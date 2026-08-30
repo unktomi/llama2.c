@@ -1,5 +1,15 @@
 /*
- * Train the smallest genuinely many-to-many terminal projection for the
+ * QUARANTINED: DO NOT USE THIS AS A JOINT PROJECTION.
+ *
+ * This experiment terminalized the retained hidden sequence too early.  Its
+ * position and attention heads were trained with independent row-wise cross
+ * entropy, while its "joint" variant merely appended a corpus bigram table
+ * and Viterbi.  Neither makes a complete candidate tuple the argument of one
+ * observer, so neither implements the requested selection-product semantics.
+ *
+ * Historical description follows.
+ *
+ * Train the smallest many-to-many terminal projection for the
  * hidden-feedback experiment.
  *
  * A 15M TinyStories model generates an ordinary text corpus.  The text is
