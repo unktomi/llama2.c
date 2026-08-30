@@ -1,0 +1,28 @@
+__pycache__/
+*.o
+*.air
+*.metallib
+*.dSYM/
+*.bin
+
+# Locally built executables.
+/run
+/runq
+/run_escardo
+/run_escardo_metal
+/run_hidden_feedback
+/run_hidden_feedback_select
+/candidate_dump
+/candidate_probe
+/company_probe
+/company_probe_san
+/exhaustive_scale_probe
+/forced_phrase_probe
+/scale_reward_audit
+/terminal_mixer
+/testc
+
+# Large local observations and archived build products.
+/work_traces/
+/quarantined-generated-do-not-run/*
+!/quarantined-generated-do-not-run/README.md

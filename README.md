@@ -43,6 +43,144 @@ make run
 
 You'll see the text stream a sample. On my M1 MacBook Air this runs at ~110 tokens/s. See [performance](#performance) or the Makefile for compile flags that can significantly speed this up. We can also try a bit bigger 42M parameter model:
 
+The earlier experimental prefix-field evaluator has been removed from the
+active build.  It used a token carrier and forced model logits at every
+recursive prefix; a single outer function named `run_pcont` concealed repeated
+learned-filler applications.  Its source, tests, strength experiment, and
+documentation remain under explicit `token-prefix-field-*-don't-do-this`
+names so that this rejected organization cannot silently return.
+
+`atkey_term_c.c` and `atkey_term_c.h` remain as the numerical-leaf boundary:
+they expose llama2.c-compatible weights and both scalar and whole-family
+kernels, but contain no inference/search policy.
+
+`run_escardo.c` is the experimental non-greedy production path. Its control
+spine is Escardo's dependent product of selection functions:
+
+```text
+b(x) = delta(x)(xs -> p(x : xs))
+a    = epsilon(x -> p(x : b(x)))
+result = a : b(a)
+```
+
+`X` is a model-produced `(token, logit, log_probability)` coordinate. Timed
+mode has no predetermined leaf count. It repeatedly invokes the same memoized
+selection product until a wall-clock deadline, sampling local observer
+arguments from the full model distribution by default. Demands are recorded
+before their suffix continuations run; multiplicity and completed-observation
+backups are appended to the JSONL trace and flushed immediately. `--top-k K`
+is an optional sampling-proposal truncation, not a leaf budget. Physical weight
+reuse is not inferred from scope installation; the printed numerical-
+application counters expose the actual number of family applications.
+
+```bash
+make runescardo CC=clang
+./run_escardo test/stories260K.bin test/tok512.bin \
+  --prompt "Lily was" --length 64 --sample-ms 10000 \
+  --seed 42 --trace candidates.jsonl
+```
+
+### Metal search execution
+
+On macOS, the Metal target keeps each checkpoint tensor in a persistent
+`MTLBuffer`, applies batched matrix families with Metal Performance Shaders,
+and runs embedding/RMS families with the kernels in `metal_kernels.metal`.
+`--batch-size` controls only how many invocations of the composed selection
+term are in flight together; it does not truncate the local support or impose
+a candidate-count budget.
+
+```bash
+make runescardometal
+./run_escardo_metal test/stories260K.bin test/tok512.bin \
+  --prompt "Lily was" --length 64 --sample-ms 10000 \
+  --batch-size 16 --seed 42 --trace candidates-metal.jsonl
+```
+
+The selection frames, observation callback, score backups, and final `tau`
+remain host control code. The expensive learned-family applications run on
+Metal. `backend_weight_uploads` counts persistent host-to-Metal tensor uploads;
+it does **not** claim that GPU execution physically fetches each scalar only
+once across later dispatches.
+
+### GGUF through llama.cpp Metal
+
+`llama_cpp_escardo/run_escardo_gguf.cpp` provides the same timed sampled-
+product trace and backup discipline over llama.cpp logits, so arbitrary GGUF
+models can use llama.cpp's quantized kernels and Metal backend. The build is an
+overlay: it reads an existing llama.cpp source checkout without modifying it.
+
+```bash
+make runescardogguf \
+  LLAMA_CPP_SOURCE=/absolute/path/to/llama.cpp
+
+../llama_cpp_escardo_build/run_escardo_gguf model.gguf \
+  --prompt "Lily was" --length 64 --sample-ms 10000 \
+  --batch-size 16 --seed 42 --trace candidates-gguf.jsonl
+```
+
+For instruction/chat GGUFs, `--chat` renders the user message with the model's
+embedded Jinja template through llama.cpp. `--reasoning on` and
+`--reasoning off` set that template's `enable_thinking` value rather than
+approximating the prompt with hand-written control tokens:
+
+```bash
+../llama_cpp_escardo_build/run_escardo_gguf qwen.gguf \
+  --chat --reasoning off --prompt "Solve this problem." \
+  --length 128 --sample-ms 60000 --trace qwen-candidates.jsonl
+```
+
+Within an in-flight batch, llama.cpp copies one fixed prefill KV sequence to
+all continuation sequence IDs and evaluates every causal frontier in one
+`llama_decode` call. Between batches it currently restores those sequence IDs
+from the shared prefill and recomputes completion prefixes. The candidate
+selection trie and all backed observations persist across batches, but the KV
+states do not; this is an explicit remaining lowering/performance limitation,
+not cross-batch model-prefix memoization.
+
+For a deliberately exhaustive finite reference, pass `--exact --top-k K`
+instead of `--sample-ms`. This mode has no implicit leaf truncation and is only
+practical for very short horizons.
+
+For neutral long-context diagnostics, `company_probe.c` records flushed
+per-token and per-layer observations through the Stories260K model's full
+512-token context. See [doc/company-traces.md](doc/company-traces.md). This
+probe is a measurement tool around the numerical reference path, not the
+Atkey evaluator itself.
+
+### Quarantined failed approaches
+
+Rejected inference shortcuts are retained only in
+`categorical-rollout-shortcut-don't-do-this.c`,
+`batched-ancestral-rollouts-don't-do-this.c`,
+`exhaustive-prefix-company-don't-do-this.c`,
+`exhaustive-logit-grid-don't-do-this.c`, and
+`entropy-distance-reward-don't-do-this.c`.  The later
+resident-weight-scope executable and trace are also archived: they were
+previously misrepresented as proof of one-shot physical weight use merely
+because each weight pointer was installed once. Their counters actually showed
+258 numerical applications per layer in a 256-token run. The current
+`run_escardo` makes no such performance claim. The rejected sources' opening
+comments state their failures, none is an active build dependency, and their archived regressions
+are outside automatic test discovery. Complete ancestral rollout sampling
+followed by a maximum backup is not the selection product: it chooses paths
+before composing the local selections. The exhaustive vocabulary-prefix
+company is a tiny numerical oracle, not a scalable inference algorithm, and
+the entropy-distance reward is an invented objective rather than the supplied
+observer.
+
+`scale_reward_audit.c` projects the embedding and every completed layer through
+the existing final RMS/classifier and prints the resulting reward vector for a
+forced completion:
+
+```bash
+make scalerewardaudit CC=clang
+./scale_reward_audit CHECKPOINT TOKENIZER PROMPT COMPLETION 32
+```
+
+The audit performs no cross-scale reduction. In particular, it does not revive
+the old entropy-distance heuristic or silently sum layer scores with
+incompatible calibrations.
+
 ```bash
 wget https://huggingface.co/karpathy/tinyllamas/resolve/main/stories42M.bin
 ./run stories42M.bin
