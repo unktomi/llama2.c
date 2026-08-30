@@ -1,5 +1,5 @@
 /*
- * Candidate-conditioned joint observer for hidden-feedback llama2.c.
+ * Ordered masked joint decoder for hidden-feedback llama2.c.
  *
  * The retained hidden tape is not assigned a scalar path energy.  A proposed
  * token tuple is placed in the company of the fixed prefill and the observer
@@ -7,19 +7,23 @@
  *
  *   observe : (Hidden^N, Token^N) -> Logits^N.
  *
- * The observer is a bidirectional attention layer. Queries come from retained
- * hidden states. Keys/values come from the fixed prompt constructors and from
- * every proposed completion constructor. Completion position i is masked out
- * of output row i, so the head cannot learn to copy the token it is rating.
- * It must judge that filler by the company supplied by all other positions.
+ * The decoder is a tied-embedding, bidirectional masked language model.
+ * Queries come from retained hidden states. Keys/values come from the fixed
+ * prompt constructors and from every proposed completion constructor.
+ * Completion position i is masked out of output row i, so the head cannot
+ * copy the token it is rating. RoPE is applied to every query and key using
+ * its absolute sequence position; unlike the rejected bag-of-embeddings
+ * observer, this decoder can distinguish differently ordered company.
  *
- * Training uses complete teacher tuples, but inference never sums their row
- * scores. A sampled function tree retains one complete observation outcome at
- * each leaf. At depth i, backward induction first obtains each child's backed
- * complete outcome, then compares only outcome.logits[i][candidate_i]. The
- * winning complete outcome is passed upward unchanged. This is the finite,
- * sampled Escardo product with reward type Logits^N, not reward type double.
- * Only the root returns the selected tuple.
+ * Training uses complete teacher tuples, but inference never folds their row
+ * observations to a path score. For a finite carrier K at each of N slots, a
+ * leaf outcome is the complete covector family (R^K)^N. At depth i, backward
+ * induction obtains each child's complete backed outcome and asks, inside
+ * that one outcome covector, whether the branch token is the model's selected
+ * filler. The local selection function returns the first attaining witness
+ * (or the final fallback, as in finite searchable-set `find`) and passes that
+ * complete outcome family upward unchanged. No scalar is compared across
+ * candidate-conditioned contexts. Only the root terminalizes the tuple.
  */
 
 #define TESTING
@@ -44,7 +48,7 @@ typedef struct {
     int head_dim;
     size_t matrix_size;
     size_t parameter_count;
-    double *parameters;        /* Wq, Wk, Wv, Wo */
+    double *parameters;        /* Wq, Wk, Wv, Wo, Wh */
 } ObserverHead;
 
 typedef struct {
@@ -151,6 +155,15 @@ static double observer_random_signed(uint64_t *state) {
         9007199254740992.0 - 1.0;
 }
 
+static uint64_t observer_mix_u64(uint64_t value) {
+    value ^= value >> 30;
+    value *= UINT64_C(0xbf58476d1ce4e5b9);
+    value ^= value >> 27;
+    value *= UINT64_C(0x94d049bb133111eb);
+    value ^= value >> 31;
+    return value;
+}
+
 static double *observer_matrix(ObserverHead *head, int matrix) {
     return head->parameters + (size_t)matrix * head->matrix_size;
 }
@@ -176,11 +189,11 @@ static void observer_head_initialize(
         .head_count = head_count,
         .head_dim = dim / head_count,
         .matrix_size = (size_t)dim * dim,
-        .parameter_count = 4U * (size_t)dim * dim,
+        .parameter_count = 5U * (size_t)dim * dim,
     };
     head->parameters = observer_allocate(head->parameter_count, sizeof(double));
     uint64_t random_state = seed != 0 ? seed : UINT64_C(1);
-    for (int matrix = 0; matrix < 3; matrix++) {
+    for (int matrix = 0; matrix < 4; matrix++) {
         double *weight = observer_matrix(head, matrix);
         for (int row = 0; row < dim; row++) {
             for (int column = 0; column < dim; column++) {
@@ -191,9 +204,9 @@ static void observer_head_initialize(
             }
         }
     }
-    double *output = observer_matrix(head, 3);
+    double *hidden_output = observer_matrix(head, 4);
     for (size_t index = 0; index < head->matrix_size; index++) {
-        output[index] = 0.01 * observer_random_signed(&random_state) /
+        hidden_output[index] = 0.01 * observer_random_signed(&random_state) /
             sqrt((double)dim);
     }
 }
@@ -211,7 +224,7 @@ static double observer_initial_parameter(
     size_t coordinate = parameter % head->matrix_size;
     int row = (int)(coordinate / (size_t)head->dim);
     int column = (int)(coordinate % (size_t)head->dim);
-    return matrix < 3 && row == column ? 1.0 : 0.0;
+    return matrix < 4 && row == column ? 1.0 : 0.0;
 }
 
 static void observer_head_save(const char *path, const ObserverHead *head) {
@@ -220,7 +233,7 @@ static void observer_head_save(const char *path, const ObserverHead *head) {
         fprintf(stderr, "could not open observer output %s\n", path);
         exit(EXIT_FAILURE);
     }
-    const unsigned char magic[8] = {'T','J','O','B','S','0','0','1'};
+    const unsigned char magic[8] = {'T','J','M','A','E','0','0','4'};
     int ok = fwrite(magic, sizeof(magic), 1, file) == 1 &&
         fwrite(&head->dim, sizeof(head->dim), 1, file) == 1 &&
         fwrite(&head->head_count, sizeof(head->head_count), 1, file) == 1 &&
@@ -243,7 +256,7 @@ static void observer_head_load(const char *path, ObserverHead *head) {
     int dim = 0;
     int heads = 0;
     if (fread(magic, sizeof(magic), 1, file) != 1 ||
-        memcmp(magic, "TJOBS001", sizeof(magic)) != 0 ||
+        memcmp(magic, "TJMAE004", sizeof(magic)) != 0 ||
         fread(&dim, sizeof(dim), 1, file) != 1 ||
         fread(&heads, sizeof(heads), 1, file) != 1) {
         observer_fail("invalid observer head file");
@@ -328,48 +341,16 @@ static char *observer_generate_teacher_story(
     return text.data;
 }
 
-static int observer_build_example(
+static void observer_build_example_from_tokens(
     ObserverExample *example,
-    Transformer *teacher,
-    Tokenizer *teacher_tokenizer,
-    Sampler *teacher_sampler,
     Transformer *student,
-    Tokenizer *student_tokenizer,
+    const int *story_tokens,
+    int content_start,
     int prompt_count,
-    int completion_count,
-    int teacher_steps
+    int completion_count
 ) {
-    char *story = observer_generate_teacher_story(
-        teacher,
-        teacher_tokenizer,
-        teacher_sampler,
-        teacher_steps
-    );
-    size_t story_bytes = strlen(story);
-    int *story_tokens = observer_allocate(story_bytes + 3U, sizeof(int));
-    int story_token_count = 0;
-    encode(
-        student_tokenizer,
-        story,
-        1,
-        0,
-        story_tokens,
-        &story_token_count
-    );
-    free(story);
-    int content_span = prompt_count - 1 + completion_count;
-    if (story_token_count - 1 < content_span) {
-        free(story_tokens);
-        return 0;
-    }
     if (prompt_count + completion_count - 1 > student->config.seq_len) {
         observer_fail("student training span exceeds sequence length");
-    }
-    int maximum_start = story_token_count - content_span;
-    int content_start = 1;
-    if (maximum_start > 1) {
-        content_start += (int)(random_u32(&teacher_sampler->rng_state) %
-            (unsigned int)maximum_start);
     }
     example->prompt_count = prompt_count;
     example->prompt_tokens = observer_allocate((size_t)prompt_count, sizeof(int));
@@ -395,7 +376,6 @@ static int observer_build_example(
         story_tokens + content_start + prompt_count - 1,
         (size_t)completion_count * sizeof(int)
     );
-    free(story_tokens);
 
     for (int position = 0; position < prompt_count; position++) {
         float *hidden = forward_token_hidden(
@@ -432,7 +412,6 @@ static int observer_build_example(
             student->config.vocab_size
         );
     }
-    return 1;
 }
 
 static ObserverExample *observer_generate_dataset(
@@ -452,30 +431,71 @@ static ObserverExample *observer_generate_dataset(
         sizeof(*examples)
     );
     int built = 0;
-    int attempts = 0;
-    while (built < count && attempts < count * 30) {
-        attempts++;
-        if (!observer_build_example(
-                &examples[built],
-                teacher,
-                teacher_tokenizer,
-                teacher_sampler,
-                student,
-                student_tokenizer,
-                prompt_count,
-                completion_count,
-                teacher_steps)) {
+    int stories = 0;
+    int content_span = prompt_count - 1 + completion_count;
+    while (built < count && stories < count * 30) {
+        stories++;
+        char *story = observer_generate_teacher_story(
+            teacher,
+            teacher_tokenizer,
+            teacher_sampler,
+            teacher_steps
+        );
+        size_t story_bytes = strlen(story);
+        int *story_tokens = observer_allocate(story_bytes + 3U, sizeof(int));
+        int story_token_count = 0;
+        encode(
+            student_tokenizer,
+            story,
+            1,
+            0,
+            story_tokens,
+            &story_token_count
+        );
+        free(story);
+        int window_count = story_token_count - content_span;
+        if (window_count <= 0) {
+            free(story_tokens);
             continue;
         }
-        built++;
-        if (built == count || built % 8 == 0) {
-            fprintf(stderr, "%s corpus: %d/%d\r", name, built, count);
-            fflush(stderr);
+        int first_window = (int)(
+            random_u32(&teacher_sampler->rng_state) % (unsigned int)window_count
+        );
+        for (int window = 0; window < window_count && built < count; window++) {
+            int content_start = 1 + (first_window + window) % window_count;
+            observer_build_example_from_tokens(
+                &examples[built],
+                student,
+                story_tokens,
+                content_start,
+                prompt_count,
+                completion_count
+            );
+            built++;
+            if (built == count || built % 128 == 0) {
+                fprintf(
+                    stderr,
+                    "%s corpus: %d/%d teacher_stories=%d\r",
+                    name,
+                    built,
+                    count,
+                    stories
+                );
+                fflush(stderr);
+            }
         }
+        free(story_tokens);
     }
     fputc('\n', stderr);
     if (built != count) {
-        fprintf(stderr, "built only %d/%d %s examples\n", built, count, name);
+        fprintf(
+            stderr,
+            "built only %d/%d %s examples from %d teacher stories\n",
+            built,
+            count,
+            name,
+            stories
+        );
         exit(EXIT_FAILURE);
     }
     return examples;
@@ -625,6 +645,52 @@ static void observer_linear(
     }
 }
 
+/*
+ * Give the masked company its sequence order. The old observer fed an
+ * unordered multiset of token embeddings to attention, making every
+ * permutation of a completion observationally identical. This is the same
+ * per-head rotary map used by llama2.c, applied to the decoder's Q/K vectors.
+ * direction=-1 applies the transpose map needed by back-propagation.
+ */
+static void observer_apply_rope(
+    double *vectors,
+    int rows,
+    int dim,
+    int head_count,
+    int first_position,
+    int direction
+) {
+    int head_dim = dim / head_count;
+    for (int row = 0; row < rows; row++) {
+        int position = first_position + row;
+        for (int head = 0; head < head_count; head++) {
+            double *vector = vectors + (size_t)row * dim + head * head_dim;
+            for (int lane = 0; lane + 1 < head_dim; lane += 2) {
+                double frequency = 1.0 /
+                    pow(10000.0, lane / (double)head_dim);
+                double angle = direction * position * frequency;
+                double cosine = cos(angle);
+                double sine = sin(angle);
+                double first = vector[lane];
+                double second = vector[lane + 1];
+                vector[lane] = first * cosine - second * sine;
+                vector[lane + 1] = first * sine + second * cosine;
+            }
+        }
+    }
+}
+
+static int observer_source_visible(
+    const int *candidate_tokens,
+    int prompt_count,
+    int source,
+    int self_source
+) {
+    if (source == self_source) return 0;
+    if (source < prompt_count) return 1;
+    return candidate_tokens[source - prompt_count] >= 0;
+}
+
 static void observer_forward(
     const ObserverExample *example,
     const int *candidate_tokens,
@@ -657,6 +723,7 @@ static void observer_forward(
     }
     for (int position = 0; position < positions; position++) {
         int source = prompt_count + position;
+        if (candidate_tokens[position] < 0) continue;
         const float *embedding = student->weights.wcls +
             (size_t)candidate_tokens[position] * dim;
         for (int lane = 0; lane < dim; lane++) {
@@ -682,12 +749,28 @@ static void observer_forward(
         workspace->query
     );
     free(query_input);
+    observer_apply_rope(
+        workspace->query,
+        positions,
+        dim,
+        head->head_count,
+        prompt_count,
+        1
+    );
     observer_linear(
         observer_const_matrix(head, 1),
         workspace->source_input,
         sources,
         dim,
         workspace->key
+    );
+    observer_apply_rope(
+        workspace->key,
+        sources,
+        dim,
+        head->head_count,
+        0,
+        1
     );
     observer_linear(
         observer_const_matrix(head, 2),
@@ -710,7 +793,11 @@ static void observer_forward(
             int masked_source = prompt_count + output_position;
             double maximum = -DBL_MAX;
             for (int source = 0; source < sources; source++) {
-                if (source == masked_source) {
+                if (!observer_source_visible(
+                        candidate_tokens,
+                        prompt_count,
+                        source,
+                        masked_source)) {
                     row[source] = 0.0;
                     continue;
                 }
@@ -727,12 +814,20 @@ static void observer_forward(
             }
             double partition = 0.0;
             for (int source = 0; source < sources; source++) {
-                if (source == masked_source) continue;
+                if (!observer_source_visible(
+                        candidate_tokens,
+                        prompt_count,
+                        source,
+                        masked_source)) continue;
                 row[source] = exp(row[source] - maximum);
                 partition += row[source];
             }
             for (int source = 0; source < sources; source++) {
-                if (source == masked_source) {
+                if (!observer_source_visible(
+                        candidate_tokens,
+                        prompt_count,
+                        source,
+                        masked_source)) {
                     row[source] = 0.0;
                     continue;
                 }
@@ -750,12 +845,15 @@ static void observer_forward(
     }
 
     const double *output_weight = observer_const_matrix(head, 3);
+    const double *hidden_weight = observer_const_matrix(head, 4);
     for (int position = 0; position < positions; position++) {
         for (int out = 0; out < dim; out++) {
-            double value = example->hidden[(size_t)position * dim + out];
+            double value = 0.0;
             for (int in = 0; in < dim; in++) {
                 value += output_weight[(size_t)out * dim + in] *
                     workspace->context[(size_t)position * dim + in];
+                value += hidden_weight[(size_t)out * dim + in] *
+                    example->hidden[(size_t)position * dim + in];
             }
             workspace->output[(size_t)position * dim + out] = value;
         }
@@ -782,6 +880,7 @@ static double observer_dataset_loss(
     const Transformer *student,
     ObserverHead *head,
     int positions,
+    int corruption_phase,
     double l2,
     double *gradient,
     double *token_accuracy,
@@ -797,6 +896,7 @@ static double observer_dataset_loss(
     double *gradient_k = gradient == NULL ? NULL : gradient + head->matrix_size;
     double *gradient_v = gradient == NULL ? NULL : gradient_k + head->matrix_size;
     double *gradient_o = gradient == NULL ? NULL : gradient_v + head->matrix_size;
+    double *gradient_h = gradient == NULL ? NULL : gradient_o + head->matrix_size;
     double loss = 0.0;
     unsigned long long correct_tokens = 0;
     unsigned long long correct_sequences = 0;
@@ -805,6 +905,19 @@ static double observer_dataset_loss(
          example_index < example_count;
          example_index++) {
         const ObserverExample *example = &examples[example_index];
+        int *candidate_tokens = observer_allocate(
+            (size_t)positions,
+            sizeof(int)
+        );
+        int mask_percent = 25 * ((example_index + corruption_phase) % 5);
+        for (int position = 0; position < positions; position++) {
+            uint64_t key = ((uint64_t)(unsigned int)(example_index + 1) << 32) ^
+                (uint64_t)(unsigned int)(position + 1) ^
+                ((uint64_t)(unsigned int)(corruption_phase + 1) << 48);
+            int draw = (int)(observer_mix_u64(key) % UINT64_C(100));
+            candidate_tokens[position] = draw < mask_percent ?
+                -1 : example->targets[position];
+        }
         int sources = example->prompt_count + positions;
         ObserverWorkspace workspace;
         observer_workspace_initialize(
@@ -815,7 +928,7 @@ static double observer_dataset_loss(
             vocab,
             gradient != NULL
         );
-        observer_forward(example, example->targets, student, head, &workspace);
+        observer_forward(example, candidate_tokens, student, head, &workspace);
         if (gradient != NULL) {
             memset(
                 workspace.grad_query,
@@ -905,6 +1018,10 @@ static double observer_dataset_loss(
                             output_gradient * workspace.context[
                                 (size_t)position * dim + in
                             ];
+                        gradient_h[(size_t)out * dim + in] +=
+                            output_gradient * example->hidden[
+                                (size_t)position * dim + in
+                            ];
                         workspace.grad_context[(size_t)position * dim + in] +=
                             output_weight[(size_t)out * dim + in] *
                             output_gradient;
@@ -928,7 +1045,11 @@ static double observer_dataset_loss(
                         ((size_t)attention_head * positions + output_position) *
                             sources;
                     for (int source = 0; source < sources; source++) {
-                        if (source == masked_source) {
+                        if (!observer_source_visible(
+                                candidate_tokens,
+                                example->prompt_count,
+                                source,
+                                masked_source)) {
                             gradient_row[source] = 0.0;
                             continue;
                         }
@@ -948,11 +1069,19 @@ static double observer_dataset_loss(
                     }
                     double softmax_dot = 0.0;
                     for (int source = 0; source < sources; source++) {
-                        if (source == masked_source) continue;
+                        if (!observer_source_visible(
+                                candidate_tokens,
+                                example->prompt_count,
+                                source,
+                                masked_source)) continue;
                         softmax_dot += gradient_row[source] * attention_row[source];
                     }
                     for (int source = 0; source < sources; source++) {
-                        if (source == masked_source) continue;
+                        if (!observer_source_visible(
+                                candidate_tokens,
+                                example->prompt_count,
+                                source,
+                                masked_source)) continue;
                         double score_gradient = attention_row[source] *
                             (gradient_row[source] - softmax_dot);
                         for (int lane = 0; lane < head_dim; lane++) {
@@ -971,6 +1100,25 @@ static double observer_dataset_loss(
                     }
                 }
             }
+
+            /* Q/K were rotary-positioned before attention. Undo that fixed
+             * orthogonal map before differentiating their learned matrices. */
+            observer_apply_rope(
+                workspace.grad_query,
+                positions,
+                dim,
+                head->head_count,
+                example->prompt_count,
+                -1
+            );
+            observer_apply_rope(
+                workspace.grad_key,
+                sources,
+                dim,
+                head->head_count,
+                0,
+                -1
+            );
 
             for (int out = 0; out < dim; out++) {
                 for (int in = 0; in < dim; in++) {
@@ -994,6 +1142,7 @@ static double observer_dataset_loss(
             }
         }
         observer_workspace_free(&workspace);
+        free(candidate_tokens);
     }
 
     double observation_count = (double)example_count * positions;
@@ -1053,6 +1202,7 @@ static void observer_train(
             student,
             head,
             positions,
+            epoch,
             l2,
             gradient,
             &train_token,
@@ -1085,6 +1235,7 @@ static void observer_train(
             student,
             head,
             positions,
+            0,
             l2,
             NULL,
             &validation_token,
@@ -1208,7 +1359,7 @@ typedef struct {
     int outcome_count;
     int outcome_capacity;
     int *outcome_tokens;       /* outcome_capacity x positions */
-    double *outcome_scores;    /* chosen coordinate at each position */
+    double *outcome_covectors; /* outcome_capacity x positions x top_k */
 } ObserverTrie;
 
 static void observer_trie_initialize(
@@ -1239,8 +1390,8 @@ static void observer_trie_initialize(
         (size_t)trie->outcome_capacity * positions,
         sizeof(int)
     );
-    trie->outcome_scores = observer_allocate(
-        (size_t)trie->outcome_capacity * positions,
+    trie->outcome_covectors = observer_allocate(
+        (size_t)trie->outcome_capacity * positions * top_k,
         sizeof(double)
     );
     trie->node_count = 1;
@@ -1282,15 +1433,16 @@ static void observer_trie_grow_outcomes(ObserverTrie *trie) {
         trie->outcome_tokens,
         (size_t)trie->outcome_capacity * trie->positions * sizeof(int)
     );
-    double *scores = realloc(
-        trie->outcome_scores,
-        (size_t)trie->outcome_capacity * trie->positions * sizeof(double)
+    double *covectors = realloc(
+        trie->outcome_covectors,
+        (size_t)trie->outcome_capacity * trie->positions * trie->top_k *
+            sizeof(double)
     );
-    if (tokens == NULL || scores == NULL) {
+    if (tokens == NULL || covectors == NULL) {
         observer_fail("could not grow outcomes");
     }
     trie->outcome_tokens = tokens;
-    trie->outcome_scores = scores;
+    trie->outcome_covectors = covectors;
 }
 
 static int observer_trie_insert_path(
@@ -1332,7 +1484,7 @@ static int observer_trie_insert_path(
 static int observer_trie_store_outcome(
     ObserverTrie *trie,
     const int *tokens,
-    const double *scores
+    const double *covectors
 ) {
     if (trie->outcome_count == trie->outcome_capacity) {
         observer_trie_grow_outcomes(trie);
@@ -1344,9 +1496,10 @@ static int observer_trie_store_outcome(
         (size_t)trie->positions * sizeof(int)
     );
     memcpy(
-        trie->outcome_scores + (size_t)outcome * trie->positions,
-        scores,
-        (size_t)trie->positions * sizeof(double)
+        trie->outcome_covectors +
+            (size_t)outcome * trie->positions * trie->top_k,
+        covectors,
+        (size_t)trie->positions * trie->top_k * sizeof(double)
     );
     return outcome;
 }
@@ -1360,34 +1513,56 @@ static int observer_trie_recompute_node(
     if (depth >= trie->positions) return trie->nodes[node].winner_outcome;
     int winner = -1;
     int winning_rank = -1;
-    double winning_score = -DBL_MAX;
+    int local_winner_rank = -1;
+    int fallback = -1;
+    int fallback_rank = -1;
+    int fallback_local_winner = -1;
     for (int rank = 0; rank < trie->top_k; rank++) {
         int child = trie->children[(size_t)node * trie->top_k + rank];
         if (child < 0) continue;
         int outcome = trie->nodes[child].winner_outcome;
         if (outcome < 0) continue;
-        double score = trie->outcome_scores[
-            (size_t)outcome * trie->positions + depth
-        ];
-        if (winner < 0 || score > winning_score) {
+        const double *covector = trie->outcome_covectors +
+            ((size_t)outcome * trie->positions + depth) * trie->top_k;
+        int selected = 0;
+        for (int alternative = 1;
+             alternative < trie->top_k;
+             alternative++) {
+            if (covector[alternative] > covector[selected]) {
+                selected = alternative;
+            }
+        }
+        fallback = outcome;
+        fallback_rank = rank;
+        fallback_local_winner = selected;
+        if (selected == rank) {
             winner = outcome;
             winning_rank = rank;
-            winning_score = score;
+            local_winner_rank = selected;
+            break;
         }
+    }
+    if (winner < 0) {
+        winner = fallback;
+        winning_rank = fallback_rank;
+        local_winner_rank = fallback_local_winner;
     }
     int changed = winner != trie->nodes[node].winner_outcome;
     trie->nodes[node].winner_outcome = winner;
     if (changed && trace != NULL && winner >= 0) {
         fprintf(
             trace,
-            "{\"event\":\"backup\",\"node\":%d,\"depth\":%d," 
+            "{\"event\":\"select_backup\",\"node\":%d,\"depth\":%d,"
             "\"winning_rank\":%d,\"outcome\":%d," 
-            "\"coordinate_score\":%.17g}\n",
+            "\"local_covector_winner_rank\":%d,"
+            "\"attains\":%s,"
+            "\"propagated\":\"complete_covector_family\"}\n",
             node,
             depth,
             winning_rank + 1,
             winner,
-            winning_score
+            local_winner_rank + 1,
+            local_winner_rank == winning_rank ? "true" : "false"
         );
         observer_trace_flush(trace);
     }
@@ -1408,7 +1583,7 @@ static void observer_trie_backup_path(
 }
 
 static void observer_trie_free(ObserverTrie *trie) {
-    free(trie->outcome_scores);
+    free(trie->outcome_covectors);
     free(trie->outcome_tokens);
     free(trie->children);
     free(trie->nodes);
@@ -1421,12 +1596,9 @@ static void observer_trace_outcome(
     const ObserverExample *example,
     Tokenizer *tokenizer,
     const int *tokens,
-    const double *scores,
-    const int *carrier,
+    const double *covectors,
     int positions,
-    int top_k,
-    int vocab,
-    const double *logits
+    int top_k
 ) {
     if (trace == NULL) return;
     fprintf(trace, "{\"event\":\"outcome\",\"outcome\":%d,\"tokens\":[", outcome);
@@ -1434,19 +1606,17 @@ static void observer_trace_outcome(
         if (position != 0) fputc(',', trace);
         fprintf(trace, "%d", tokens[position]);
     }
-    fputs("],\"selected_coordinates\":[", trace);
-    for (int position = 0; position < positions; position++) {
-        if (position != 0) fputc(',', trace);
-        fprintf(trace, "%.17g", scores[position]);
-    }
-    fputs("],\"carrier_scores\":[", trace);
+    fputs("],\"covectors\":[", trace);
     for (int position = 0; position < positions; position++) {
         if (position != 0) fputc(',', trace);
         fputc('[', trace);
         for (int rank = 0; rank < top_k; rank++) {
             if (rank != 0) fputc(',', trace);
-            int token = carrier[(size_t)position * top_k + rank];
-            fprintf(trace, "%.17g", logits[(size_t)position * vocab + token]);
+            fprintf(
+                trace,
+                "%.17g",
+                covectors[(size_t)position * top_k + rank]
+            );
         }
         fputc(']', trace);
     }
@@ -1492,7 +1662,7 @@ static int observer_evaluate_path(
     FILE *trace,
     int *path_nodes,
     int *tokens,
-    double *scores
+    double *covectors
 ) {
     int leaf = observer_trie_insert_path(trie, ranks, path_nodes);
     if (trie->nodes[leaf].winner_outcome >= 0) return 0;
@@ -1503,23 +1673,24 @@ static int observer_evaluate_path(
     }
     observer_forward(example, tokens, student, head, workspace);
     for (int position = 0; position < trie->positions; position++) {
-        scores[position] = workspace->logits[
-            (size_t)position * workspace->vocab + tokens[position]
-        ];
+        for (int rank = 0; rank < trie->top_k; rank++) {
+            int token = carrier[(size_t)position * trie->top_k + rank];
+            covectors[(size_t)position * trie->top_k + rank] =
+                workspace->logits[
+                    (size_t)position * workspace->vocab + token
+                ];
+        }
     }
-    int outcome = observer_trie_store_outcome(trie, tokens, scores);
+    int outcome = observer_trie_store_outcome(trie, tokens, covectors);
     observer_trace_outcome(
         trace,
         outcome,
         example,
         tokenizer,
         tokens,
-        scores,
-        carrier,
+        covectors,
         trie->positions,
-        trie->top_k,
-        workspace->vocab,
-        workspace->logits
+        trie->top_k
     );
     observer_trie_backup_path(trie, path_nodes, outcome, trace);
     return 1;
@@ -1574,12 +1745,7 @@ static int *observer_search(
     );
     int *seed_tokens = observer_allocate((size_t)positions, sizeof(int));
     for (int position = 0; position < positions; position++) {
-        observer_select_top_k(
-            example->base_logits + (size_t)position * vocab,
-            vocab,
-            1,
-            seed_tokens + position
-        );
+        seed_tokens[position] = -1;
     }
     ObserverWorkspace proposal_workspace;
     observer_workspace_initialize(
@@ -1608,8 +1774,10 @@ static int *observer_search(
     if (trace != NULL) {
         fprintf(
             trace,
-            "{\"event\":\"run\",\"reward_type\":\"logits_tuple\"," 
-            "\"backup\":\"coordinatewise_backward_induction\"," 
+            "{\"event\":\"run\","
+            "\"reward_type\":\"finite_covector_family\","
+            "\"backup\":\"selection_product_model_attainment\","
+            "\"proposal\":\"all_completion_slots_masked\","
             "\"positions\":%d,\"top_k\":%d,\"exact\":%s," 
             "\"sample_ms\":%d,\"seed\":%llu," 
             "\"root_terminalizations\":1}\n",
@@ -1659,7 +1827,10 @@ static int *observer_search(
     int *ranks = observer_allocate((size_t)positions, sizeof(int));
     int *path_nodes = observer_allocate((size_t)positions + 1U, sizeof(int));
     int *tokens = observer_allocate((size_t)positions, sizeof(int));
-    double *scores = observer_allocate((size_t)positions, sizeof(double));
+    double *covectors = observer_allocate(
+        (size_t)positions * top_k,
+        sizeof(double)
+    );
     unsigned long long attempted = 0;
     long start = time_in_ms();
     if (exact) {
@@ -1678,7 +1849,7 @@ static int *observer_search(
                 trace,
                 path_nodes,
                 tokens,
-                scores
+                covectors
             );
             attempted++;
         }
@@ -1714,7 +1885,7 @@ static int *observer_search(
                 trace,
                 path_nodes,
                 tokens,
-                scores
+                covectors
             );
             attempted++;
         } while (time_in_ms() - start < sample_ms);
@@ -1748,7 +1919,7 @@ static int *observer_search(
     *attempted_out = attempted;
     *unique_out = trie.outcome_count;
     *node_count_out = trie.node_count;
-    free(scores);
+    free(covectors);
     free(tokens);
     free(path_nodes);
     free(ranks);
@@ -1994,6 +2165,7 @@ static int observer_train_main(int argc, char **argv) {
         &student,
         &head,
         options.completion_count,
+        0,
         options.l2,
         NULL,
         &initial_token,
@@ -2109,7 +2281,7 @@ static int observer_infer_main(int argc, char **argv) {
     fflush(stdout);
     fprintf(
         stderr,
-        "mode=joint_logit_observer positions=%d top_k=%d exact=%d "
+        "mode=ordered_masked_joint_decoder positions=%d top_k=%d exact=%d "
         "attempted=%llu unique=%d nodes=%d recurrence_ms=%ld search_ms=%ld "
         "trace=%s\n",
         options.length,
