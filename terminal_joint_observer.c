@@ -15,7 +15,9 @@
  * its absolute sequence position; unlike the rejected bag-of-embeddings
  * observer, this decoder can distinguish differently ordered company.
  *
- * Training uses complete teacher tuples, but inference never folds their row
+ * Training denoises complete teacher tuples after deterministic deletion,
+ * model-native wrong-token substitution, and repeated-company corruption;
+ * the rated slot remains self-masked. Inference never folds the resulting row
  * observations to a path score. For a finite carrier K at each of N slots, a
  * leaf outcome is the complete covector family (R^K)^N. At depth i, backward
  * induction obtains each child's complete backed outcome and asks, inside
@@ -233,7 +235,7 @@ static void observer_head_save(const char *path, const ObserverHead *head) {
         fprintf(stderr, "could not open observer output %s\n", path);
         exit(EXIT_FAILURE);
     }
-    const unsigned char magic[8] = {'T','J','M','A','E','0','0','4'};
+    const unsigned char magic[8] = {'T','J','M','A','E','0','0','5'};
     int ok = fwrite(magic, sizeof(magic), 1, file) == 1 &&
         fwrite(&head->dim, sizeof(head->dim), 1, file) == 1 &&
         fwrite(&head->head_count, sizeof(head->head_count), 1, file) == 1 &&
@@ -256,7 +258,7 @@ static void observer_head_load(const char *path, ObserverHead *head) {
     int dim = 0;
     int heads = 0;
     if (fread(magic, sizeof(magic), 1, file) != 1 ||
-        memcmp(magic, "TJMAE004", sizeof(magic)) != 0 ||
+        memcmp(magic, "TJMAE005", sizeof(magic)) != 0 ||
         fread(&dim, sizeof(dim), 1, file) != 1 ||
         fread(&heads, sizeof(heads), 1, file) != 1) {
         observer_fail("invalid observer head file");
@@ -845,14 +847,17 @@ static void observer_forward(
     }
 
     const double *output_weight = observer_const_matrix(head, 3);
-    const double *hidden_weight = observer_const_matrix(head, 4);
+    const double *hidden_delta = observer_const_matrix(head, 4);
     for (int position = 0; position < positions; position++) {
         for (int out = 0; out < dim; out++) {
-            double value = 0.0;
+            /* Preserve the frozen model's predictive covector. Matrix 4 is a
+             * zero-centred residual adapter, not a replacement initialized
+             * near zero for the entire hidden path. */
+            double value = example->hidden[(size_t)position * dim + out];
             for (int in = 0; in < dim; in++) {
                 value += output_weight[(size_t)out * dim + in] *
                     workspace->context[(size_t)position * dim + in];
-                value += hidden_weight[(size_t)out * dim + in] *
+                value += hidden_delta[(size_t)out * dim + in] *
                     example->hidden[(size_t)position * dim + in];
             }
             workspace->output[(size_t)position * dim + out] = value;
@@ -872,6 +877,52 @@ static void observer_forward(
                 value;
         }
     }
+}
+
+enum {
+    OBSERVER_NATIVE_CORRUPTION_WIDTH = 4,
+    OBSERVER_CORRUPTION_MODES = 5,
+};
+
+/* Pick a plausible wrong constructor from the frozen student's native
+ * covector at one position.  Keeping this deterministic makes every training
+ * epoch reproducible while the rank argument exposes more than one local
+ * alternative over successive corruption phases. */
+static int observer_native_wrong_token(
+    const ObserverExample *example,
+    int position,
+    int vocab,
+    unsigned int requested_rank
+) {
+    int top[OBSERVER_NATIVE_CORRUPTION_WIDTH];
+    for (int rank = 0; rank < OBSERVER_NATIVE_CORRUPTION_WIDTH; rank++) {
+        top[rank] = -1;
+    }
+    const float *logits = example->base_logits + (size_t)position * vocab;
+    int target = example->targets[position];
+    for (int token = 0; token < vocab; token++) {
+        if (token == target) continue;
+        int insert = OBSERVER_NATIVE_CORRUPTION_WIDTH;
+        for (int rank = 0; rank < OBSERVER_NATIVE_CORRUPTION_WIDTH; rank++) {
+            if (top[rank] < 0 || logits[token] > logits[top[rank]]) {
+                insert = rank;
+                break;
+            }
+        }
+        if (insert == OBSERVER_NATIVE_CORRUPTION_WIDTH) continue;
+        for (int rank = OBSERVER_NATIVE_CORRUPTION_WIDTH - 1;
+             rank > insert;
+             rank--) {
+            top[rank] = top[rank - 1];
+        }
+        top[insert] = token;
+    }
+    int available = 0;
+    while (available < OBSERVER_NATIVE_CORRUPTION_WIDTH && top[available] >= 0) {
+        available++;
+    }
+    if (available == 0) observer_fail("native corruption has no alternative");
+    return top[requested_rank % (unsigned int)available];
 }
 
 static double observer_dataset_loss(
@@ -909,14 +960,53 @@ static double observer_dataset_loss(
             (size_t)positions,
             sizeof(int)
         );
-        int mask_percent = 25 * ((example_index + corruption_phase) % 5);
+        int corruption_mode =
+            (example_index + corruption_phase) % OBSERVER_CORRUPTION_MODES;
+        uint64_t example_key =
+            ((uint64_t)(unsigned int)(example_index + 1) << 32) ^
+            ((uint64_t)(unsigned int)(corruption_phase + 1) << 48);
+        int repeated_position = (int)(
+            observer_mix_u64(example_key ^ UINT64_C(0x7265706561746564)) %
+            (uint64_t)positions
+        );
+        int repeated_token = observer_native_wrong_token(
+            example,
+            repeated_position,
+            vocab,
+            (unsigned int)(observer_mix_u64(
+                example_key ^ UINT64_C(0x636f6d70616e7900)
+            ) % OBSERVER_NATIVE_CORRUPTION_WIDTH)
+        );
         for (int position = 0; position < positions; position++) {
-            uint64_t key = ((uint64_t)(unsigned int)(example_index + 1) << 32) ^
-                (uint64_t)(unsigned int)(position + 1) ^
-                ((uint64_t)(unsigned int)(corruption_phase + 1) << 48);
+            uint64_t key = example_key ^
+                (uint64_t)(unsigned int)(position + 1);
             int draw = (int)(observer_mix_u64(key) % UINT64_C(100));
-            candidate_tokens[position] = draw < mask_percent ?
-                -1 : example->targets[position];
+            int wrong = observer_native_wrong_token(
+                example,
+                position,
+                vocab,
+                (unsigned int)(observer_mix_u64(
+                    key ^ UINT64_C(0x77726f6e67000000)
+                ) % OBSERVER_NATIVE_CORRUPTION_WIDTH)
+            );
+            if (corruption_mode == 0) {
+                candidate_tokens[position] = example->targets[position];
+            } else if (corruption_mode == 1) {
+                candidate_tokens[position] = draw < 50 ?
+                    -1 : example->targets[position];
+            } else if (corruption_mode == 2) {
+                candidate_tokens[position] = draw < 50 ?
+                    wrong : example->targets[position];
+            } else if (corruption_mode == 3) {
+                /* Directly train against the repeated-token fixed points seen
+                 * in the v4/v5 exact traces.  The target remains the original
+                 * teacher tuple and observer_forward still masks the source at
+                 * the row being rated. */
+                candidate_tokens[position] = repeated_token;
+            } else {
+                candidate_tokens[position] = draw < 25 ? -1 :
+                    (draw < 75 ? wrong : example->targets[position]);
+            }
         }
         int sources = example->prompt_count + positions;
         ObserverWorkspace workspace;
@@ -1743,29 +1833,13 @@ static int *observer_search(
         (size_t)positions * top_k,
         sizeof(int)
     );
-    int *seed_tokens = observer_allocate((size_t)positions, sizeof(int));
+    /* The local selections are the model-native covectors retained by the
+     * hidden-feedback term. The learned leave-one-out decoder observes a
+     * completed tuple; it must not replace those selections with an unrelated
+     * all-slots-masked proposal whose rows collapse to the same generic words. */
     for (int position = 0; position < positions; position++) {
-        seed_tokens[position] = -1;
-    }
-    ObserverWorkspace proposal_workspace;
-    observer_workspace_initialize(
-        &proposal_workspace,
-        head,
-        positions,
-        example->prompt_count + positions,
-        vocab,
-        0
-    );
-    observer_forward(
-        example,
-        seed_tokens,
-        student,
-        head,
-        &proposal_workspace
-    );
-    for (int position = 0; position < positions; position++) {
-        observer_select_top_k_double(
-            proposal_workspace.logits + (size_t)position * vocab,
+        observer_select_top_k(
+            example->base_logits + (size_t)position * vocab,
             vocab,
             top_k,
             carrier + (size_t)position * top_k
@@ -1777,7 +1851,7 @@ static int *observer_search(
             "{\"event\":\"run\","
             "\"reward_type\":\"finite_covector_family\","
             "\"backup\":\"selection_product_model_attainment\","
-            "\"proposal\":\"all_completion_slots_masked\","
+            "\"proposal\":\"model_native_hidden_feedback_covectors\","
             "\"positions\":%d,\"top_k\":%d,\"exact\":%s," 
             "\"sample_ms\":%d,\"seed\":%llu," 
             "\"root_terminalizations\":1}\n",
@@ -1802,10 +1876,7 @@ static int *observer_search(
                 observer_json_string(trace, tokenizer->vocab[token]);
                 fprintf(
                     trace,
-                    ",\"proposal_logit\":%.17g,\"base_logit\":%.17g}\n",
-                    proposal_workspace.logits[
-                        (size_t)position * vocab + token
-                    ],
+                    ",\"native_proposal_logit\":%.17g}\n",
                     example->base_logits[(size_t)position * vocab + token]
                 );
                 observer_trace_flush(trace);
@@ -1925,8 +1996,6 @@ static int *observer_search(
     free(ranks);
     observer_workspace_free(&workspace);
     observer_trie_free(&trie);
-    observer_workspace_free(&proposal_workspace);
-    free(seed_tokens);
     free(carrier);
     return selected;
 }

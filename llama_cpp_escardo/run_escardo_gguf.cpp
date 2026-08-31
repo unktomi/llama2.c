@@ -2,24 +2,25 @@
  * Exact finite product of model-backed selection functions over llama.cpp.
  *
  * There is one observer operation. For a recursively completed branch
- * x : b(x), it teacher-forces the whole counterfactual and returns the frozen
- * model's vocabulary covector at the final completion endpoint:
+ * x : b(x), it teacher-forces the whole counterfactual and scans the frozen
+ * model's native vocabulary covector at every causal boundary:
  *
- *   q(x : b(x)) = unembed(final_hidden(left ++ x : b(x))).
+ *   A_i(x : b(x)) = (sum_{j=i}^{N} z_j, N - i + 1)
+ *   q_i(x : b(x)) = softmax(A_i.sum / A_i.mass).
  *
- * The terminal root can depend on every constructor in the completed branch.
- * A local selector evaluates its constructor x against that branch's root
- * covector using the full-vocabulary log-softmax. No per-token conditional
- * probabilities are summed and the terminal position still decodes x before
- * it is observed.
+ * The carrier (sum,mass) merges componentwise and is therefore associative;
+ * softmax turns the mean logits into the normalized geometric mean of the
+ * boundary distributions. A local selector evaluates its constructor x in
+ * q_i. No selected-token conditional probabilities are added into a path
+ * score, and every scale retains its own covector in the result tuple.
  *
  * Escardo's dependent product is evaluated literally.  For every x, first
  * obtain b(x) by recursively applying the suffix selection.  Then apply the
- * same observer to (prefix, b(x)).  A branch attains when x is the maximum
- * coordinate of its own terminal-root covector over the common finite support.
+ * same observer to (prefix, b(x)). A branch attains when x is the maximum
+ * coordinate of its own scanned covector over the common finite support.
  * This fixed-point property is retained as an ambiguity diagnostic. Selection
  * itself is typed evaluation: maximize
- * log_softmax(root_covector(p(x)))[x]. Raw coordinates from distinct frames
+ * log_softmax(boundary_scan(p(x)))[x]. Raw coordinates from distinct frames
  * are never compared or added. The selected outcome retains the complete
  * position-indexed covector family, and only the root emits its token tuple.
  *
@@ -294,6 +295,17 @@ double log_partition(const std::vector<float> & logits) {
     return static_cast<double>(maximum) + std::log(total);
 }
 
+double log_partition(const std::vector<double> & logits) {
+    double maximum = -std::numeric_limits<double>::max();
+    for (double value : logits) maximum = std::max(maximum, value);
+    double total = 0.0;
+    for (double value : logits) total += std::exp(value - maximum);
+    if (!(total > 0.0) || !std::isfinite(total)) {
+        fail("invalid affine boundary covector");
+    }
+    return maximum + std::log(total);
+}
+
 struct Trace {
     FILE * stream = nullptr;
     ~Trace() {
@@ -378,7 +390,7 @@ private:
     std::vector<int> available_;
 };
 
-int terminal_root_batch_capacity(const Options & options) {
+int boundary_scan_batch_capacity(const Options & options) {
     return options.top_k;
 }
 
@@ -403,7 +415,7 @@ public:
         counters_(counters),
         vocab_size_(llama_vocab_n_tokens(vocab)),
         embedding_out_(llama_model_n_embd_out(model)),
-        token_batch_(terminal_root_batch_capacity(options), 0) {
+        token_batch_(boundary_scan_batch_capacity(options), 0) {
         if (options_.top_k > vocab_size_) {
             fail("top-k exceeds model vocabulary");
         }
@@ -656,8 +668,8 @@ private:
     product::ObservationBatchResult observe(
         const product::ObservationBatch & batch
     ) override {
-        product::TerminalRootSchedule schedule =
-            product::make_terminal_root_schedule(batch);
+        product::BoundaryScanSchedule schedule =
+            product::make_boundary_scan_schedule(batch);
         product::ObservationBatchResult result;
         result.selection_id = batch.selection_id;
         result.observations.reserve(batch.demands.size());
@@ -681,28 +693,42 @@ private:
 
         const size_t lane_count = schedule.lanes.size();
         if (lane_count != batch.demands.size()) {
-            fail("terminal root schedule lost an observer demand");
+            fail("boundary scan schedule lost an observer demand");
         }
         const size_t path_length =
             schedule.lanes.front().candidate_then_suffix.size();
-        if (path_length == 0) fail("terminal root lane has an empty path");
+        if (path_length == 0) fail("boundary scan lane has an empty path");
+        const size_t boundary_count = path_length + 1;
 
         std::vector<int> sequences;
         std::vector<llama_token> tokens;
+        std::vector<std::vector<double>> covector_sums(
+            lane_count,
+            std::vector<double>(static_cast<size_t>(vocab_size_), 0.0)
+        );
         sequences.reserve(lane_count);
         tokens.reserve(lane_count);
         int model_position = -1;
         try {
-            for (const product::TerminalRootLane & lane : schedule.lanes) {
+            for (size_t lane_index = 0;
+                 lane_index < lane_count; ++lane_index) {
+                const product::BoundaryScanLane & lane =
+                    schedule.lanes[lane_index];
                 if (lane.candidate_then_suffix.size() != path_length) {
-                    fail("terminal root lanes disagree on path horizon");
+                    fail("boundary scan lanes disagree on path horizon");
                 }
                 NodeState & history = state_from_ref(
                     lane.history_before_candidate
                 );
                 if (model_position < 0) model_position = history.position + 1;
                 if (model_position != history.position + 1) {
-                    fail("terminal root lanes disagree on causal position");
+                    fail("boundary scan lanes disagree on causal position");
+                }
+                for (int token = 0; token < vocab_size_; ++token) {
+                    covector_sums[lane_index][static_cast<size_t>(token)] =
+                        static_cast<double>(history.logits[
+                            static_cast<size_t>(token)
+                        ]);
                 }
                 int sequence = sequence_pool_->acquire();
                 sequences.push_back(sequence);
@@ -714,6 +740,15 @@ private:
                 tokens, model_position, sequences
             );
             counters_.observer_decode_calls++;
+            for (size_t lane_index = 0;
+                 lane_index < lane_count; ++lane_index) {
+                for (int token = 0; token < vocab_size_; ++token) {
+                    covector_sums[lane_index][static_cast<size_t>(token)] +=
+                        static_cast<double>(states[lane_index].logits[
+                            static_cast<size_t>(token)
+                        ]);
+                }
+            }
             for (size_t offset = 1; offset < path_length; ++offset) {
                 for (size_t lane_index = 0;
                      lane_index < lane_count; ++lane_index) {
@@ -727,27 +762,40 @@ private:
                     sequences
                 );
                 counters_.observer_decode_calls++;
+                for (size_t lane_index = 0;
+                     lane_index < lane_count; ++lane_index) {
+                    for (int token = 0; token < vocab_size_; ++token) {
+                        covector_sums[lane_index][
+                            static_cast<size_t>(token)
+                        ] += static_cast<double>(states[lane_index].logits[
+                            static_cast<size_t>(token)
+                        ]);
+                    }
+                }
             }
 
             for (size_t lane_index = 0;
                  lane_index < lane_count; ++lane_index) {
-                const product::TerminalRootLane & lane =
+                const product::BoundaryScanLane & lane =
                     schedule.lanes[lane_index];
                 const size_t row = demand_rows.at(lane.demand_id);
                 const product::ObservationDemand & demand = batch.demands[row];
                 product::PositionCovector & frame =
                     result.observations[row].covector;
-                const std::vector<float> & root_logits =
-                    states[lane_index].logits;
-                frame.vocabulary_log_partition = log_partition(root_logits);
+                std::vector<double> & scan = covector_sums[lane_index];
+                const double inverse_mass =
+                    1.0 / static_cast<double>(boundary_count);
+                for (double & coordinate : scan) {
+                    coordinate *= inverse_mass;
+                }
+                frame.boundary_count = boundary_count;
+                frame.vocabulary_log_partition = log_partition(scan);
                 frame.coordinates.reserve(demand.common_support.size());
                 for (product::Token token : demand.common_support) {
                     product::FramedCoordinate coordinate;
                     coordinate.token = token;
                     coordinate.frame = frame.frame;
-                    coordinate.value = static_cast<double>(root_logits[
-                        static_cast<size_t>(token)
-                    ]);
+                    coordinate.value = scan[static_cast<size_t>(token)];
                     frame.coordinates.push_back(coordinate);
                 }
             }
@@ -939,12 +987,12 @@ private:
         fail("trace covector omitted the selected token");
     }
 
-    double root_evaluation(
+    double scan_evaluation(
         const product::PositionCovector & covector,
         product::Token token
     ) const {
         if (covector.coordinates.empty()) {
-            fail("trace received empty terminal root covector");
+            fail("trace received empty boundary-scan covector");
         }
         for (const product::FramedCoordinate & coordinate :
              covector.coordinates) {
@@ -952,8 +1000,11 @@ private:
                 fail("trace received a coordinate from another frame");
             }
         }
+        if (covector.boundary_count == 0) {
+            fail("trace boundary-scan covector has zero mass");
+        }
         if (!std::isfinite(covector.vocabulary_log_partition)) {
-            fail("trace terminal root covector has no vocabulary partition");
+            fail("trace boundary-scan covector has no vocabulary partition");
         }
         return coordinate_for(covector, token).value -
             covector.vocabulary_log_partition;
@@ -1032,11 +1083,13 @@ private:
             ",\"depth\":%d,\"remaining\":%d,\"token\":%d"
             ",\"local_rank\":%d,\"logit\":%.9g"
             ",\"proposal_log_probability\":%.17g"
-            ",\"observer_frame\":%llu,\"attains\":%s"
+            ",\"observer_frame\":%llu"
+            ",\"attains_on_common_support\":%s"
             ",\"observer_max_rank\":%d,\"observer_max_token\":%d"
-            ",\"root_covector_logit\":%.9g"
-            ",\"root_vocabulary_log_partition\":%.17g"
-            ",\"root_ev_log_probability\":%.17g,\"text\":",
+            ",\"boundary_count\":%zu"
+            ",\"scan_covector_logit\":%.9g"
+            ",\"scan_vocabulary_log_partition\":%.17g"
+            ",\"scan_ev_log_probability\":%.17g,\"text\":",
             static_cast<unsigned long long>(selection_id - 1),
             static_cast<int>(value.position),
             options_.length - static_cast<int>(value.position),
@@ -1048,9 +1101,10 @@ private:
             alternative.attains ? "true" : "false",
             static_cast<int>(best + 1),
             covector.coordinates[best].token,
+            covector.boundary_count,
             candidate.value,
             covector.vocabulary_log_partition,
-            alternative.root_ev_log_probability
+            alternative.scan_ev_log_probability
         );
         json_string(trace_.stream, path_text(*alternative.complete_path));
         std::fputs(",\"observer_support\":[", trace_.stream);
@@ -1100,10 +1154,12 @@ private:
                 trace_.stream,
                 ",\"proposal_local_rank\":%d"
                 ",\"covector_rank\":%zu"
-                ",\"root_ev_log_probability\":%.17g}",
+                ",\"boundary_count\":%zu"
+                ",\"scan_ev_log_probability\":%.17g}",
                 position.local_rank,
                 coordinate_rank(position_covector, position.token),
-                root_evaluation(position_covector, position.token)
+                position_covector.boundary_count,
+                scan_evaluation(position_covector, position.token)
             );
         }
         std::fputs("]}\n", trace_.stream);
@@ -1128,9 +1184,9 @@ private:
             "{\"event\":\"select\",\"frame\":%llu"
             ",\"depth\":%d,\"remaining\":%d,\"token\":%d"
             ",\"local_rank\":%d,\"observer_frame\":%llu"
-            ",\"attains\":%s"
-            ",\"root_ev_log_probability\":%.17g"
-            ",\"selection_rule\":\"max_terminal_root_ev\""
+            ",\"attains_on_common_support\":%s"
+            ",\"scan_ev_log_probability\":%.17g"
+            ",\"selection_rule\":\"max_boundary_scan_ev\""
             ",\"propagated\":\"complete_covector_family\""
             ",\"text\":",
             static_cast<unsigned long long>(selection_id - 1),
@@ -1140,7 +1196,7 @@ private:
             value.local_rank,
             static_cast<unsigned long long>(covector.frame.frame_id - 1),
             alternative.attains ? "true" : "false",
-            alternative.root_ev_log_probability
+            alternative.scan_ev_log_probability
         );
         json_string(trace_.stream, path_text(*alternative.complete_path));
         std::fputs("}\n", trace_.stream);
@@ -1221,9 +1277,9 @@ int main(int argc, char ** argv) {
                 trace.stream,
                 ",\"chat_template\":%s,\"enable_thinking\":%s"
                 ",\"length\":%d,\"proposal_top_k\":%d"
-                ",\"mode\":\"exact_select_product_terminal_root\""
-                ",\"observer\":\"final_completion_endpoint_unembedding\""
-                ",\"selection_rule\":\"max_terminal_root_ev\"}\n",
+                ",\"mode\":\"exact_select_product_boundary_scan\""
+                ",\"observer\":\"recursive_boundary_geometric_barycenter\""
+                ",\"selection_rule\":\"max_boundary_scan_ev\"}\n",
                 options.use_chat_template ? "true" : "false",
                 options.enable_thinking ? "true" : "false",
                 options.length,
@@ -1261,11 +1317,13 @@ int main(int argc, char ** argv) {
         std::puts("completion:");
         std::puts(displayed.c_str());
         std::printf(
-            "score_kind=full_vocabulary_terminal_root_ev\n"
+            "score_kind=full_vocabulary_boundary_scan_ev\n"
             "selection_carrier=token_path_with_covector_family\n"
-            "selection_observer=final_completion_endpoint_unembedding\n"
-            "selection_rule=max_terminal_root_ev\n"
-            "observer_attention=causal_final_endpoint\n"
+            "selection_observer=recursive_boundary_geometric_barycenter\n"
+            "selection_rule=max_boundary_scan_ev\n"
+            "observer_attention=affine_scan_of_causal_boundary_covectors\n"
+            "observer_composition=geometric_mean_native_boundary_covectors\n"
+            "observer_lowering=one_completed_path_lane_per_candidate\n"
             "aggregate_path_score=none\n"
             "root_terminalizations=1\n"
             "strength_nodes=%llu\n"

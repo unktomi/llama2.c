@@ -128,20 +128,23 @@ Token argmax_token(
     return best->token;
 }
 
-double root_evaluation(
+double scan_evaluation(
     const PositionCovector & covector,
     Token token
 ) {
     if (covector.coordinates.empty()) {
-        invalid("cannot evaluate an empty terminal root covector");
+        invalid("cannot evaluate an empty boundary-scan covector");
     }
     for (const FramedCoordinate & coordinate : covector.coordinates) {
         if (coordinate.frame != covector.frame) {
-            invalid("terminal root covector mixes observation frames");
+            invalid("boundary-scan covector mixes observation frames");
         }
     }
+    if (covector.boundary_count == 0) {
+        invalid("boundary-scan covector has zero mass");
+    }
     if (!std::isfinite(covector.vocabulary_log_partition)) {
-        invalid("terminal root covector has no vocabulary partition");
+        invalid("boundary-scan covector has no vocabulary partition");
     }
     return coordinate_for(covector, token).value -
         covector.vocabulary_log_partition;
@@ -169,26 +172,26 @@ bool ObservationFrame::operator!=(const ObservationFrame & other) const {
     return !(*this == other);
 }
 
-TerminalRootSchedule make_terminal_root_schedule(
+BoundaryScanSchedule make_boundary_scan_schedule(
     const ObservationBatch & batch
 ) {
     if (batch.selection_id == 0) invalid("schedule has no selection id");
     if (batch.demands.empty()) invalid("schedule has no observer demands");
 
-    TerminalRootSchedule schedule;
+    BoundaryScanSchedule schedule;
     schedule.selection_id = batch.selection_id;
     schedule.position = batch.selecting_position;
-    TerminalRootLaneId next_lane_id = 1;
+    BoundaryScanLaneId next_lane_id = 1;
     for (const ObservationDemand & demand : batch.demands) {
         if (demand.demand_id == 0 || demand.candidate.binding_id == 0) {
             invalid("schedule contains an unbound observer demand");
         }
         validate_outcome(
             demand.history_before_candidate,
-            "terminal root lane history"
+            "boundary scan lane history"
         );
         const std::vector<Token> suffix = demand.selected_suffix.tokens();
-        TerminalRootLane lane;
+        BoundaryScanLane lane;
         lane.lane_id = next_lane_id++;
         lane.demand_id = demand.demand_id;
         lane.history_before_candidate = demand.history_before_candidate;
@@ -304,6 +307,9 @@ std::vector<PositionCovector> ExactProduct::observe_restrictions(
         if (!std::isfinite(covector.vocabulary_log_partition)) {
             invalid("root observer omitted the vocabulary partition");
         }
+        if (covector.boundary_count != horizon_ - node.position + 1) {
+            invalid("root observer returned the wrong boundary-scan mass");
+        }
         if (covector.coordinates.size() != support.size()) {
             invalid("root observer did not return the complete common support");
         }
@@ -400,7 +406,7 @@ ProductResult ExactProduct::evaluate(
         }
     }
 
-    /* No observer demand needs a child KV state: every terminal-root lane
+    /* No observer demand needs a child KV state: every boundary-scan lane
      * starts at the common history and teacher-forces x ++ selected_suffix.
      * Release the local frontier before invoking the root observer. */
     node_guard.release();
@@ -454,16 +460,16 @@ ProductResult ExactProduct::evaluate(
         );
         const bool satisfies = attained == node.alternatives[index].token;
         if (satisfies) attaining_count++;
-        const double root_ev = root_evaluation(
+        const double scan_ev = scan_evaluation(
             complete_observations.back().positions.front(),
             node.alternatives[index].token
         );
-        if (index == 0 || root_ev > selected_value ||
-            (root_ev == selected_value &&
+        if (index == 0 || scan_ev > selected_value ||
+            (scan_ev == selected_value &&
              node.alternatives[index].local_rank <
                  node.alternatives[selected_index].local_rank)) {
             selected_index = index;
-            selected_value = root_ev;
+            selected_value = scan_ev;
         }
 
         ObservedAlternative alternative;
@@ -473,7 +479,7 @@ ProductResult ExactProduct::evaluate(
         alternative.current_covector =
             &complete_observations[index].positions.front();
         alternative.observation_tuple = &complete_observations[index];
-        alternative.root_ev_log_probability = root_ev;
+        alternative.scan_ev_log_probability = scan_ev;
         alternative.attains = satisfies;
         alternatives.push_back(alternative);
         if (events_ != nullptr) {

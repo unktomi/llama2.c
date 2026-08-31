@@ -12,22 +12,26 @@
  *     SelectionOutcome =
  *         (token path, layerwise K/V summary, final hidden, covector family).
  *
- * Once all child continuations of one Select are ready, the same root
- * observer is restricted to each complete bound path T = x : b(x).  It
- * teacher-forces T once and returns only the final endpoint's full-vocabulary
- * unembedding covector
+ * Every causal boundary contributes its complete native vocabulary covector.
+ * A bound suffix carries the homogeneous affine summary
  *
- *     q(T) = logits(final_endpoint(T)).
+ *     A = (sum_final_hidden, mass).
  *
- * The local selection observes its own constructor in that covector:
+ * Prepending the current boundary is the associative operation
  *
- *     ev(x, q(T)) = logsoftmax(q(T))[x].
+ *     (h, 1) <> (S, m) = (h + S, m + 1).
  *
- * No conditional probabilities along T are accumulated.  Finite Select
- * maximizes this single endpoint observation for every x; it does not fold
- * ratings across token positions.  The selected outcome retains the complete
- * position-indexed family of endpoint covectors, and only the root emits its
- * token tuple.
+ * Since unembedding is linear, applying it to S / m is exactly the arithmetic
+ * mean of the native logits and therefore, after softmax, the normalized
+ * geometric mean of their vocabulary distributions.  The local selection
+ * observes its own constructor in that composed covector:
+ *
+ *     ev(x, q(T)) = logsoftmax(W_out(sum_hidden(T) / mass(T)))[x].
+ *
+ * No selected-token probabilities are accumulated.  Each recursive scale
+ * retains its own frame and the chosen child's observation tail, so the result
+ * is a zip of covectors rather than a scalar path fold.  Only the root emits
+ * the selected token tuple.
  *
  * This executable currently exposes only exact evaluation of an explicitly
  * requested finite local support. The former wall-clock implementation was
@@ -409,8 +413,6 @@ struct ModelNode {
     Tensor **scales;
     Tensor *final_hidden;
     Tensor *logits;
-    double log_partition;
-    bool log_partition_ready;
     NodeWaiter *waiter_head;
     NodeWaiter *waiter_tail;
 };
@@ -1007,11 +1009,17 @@ struct LogitPath {
 };
 
 typedef struct {
+    Tensor *sum_final_hidden;
+    uint64_t mass;
+} AffineCovectorSummary;
+
+typedef struct {
     LogitPath *path;
     ModelNode *terminal;
     Tensor **keys;
     Tensor **values;
     Tensor *final_hidden;
+    AffineCovectorSummary covector_summary;
     struct CovectorFrame *observations;
 } SelectionOutcome;
 
@@ -1027,7 +1035,10 @@ typedef struct CovectorFrame CovectorFrame;
 
 struct CovectorFrame {
     uint64_t id;
-    ModelNode *endpoint;
+    AffineCovectorSummary summary;
+    Tensor *mean_final_hidden;
+    Tensor *logits;
+    double log_partition;
     int maximum_token;
     int evaluated_token_rank;
     CovectorFrame *tail;
@@ -1046,7 +1057,7 @@ struct Search {
     uint64_t next_observer_frame_id;
     uint64_t candidate_observations;
     uint64_t continuation_demands;
-    uint64_t endpoint_covectors;
+    uint64_t barycenter_covectors;
     uint64_t attaining_alternatives;
     uint64_t ambiguous_selection_nodes;
     uint64_t zero_attainer_nodes;
@@ -1058,7 +1069,7 @@ struct SelectBranch {
     ModelLogit value;
     SelectionOutcome *outcome;
     CovectorFrame *observation;
-    double endpoint_log_probability;
+    double barycenter_log_probability;
     bool attains;
     bool ready;
 };
@@ -1074,6 +1085,7 @@ struct SelectJob {
     int branch_count;
     int started_count;
     int ready_count;
+    int observation_ready_count;
     int attainer_count;
     bool observation_started;
 };
@@ -1186,7 +1198,6 @@ static void trace_candidate(SelectBranch *branch) {
     if (search->trace == NULL) return;
     FILE *stream = search->trace;
     CovectorFrame *frame = branch->observation;
-    ModelNode *endpoint = frame->endpoint;
     const int evaluated_token = branch->value.token;
     fprintf(
         stream,
@@ -1195,12 +1206,13 @@ static void trace_candidate(SelectBranch *branch) {
         ",\"local_rank\":%d,\"logit\":%.9g"
         ",\"proposal_log_probability\":%.17g"
         ",\"observer_frame\":%" PRIu64
-        ",\"observer_kind\":\"terminal_endpoint_unembedding\""
-        ",\"endpoint_node\":%" PRIu64 ",\"endpoint_position\":%d"
-        ",\"attains\":%s,\"observer_max_token\":%d"
+        ",\"observer_kind\":\"recursive_boundary_geometric_barycenter\""
+        ",\"boundary_mass\":%" PRIu64
+        ",\"attains_on_common_support\":%s"
+        ",\"observer_full_vocabulary_max_token\":%d"
         ",\"candidate_covector_rank\":%d"
         ",\"candidate_covector_logit\":%.17g"
-        ",\"endpoint_log_probability\":%.17g"
+        ",\"barycenter_log_probability\":%.17g"
         ",\"text\":",
         branch->job->frame_id,
         branch->job->history->position - search->prompt_count + 1,
@@ -1210,13 +1222,12 @@ static void trace_candidate(SelectBranch *branch) {
         branch->value.logit,
         branch->value.log_probability,
         frame->id,
-        endpoint->id,
-        endpoint->position,
+        frame->summary.mass,
         branch->attains ? "true" : "false",
         frame->maximum_token,
         frame->evaluated_token_rank,
-        endpoint->logits->values[evaluated_token],
-        branch->endpoint_log_probability
+        frame->logits->values[evaluated_token],
+        branch->barycenter_log_probability
     );
     trace_decoded_path(
         search,
@@ -1224,7 +1235,7 @@ static void trace_candidate(SelectBranch *branch) {
         branch->outcome->path
     );
     int *observer_top = top_covector_tokens(
-        endpoint->logits,
+        frame->logits,
         branch->job->branch_count
     );
     fputs(",\"observer_top\":[", stream);
@@ -1241,14 +1252,14 @@ static void trace_candidate(SelectBranch *branch) {
             stream,
             atkey_decode(
                 search->model->runtime,
-                endpoint->token,
+                branch->job->history->token,
                 token
             )
         );
         fprintf(
             stream,
             ",\"logit\":%.17g}",
-            endpoint->logits->values[token]
+            frame->logits->values[token]
         );
     }
     free(observer_top);
@@ -1264,10 +1275,10 @@ static void trace_choice(SelectJob *job, const SelectBranch *branch) {
         "{\"event\":\"select\",\"frame\":%" PRIu64
         ",\"depth\":%d,\"remaining\":%d,\"token\":%d"
         ",\"local_rank\":%d,\"observer_frame\":%" PRIu64
-        ",\"attains\":%s"
+        ",\"attains_on_common_support\":%s"
         ",\"attainer_count\":%d"
-        ",\"endpoint_log_probability\":%.17g"
-        ",\"selection_rule\":\"max_terminal_endpoint_ev\""
+        ",\"barycenter_log_probability\":%.17g"
+        ",\"selection_rule\":\"max_boundary_barycenter_ev\""
         ",\"propagated\":\"complete_covector_family\",\"text\":",
         job->frame_id,
         job->history->position - search->prompt_count + 1,
@@ -1277,7 +1288,7 @@ static void trace_choice(SelectJob *job, const SelectBranch *branch) {
         branch->observation->id,
         branch->attains ? "true" : "false",
         job->attainer_count,
-        branch->endpoint_log_probability
+        branch->barycenter_log_probability
     );
     trace_decoded_path(search, job->history, branch->outcome->path);
     fputs("}\n", search->trace);
@@ -1315,7 +1326,7 @@ static int logit_precedes(const Tensor *logits, int left, int right) {
 
 static int *top_covector_tokens(const Tensor *logits, int count) {
     if (logits == NULL || count <= 0 || count > logits->width) {
-        escardo_fail("invalid endpoint-covector display width");
+        escardo_fail("invalid barycenter-covector display width");
     }
     int *tokens = escardo_calloc((size_t)count, sizeof(*tokens));
     int filled = 0;
@@ -1337,7 +1348,7 @@ static int *top_covector_tokens(const Tensor *logits, int count) {
         if (filled < count) filled++;
     }
     if (filled != count) {
-        escardo_fail("could not inspect terminal endpoint covector");
+        escardo_fail("could not inspect boundary barycenter covector");
     }
     return tokens;
 }
@@ -1383,20 +1394,6 @@ static double log_partition(const Tensor *logits) {
         total += exp((double)logits->values[token] - maximum);
     }
     return (double)maximum + log(total);
-}
-
-static double model_node_log_probability(ModelNode *node, int token) {
-    if (node == NULL || !node->ready || node->logits == NULL) {
-        escardo_fail("endpoint observer received an unavailable model node");
-    }
-    if (token < 0 || token >= node->logits->width) {
-        escardo_fail("endpoint observer token lies outside the vocabulary");
-    }
-    if (!node->log_partition_ready) {
-        node->log_partition = log_partition(node->logits);
-        node->log_partition_ready = true;
-    }
-    return (double)node->logits->values[token] - node->log_partition;
 }
 
 static LogitPath *path_cons(
@@ -1463,8 +1460,8 @@ static void select_branch_history_ready(
 
 static void select_start_branch(SelectBranch *branch) {
     SelectJob *job = branch->job;
-    /* Even the final constructor must traverse the model.  q([x]) is the
-     * unembedding covector at x's endpoint, not the proposal at `history`. */
+    /* Even the final constructor must traverse the model: q([x]) composes
+     * both the incoming boundary at `history` and the outgoing boundary. */
     model_request_node(
         job->search->model,
         job->history,
@@ -1498,7 +1495,7 @@ static int path_length(const LogitPath *path) {
 
 static int tensor_maximum_token(const Tensor *logits) {
     if (logits == NULL || logits->width <= 0) {
-        escardo_fail("cannot maximize an empty endpoint covector");
+        escardo_fail("cannot maximize an empty barycenter covector");
     }
     int maximum = 0;
     for (int token = 1; token < logits->width; token++) {
@@ -1511,7 +1508,7 @@ static int tensor_maximum_token(const Tensor *logits) {
 
 static int tensor_token_rank(const Tensor *logits, int selected) {
     if (logits == NULL || selected < 0 || selected >= logits->width) {
-        escardo_fail("cannot rank a token outside the endpoint covector");
+        escardo_fail("cannot rank a token outside the barycenter covector");
     }
     int rank = 1;
     for (int token = 0; token < logits->width; token++) {
@@ -1530,48 +1527,103 @@ static CovectorFrame *covector_frame_new(
 ) {
     Search *search = job->search;
     ModelTerm *model = search->model;
-    ModelNode *endpoint = branch->outcome->terminal;
-    if (endpoint == NULL || !endpoint->ready || endpoint->logits == NULL ||
-        endpoint->logits->width != model->vocab_size) {
-        escardo_fail("bound path has no terminal unembedding covector");
+    AffineCovectorSummary suffix = branch->outcome->covector_summary;
+    if (job->history->final_hidden == NULL ||
+        job->history->final_hidden->width != model->dim ||
+        suffix.sum_final_hidden == NULL ||
+        suffix.sum_final_hidden->width != model->dim ||
+        suffix.mass != (uint64_t)job->remaining ||
+        suffix.mass == UINT64_MAX) {
+        escardo_fail("bound suffix has an invalid affine covector summary");
     }
     CovectorFrame *frame = arena_allocate(&model->arena, sizeof(*frame));
     memset(frame, 0, sizeof(*frame));
     frame->id = search->next_observer_frame_id++;
-    frame->endpoint = endpoint;
-    frame->maximum_token = tensor_maximum_token(endpoint->logits);
-    frame->evaluated_token_rank = tensor_token_rank(
-        endpoint->logits,
-        branch->value.token
-    );
-    search->endpoint_covectors++;
+    frame->summary = (AffineCovectorSummary){
+        .sum_final_hidden = tensor_add(
+            model,
+            job->history->final_hidden,
+            suffix.sum_final_hidden
+        ),
+        .mass = suffix.mass + 1,
+    };
+    frame->mean_final_hidden = tensor_new(&model->arena, model->dim);
+    const float inverse_mass = 1.0f / (float)frame->summary.mass;
+    for (int lane = 0; lane < model->dim; lane++) {
+        frame->mean_final_hidden->values[lane] =
+            frame->summary.sum_final_hidden->values[lane] * inverse_mass;
+    }
+    search->barycenter_covectors++;
     return frame;
 }
 
+static void select_branch_barycenter_ready(
+    void *environment,
+    Tensor *logits
+) {
+    SelectBranch *branch = environment;
+    SelectJob *job = branch->job;
+    CovectorFrame *frame = branch->observation;
+    if (frame == NULL || frame->logits != NULL || logits == NULL ||
+        logits->width != job->search->model->vocab_size) {
+        escardo_fail("invalid boundary barycenter unembedding result");
+    }
+    frame->logits = logits;
+    frame->log_partition = log_partition(logits);
+    frame->maximum_token = tensor_maximum_token(logits);
+    frame->evaluated_token_rank = tensor_token_rank(
+        logits,
+        branch->value.token
+    );
+    job->observation_ready_count++;
+    if (job->observation_ready_count > job->branch_count) {
+        escardo_fail("boundary observer completed a branch twice");
+    }
+    if (job->observation_ready_count == job->branch_count) {
+        select_job_finish_observation(job);
+    }
+}
+
 static void select_job_finish_observation(SelectJob *job) {
+    if (job->observation_ready_count != job->branch_count) {
+        escardo_fail("boundary observer terminated with missing covectors");
+    }
     int selected_index = 0;
     for (int demand = 0; demand < job->branch_count; demand++) {
         SelectBranch *branch = &job->branches[demand];
         CovectorFrame *frame = branch->observation;
-        if (frame == NULL || frame->endpoint == NULL) {
+        if (frame == NULL || frame->logits == NULL ||
+            frame->summary.sum_final_hidden == NULL ||
+            frame->summary.mass != (uint64_t)job->remaining + 1) {
             escardo_fail("selection observer returned an invalid frame");
         }
 
-        branch->attains = frame->maximum_token == branch->value.token;
-        branch->endpoint_log_probability = model_node_log_probability(
-            frame->endpoint,
-            branch->value.token
-        );
+        int support_maximum = 0;
+        for (int coordinate = 1;
+             coordinate < job->branch_count; coordinate++) {
+            const int token = job->branches[coordinate].value.token;
+            const int incumbent =
+                job->branches[support_maximum].value.token;
+            if (frame->logits->values[token] >
+                    frame->logits->values[incumbent]) {
+                support_maximum = coordinate;
+            }
+        }
+        branch->attains =
+            job->branches[support_maximum].value.token == branch->value.token;
+        branch->barycenter_log_probability =
+            (double)frame->logits->values[branch->value.token] -
+            frame->log_partition;
         if (branch->attains) job->attainer_count++;
         frame->tail = branch->outcome->observations;
         job->search->candidate_observations++;
         trace_candidate(branch);
         SelectBranch *incumbent = &job->branches[selected_index];
         if (demand == 0 ||
-            branch->endpoint_log_probability >
-                incumbent->endpoint_log_probability ||
-            (branch->endpoint_log_probability ==
-                 incumbent->endpoint_log_probability &&
+            branch->barycenter_log_probability >
+                incumbent->barycenter_log_probability ||
+            (branch->barycenter_log_probability ==
+                 incumbent->barycenter_log_probability &&
              branch->value.local_rank < incumbent->value.local_rank)) {
             selected_index = demand;
         }
@@ -1591,6 +1643,7 @@ static void select_job_finish_observation(SelectJob *job) {
         sizeof(*propagated)
     );
     *propagated = *selected->outcome;
+    propagated->covector_summary = selected->observation->summary;
     propagated->observations = selected->observation;
     job->continuation(job->continuation_environment, propagated);
 }
@@ -1609,7 +1662,15 @@ static void select_job_start_observation(SelectJob *job) {
         }
         branch->observation = covector_frame_new(job, branch);
     }
-    select_job_finish_observation(job);
+    for (int demand = 0; demand < job->branch_count; demand++) {
+        SelectBranch *branch = &job->branches[demand];
+        scope_request_tensor(
+            &job->search->model->output,
+            branch->observation->mean_final_hidden,
+            select_branch_barycenter_ready,
+            branch
+        );
+    }
 }
 
 static void select_job_after_branch(SelectJob *job) {
@@ -1642,6 +1703,10 @@ static void select_path(
             .keys = history->keys,
             .values = history->values,
             .final_hidden = history->final_hidden,
+            .covector_summary = {
+                .sum_final_hidden = history->final_hidden,
+                .mass = 1,
+            },
         };
         continuation(continuation_environment, outcome);
         return;
@@ -1983,9 +2048,9 @@ int main(int argc, char **argv) {
         fprintf(
             trace,
             ",\"backend\":\"%s\",\"mode\":\"%s\""
-            ",\"selection_rule\":\"max_terminal_endpoint_ev\"}\n",
+            ",\"selection_rule\":\"max_boundary_barycenter_ev\"}\n",
             atkey_backend_name(runtime),
-            "exact_select_product_terminal_endpoint_covector"
+            "exact_select_product_boundary_geometric_scan"
         );
         fflush(trace);
     }
@@ -2011,17 +2076,17 @@ int main(int argc, char **argv) {
     puts("completion:");
     print_selected(&search, result.selected);
     printf(
-        "score_kind=full_vocabulary_terminal_endpoint_logsoftmax_coordinate\n"
+        "score_kind=full_vocabulary_boundary_barycenter_logsoftmax_coordinate\n"
         "selection_carrier=token_path_with_covector_family\n"
-        "selection_observer=terminal_endpoint_unembedding_root_callback\n"
-        "observer_attention=teacher_forced_bound_path_final_endpoint\n"
-        "observer_lowering=one_completed_path_lane_per_candidate\n"
+        "selection_observer=recursive_boundary_covector_scan\n"
+        "observer_composition=geometric_mean_native_boundary_covectors\n"
+        "observer_lowering=affine_hidden_sum_then_batched_output\n"
         "aggregate_path_score=none\n"
         "root_terminalizations=1\n"
         "strength_nodes=%" PRIu64 "\n"
         "candidate_observations=%" PRIu64 "\n"
         "continuation_demands=%" PRIu64 "\n"
-        "endpoint_covectors=%" PRIu64 "\n"
+        "barycenter_covectors=%" PRIu64 "\n"
         "attaining_alternatives=%" PRIu64 "\n"
         "ambiguous_selection_nodes=%" PRIu64 "\n"
         "zero_attainer_nodes=%" PRIu64 "\n"
@@ -2029,7 +2094,7 @@ int main(int argc, char **argv) {
         search.strength_nodes,
         search.candidate_observations,
         search.continuation_demands,
-        search.endpoint_covectors,
+        search.barycenter_covectors,
         search.attaining_alternatives,
         search.ambiguous_selection_nodes,
         search.zero_attainer_nodes,
@@ -2054,11 +2119,11 @@ int main(int argc, char **argv) {
             trace,
             "{\"event\":\"run_end\",\"strength_nodes\":%" PRIu64
             ",\"candidate_observations\":%" PRIu64
-            ",\"endpoint_covectors\":%" PRIu64
+            ",\"barycenter_covectors\":%" PRIu64
             ",\"model_token_terms\":%" PRIu64 "}\n",
             search.strength_nodes,
             search.candidate_observations,
-            search.endpoint_covectors,
+            search.barycenter_covectors,
             model.model_steps
         );
         fflush(trace);

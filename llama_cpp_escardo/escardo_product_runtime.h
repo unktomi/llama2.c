@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <vector>
 
 namespace escardo_product {
@@ -43,10 +44,10 @@ struct StructuredOutcomeRef {
  * object. BindingId is the stable row identity through llama.cpp/Metal
  * batches; a backend must not split these into unkeyed parallel arrays.
  *
- * A terminal binding deliberately has child_materialized == false.  The unit
- * observer at the last position is the history proposal covector, so decoding
- * the candidate merely to manufacture an unused child state would be eager
- * work with no denotational role.
+ * A terminal binding deliberately has child_materialized == false: the
+ * SelectionTerm need not retain that child as a recursive frontier. The root
+ * observer still teacher-forces the terminal constructor in its scan lane so
+ * the outgoing causal boundary participates in the affine summary.
  */
 struct BoundContinuation {
     BindingId binding_id = 0;
@@ -101,11 +102,18 @@ struct FramedCoordinate {
     double value = 0.0;
 };
 
-/* One projective/affine covector over a node's complete common support. */
+/*
+ * One projective/affine covector over a node's complete common support.
+ * `boundary_count` is the mass retained by the associative scan; coordinates
+ * are the corresponding arithmetic means in logit space (geometric means
+ * after softmax).  The full-vocabulary partition fixes the projective gauge.
+ */
 struct PositionCovector {
     std::size_t position = 0;
     ObservationFrame frame;
-    double vocabulary_log_partition = 0.0;
+    std::size_t boundary_count = 0;
+    double vocabulary_log_partition =
+        std::numeric_limits<double>::quiet_NaN();
     std::vector<FramedCoordinate> coordinates;
 };
 
@@ -116,15 +124,17 @@ struct ObservationTuple {
 
 /*
  * One restricted root-observer argument p(x : b(x)). `candidate` names x and
- * selected_suffix fixes b(x). The backend teacher-forces that one completed
- * counterfactual path, then returns the model's vocabulary covector at its
- * final completion endpoint. `common_support` identifies the coordinates that
- * the finite local selection needs; `vocabulary_log_partition` is nevertheless
- * computed over the model's complete vocabulary.
+ * selected_suffix fixes b(x). The backend teacher-forces that completed
+ * counterfactual and scans every native vocabulary covector at its causal
+ * boundaries, including the history boundary before x and the boundary after
+ * the final suffix token. It returns their affine mean. `common_support`
+ * identifies the coordinates needed by the finite local selection; the
+ * partition is nevertheless computed over the complete vocabulary.
  *
- * Covectors for two different completed counterfactuals are different frames.
- * Their raw coordinates are never compared. Selection compares only the typed
- * evaluations log_softmax(root_covector)[candidate].
+ * The scan carrier is (sum, mass), with componentwise sum and integer mass.
+ * Thus recursive grouping cannot change the result. Covectors for different
+ * completed counterfactuals remain different frames and their raw coordinates
+ * are never compared directly.
  */
 struct ObservationDemand {
     DemandId demand_id = 0;
@@ -151,30 +161,30 @@ struct ObservationBatchResult {
     std::vector<DemandObservation> observations;
 };
 
-using TerminalRootLaneId = std::uint64_t;
+using BoundaryScanLaneId = std::uint64_t;
 
 /*
- * Stable lowering identity for one completed counterfactual observer demand.
- * The backend copies `history_before_candidate.kv_summary` to a lane sequence,
- * teacher-forces candidate_then_suffix all the way through its final token,
- * and returns that final token's native unembedding covector. There is one
- * lane per demand, including at the terminal selection position.
+ * Stable lowering identity for one completed counterfactual scan. The backend
+ * starts with the history proposal, copies the history KV state to a lane,
+ * teacher-forces candidate_then_suffix, and merges every resulting proposal
+ * componentwise while retaining the exact boundary mass. There is one lane
+ * per demand, including at the terminal selection position.
  */
-struct TerminalRootLane {
-    TerminalRootLaneId lane_id = 0;
+struct BoundaryScanLane {
+    BoundaryScanLaneId lane_id = 0;
     DemandId demand_id = 0;
     StructuredOutcomeRef history_before_candidate;
     std::vector<Token> candidate_then_suffix;
 };
 
-struct TerminalRootSchedule {
+struct BoundaryScanSchedule {
     SelectionId selection_id = 0;
     std::size_t position = 0;
-    std::vector<TerminalRootLane> lanes;
+    std::vector<BoundaryScanLane> lanes;
 };
 
 /* Expands demands without evaluating or rating them. */
-TerminalRootSchedule make_terminal_root_schedule(
+BoundaryScanSchedule make_boundary_scan_schedule(
     const ObservationBatch & batch
 );
 
@@ -226,7 +236,7 @@ struct ObservedAlternative {
     const BoundPath * complete_path = nullptr;
     const PositionCovector * current_covector = nullptr;
     const ObservationTuple * observation_tuple = nullptr;
-    double root_ev_log_probability = 0.0;
+    double scan_ev_log_probability = 0.0;
     bool attains = false;
 };
 
@@ -276,18 +286,17 @@ struct ProductResult {
  *   a      = epsilon(x -> p(x : b(x)))
  *   result = a : b(a)
  *
- * For this finite-search epsilon, ev evaluates each x in the terminal root
- * covector of its recursively completed counterfactual p(x):
+ * For this finite-search epsilon, ev evaluates each x in the recursively
+ * scanned boundary covector of its completed counterfactual p(x):
  *
- *   ev(x, p(x)) = root_logits(p(x))[x]
- *                  - logsumexp(root_logits(p(x))[vocabulary]).
+ *   scan(p(x)) = mean_j boundary_logits_j(p(x))
+ *   ev(x,p(x)) = log_softmax(scan(p(x)))[x].
  *
- * The subtraction fixes the additive gauge before evaluations from distinct
- * frames are ordered. No path likelihood is constructed. The maximum root
- * evaluation is selected (local rank breaks exact ties). Whether x is also the
- * argmax coordinate of its own frame over the finite proposal support is
- * retained only as a diagnostic. The selected current covector is prepended
- * to b(a)'s position-indexed tuple.
+ * The scan composes vocabulary coordinates before ev; it never folds selected
+ * token probabilities into a scalar path score. Carrying its boundary mass
+ * makes it associative, and full-vocabulary normalization fixes the additive
+ * gauge before evaluations from distinct frames are ordered. The selected
+ * current covector is prepended to b(a)'s position-indexed tuple.
  */
 class ExactProduct {
 public:
