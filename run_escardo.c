@@ -16,9 +16,9 @@
  *     a   = epsilon (\x -> p (x : b x))
  *     result = a : b a
  *
- * The branch for b(a) is shared; it is not evaluated again after epsilon has
- * selected a.  Only the root applies tau, p(selection p), and starts the
- * scheduler.
+ * The branch for b(a) and its attained outcome are shared; neither is
+ * evaluated again after epsilon has selected a. Only the root forgets the
+ * retained outcome and emits the token witness.
  *
  * For a demanded constructor x, the local Select first forces and memoizes
  * b(x), then compares
@@ -1521,14 +1521,38 @@ static int timed_local_rank(
     return rank;
 }
 
-/* Draw an argument for one local Select.  With top_k == 0 this is categorical
- * sampling from the model over the entire selectable vocabulary.  A positive
- * top_k truncates only the proposal distribution; the recorded payoff remains
- * the token's normalized probability under the full vocabulary. */
+static TimedSelectEdge *timed_find_edge(
+    const TimedSelectFrame *frame,
+    int token
+) {
+    for (TimedSelectEdge *edge = frame->edges; edge != NULL;
+         edge = edge->next) {
+        if (edge->token == token) return edge;
+    }
+    return NULL;
+}
+
+static bool timed_argument_is_eligible(
+    const TimedSelectFrame *frame,
+    int token,
+    bool demand_unseen,
+    uint64_t minimum_demand
+) {
+    TimedSelectEdge *edge = timed_find_edge(frame, token);
+    if (demand_unseen) return edge == NULL;
+    return edge != NULL && edge->demand_count == minimum_demand;
+}
+
+/* Draw a memo cell for one local Select. A cell not yet present in this frame
+ * is demanded before an existing cell is repeated. Once the finite proposal
+ * support is present, only least-demanded cells are eligible for the next
+ * draw. The model logits choose probabilistically among eligible cells; demand
+ * counts never enter constructor/codata comparison. */
 static ModelLogit timed_sample_argument(
     Search *search,
-    ModelNode *history
+    TimedSelectFrame *frame
 ) {
+    ModelNode *history = frame->history;
     Tensor *logits = history->logits;
     int *support = NULL;
     int support_count = search->top_k;
@@ -1540,15 +1564,53 @@ static ModelLogit timed_sample_argument(
     }
     if (support_count <= 0) escardo_fail("empty timed sampling support");
 
+    int existing_count = 0;
+    uint64_t minimum_demand = UINT64_MAX;
+    if (support != NULL) {
+        for (int index = 0; index < support_count; index++) {
+            TimedSelectEdge *edge = timed_find_edge(frame, support[index]);
+            if (edge == NULL) continue;
+            existing_count++;
+            if (edge->demand_count < minimum_demand) {
+                minimum_demand = edge->demand_count;
+            }
+        }
+    } else {
+        for (int token = 0; token < search->model->vocab_size; token++) {
+            if (!token_is_selectable(search, token)) continue;
+            TimedSelectEdge *edge = timed_find_edge(frame, token);
+            if (edge == NULL) continue;
+            existing_count++;
+            if (edge->demand_count < minimum_demand) {
+                minimum_demand = edge->demand_count;
+            }
+        }
+    }
+    bool demand_unseen = existing_count < support_count;
+    if (!demand_unseen && minimum_demand == UINT64_MAX) {
+        escardo_fail("timed sampling lost its demanded support");
+    }
+
     double maximum = -DBL_MAX;
     if (support != NULL) {
         for (int index = 0; index < support_count; index++) {
-            double value = logits->values[support[index]];
+            int token = support[index];
+            if (!timed_argument_is_eligible(
+                    frame, token, demand_unseen, minimum_demand
+                )) {
+                continue;
+            }
+            double value = logits->values[token];
             if (value > maximum) maximum = value;
         }
     } else {
         for (int token = 0; token < search->model->vocab_size; token++) {
             if (!token_is_selectable(search, token)) continue;
+            if (!timed_argument_is_eligible(
+                    frame, token, demand_unseen, minimum_demand
+                )) {
+                continue;
+            }
             double value = logits->values[token];
             if (value > maximum) maximum = value;
         }
@@ -1557,11 +1619,22 @@ static ModelLogit timed_sample_argument(
     double mass = 0.0;
     if (support != NULL) {
         for (int index = 0; index < support_count; index++) {
-            mass += exp((double)logits->values[support[index]] - maximum);
+            int token = support[index];
+            if (!timed_argument_is_eligible(
+                    frame, token, demand_unseen, minimum_demand
+                )) {
+                continue;
+            }
+            mass += exp((double)logits->values[token] - maximum);
         }
     } else {
         for (int token = 0; token < search->model->vocab_size; token++) {
             if (!token_is_selectable(search, token)) continue;
+            if (!timed_argument_is_eligible(
+                    frame, token, demand_unseen, minimum_demand
+                )) {
+                continue;
+            }
             mass += exp((double)logits->values[token] - maximum);
         }
     }
@@ -1575,6 +1648,11 @@ static ModelLogit timed_sample_argument(
     if (support != NULL) {
         for (int index = 0; index < support_count; index++) {
             int token = support[index];
+            if (!timed_argument_is_eligible(
+                    frame, token, demand_unseen, minimum_demand
+                )) {
+                continue;
+            }
             cumulative += exp((double)logits->values[token] - maximum);
             selected = token;
             if (target < cumulative) break;
@@ -1582,6 +1660,11 @@ static ModelLogit timed_sample_argument(
     } else {
         for (int token = 0; token < search->model->vocab_size; token++) {
             if (!token_is_selectable(search, token)) continue;
+            if (!timed_argument_is_eligible(
+                    frame, token, demand_unseen, minimum_demand
+                )) {
+                continue;
+            }
             cumulative += exp((double)logits->values[token] - maximum);
             selected = token;
             if (target < cumulative) break;
@@ -2095,7 +2178,7 @@ static void timed_trace_demand(
         "{\"event\":\"continuation_demand\",\"sample\":%" PRIu64
         ",\"frame\":%" PRIu64 ",\"depth\":%d,\"remaining\":%d"
         ",\"token\":%d,\"local_rank\":%d,\"logit\":%.9g"
-        ",\"local_log_probability\":%.17g"
+        ",\"proposal_log_probability\":%.17g"
         ",\"multiplicity\":%" PRIu64 "}\n",
         sample->sample_id,
         edge->owner->history->id,
@@ -2269,7 +2352,7 @@ static void timed_sample_child_ready(void *environment, ModelNode *child) {
  * it never predetermines a leaf count or divides one across early branches. */
 static void timed_sample_step(TimedSample *sample) {
     TimedSelectFrame *frame = sample->frame;
-    ModelLogit value = timed_sample_argument(sample->search, frame->history);
+    ModelLogit value = timed_sample_argument(sample->search, frame);
     TimedSelectEdge *edge = timed_edge_for(frame, value);
     frame->demand_count++;
     edge->demand_count++;
@@ -2689,15 +2772,15 @@ int main(int argc, char **argv) {
     puts("completion:");
     print_selected(&search, result.selected);
     printf(
-        "selected_score=%.17g\n"
-        "score_kind=joint_model_log_probability\n"
-        "selection_carrier=ModelLogit\n"
+        "selected_root_coordinate=%.17g\n"
+        "score_kind=terminal_root_covector_coordinate\n"
+        "selection_carrier=ModelLogit_with_terminal_SelectionOutcome\n"
         "root_terminalizations=1\n"
         "strength_nodes=%" PRIu64 "\n"
         "candidate_observations=%" PRIu64 "\n"
         "sampled_candidate_demands=%" PRIu64 "\n"
         "completed_samples=%" PRIu64 "\n"
-        "payoff_observations=%" PRIu64 "\n"
+        "constructor_codata_evaluations=%" PRIu64 "\n"
         "model_token_terms=%" PRIu64 "\n",
         result.score,
         search.strength_nodes,
@@ -2726,7 +2809,7 @@ int main(int argc, char **argv) {
     if (trace != NULL) {
         fprintf(
             trace,
-            "{\"event\":\"run_end\",\"selected_score\":%.17g"
+            "{\"event\":\"run_end\",\"selected_root_coordinate\":%.17g"
             ",\"strength_nodes\":%" PRIu64
             ",\"candidate_observations\":%" PRIu64
             ",\"completed_samples\":%" PRIu64 "}\n",
