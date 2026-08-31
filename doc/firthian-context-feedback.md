@@ -62,36 +62,57 @@ checks `maximum_calls_per_filler == 1` for this phase. Strength runs afterward
 over immutable outcomes and aborts if it causes any learned-filler call or
 scalar weight read.
 
-## Exact finite sampled support
+## Sampled dependent demand tree
 
-`-k` is the number of token-indexed cells sampled without replacement at each
-prefix. Once those local carriers have been demanded, their finite selection
-product is exact: every sampled alternative remains available at every
-completion position.
+Every generated frame retains the full 32,000-token vocabulary. `-k 0` leaves
+the proposal distribution over that full carrier. A positive `-k K` is an
+explicit top-K proposal restriction and is reported as such; it is never
+described as the semantic carrier or as exact full-vocabulary search.
 
-`-b` is only an optional resource safety limit. If the exact sampled product
-would exceed it, the run fails before model evaluation. It never spends the
-limit near the root and silently turns later Selects into unary nodes. The
-default is unlimited.
+`-b N` demands `N` complete hypothetical paths before the learned observer is
+run. Shared prefixes are represented once and repeated paths increment their
+reachability multiplicity. The resulting irregular prefix tree is a finite
+dependent selection term. After one whole-family `llama_company_evaluate`,
+memoized strength applies every local `Select` to the recursively selected
+suffix outcome. Sampling constructs the observed subtree; it does not choose
+the returned witness.
 
-For a two-token completion with `-k 4`, the term has all `4^2 = 16` leaves:
+The finite recursion is exact over the observed dependent subtree, but the
+subtree is only a sampled approximation to the full vocabulary product. The
+trace therefore records `exact:false`, `path_demands`, `unique_leaves`,
+`root_reachability`, and any positive `proposal_top_k`.
+
+For six completion positions with 1,024 full-vocabulary path demands:
 
 ```sh
 ./run_hidden_feedback_select test/stories15M.bin \
-  -z tokenizer.bin -i "Lily was" -n 6 \
-  -r company -k 4 -b 16 -s 42 -o candidates.jsonl
+  -z tokenizer.bin -i "Lily was" -l 6 \
+  -r company -k 0 -b 1024 -s 42 -o candidates.jsonl
 ```
 
 Use `-l N` to request exactly `N` completion positions independently of the
 tokenized prompt length. This overrides the older total-position `-n` option
 and refuses prompts that would exceed the model context.
 
-The proposal carrier is still produced by independently unembedding the fixed
-hidden-feedback tape. That is a known semantic limitation, not a solved
-quality result. Backward induction cannot select a coherent completion absent
-from this carrier. The active implementation reports the actual weak leaves;
+The sampling proposal is still produced by independently unembedding the
+fixed hidden-feedback tape. That is a known coverage limitation, not a solved
+quality result. Backward induction cannot select a coherent completion that
+was never demanded. The active implementation reports the actual weak leaves;
 it does not repair them with an AR rollout, scalar likelihood sum, terminal
 token score, or truncated suffix.
+
+The first full-vocabulary system run above retained 1,023 unique leaves from
+1,024 path demands and selected:
+
+```text
+Lily was a a sad a very sad
+```
+
+None of those leaves contained `girl`, `young`, `little`, `child`, or
+`person`. At the relevant fixed-tape frame, `girl` had local rank 516 and
+proposal probability `2.34597073e-06`, so 1,024 draws had expected occurrence
+count `0.00240227`. This is a measured failure of the fixed hidden-feedback
+proposal, not evidence that the recursive observer rejected a coherent leaf.
 
 ## Trace
 

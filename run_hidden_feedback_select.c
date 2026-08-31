@@ -995,6 +995,7 @@ typedef struct {
     ProjectionObserverKind observer_kind;
     int local_support;
     unsigned long long sample_seed;
+    unsigned long long sample_state;
     unsigned long long next_frame_id;
     double first_variable_selection_rating;
     int first_variable_selection_rating_set;
@@ -1846,6 +1847,7 @@ typedef struct {
     int count;
     int capacity;
     unsigned long long leaf_count;
+    unsigned long long path_demands;
 } ProjectionTerm;
 
 static int projection_term_add_node(
@@ -1883,88 +1885,164 @@ static int projection_term_add_node(
     return index;
 }
 
-static void projection_term_build(
-    ProjectionProduct *product,
+static int projection_term_find_child(
+    const ProjectionTerm *term,
+    int parent,
+    int candidate_index
+) {
+    const ProjectionTermNode *node = &term->nodes[parent];
+    for (int ordinal = 0; ordinal < node->child_count; ordinal++) {
+        int child = node->children[ordinal];
+        if (term->nodes[child].candidate_index == candidate_index) {
+            return child;
+        }
+    }
+    return -1;
+}
+
+static int projection_term_append_child(
     ProjectionTerm *term,
     int parent,
     int position,
-    int *path
+    int candidate_index
 ) {
-    if (position == product->frame_count) {
-        term->leaf_count++;
-        term->nodes[parent].reachability = 1;
-        return;
-    }
-    ProjectionSelectFrame *frame = &product->frames[position];
-    int demand_count = frame->candidate_count;
-    if (demand_count > product->local_support) {
-        demand_count = product->local_support;
-    }
-    if (demand_count < 1) demand_count = 1;
-    int *demands = malloc((size_t)demand_count * sizeof(*demands));
-    int *children = malloc((size_t)demand_count * sizeof(*children));
-    if (demands == NULL || children == NULL) {
-        fprintf(stderr, "could not allocate demanded selection branches\n");
+    int child = projection_term_add_node(
+        term,
+        parent,
+        position,
+        candidate_index
+    );
+    ProjectionTermNode *node = &term->nodes[parent];
+    if (node->child_count == INT_MAX) {
+        fprintf(stderr, "selection term child count overflow\n");
         exit(EXIT_FAILURE);
     }
-    projection_demanded_candidates(
-        product,
-        frame,
-        path,
-        demand_count,
-        demands
+    int child_count = node->child_count + 1;
+    int *children = realloc(
+        node->children,
+        (size_t)child_count * sizeof(*children)
     );
-    term->nodes[parent].children = children;
-    term->nodes[parent].child_count = demand_count;
-    for (int demand = 0; demand < demand_count; demand++) {
-        int candidate_index = demands[demand];
-        path[position] = candidate_index;
-        int child = projection_term_add_node(
-            term,
-            parent,
-            position,
-            candidate_index
-        );
-        term->nodes[parent].children[demand] = child;
-        projection_term_build(
-            product,
-            term,
-            child,
-            position + 1,
-            path
-        );
-        if (ULLONG_MAX - term->nodes[parent].reachability <
-                term->nodes[child].reachability) {
-            fprintf(stderr, "selection reachability multiplicity overflow\n");
-            exit(EXIT_FAILURE);
-        }
-        term->nodes[parent].reachability += term->nodes[child].reachability;
+    if (children == NULL) {
+        fprintf(stderr, "could not grow sampled selection branches\n");
+        exit(EXIT_FAILURE);
     }
-    free(demands);
+    node->children = children;
+    node->children[node->child_count] = child;
+    node->child_count = child_count;
+    return child;
 }
 
 /*
- * The sampled carrier at a prefix is finite, but its selection product is
- * exact.  A resource limit may reject that term; it must never reshape it by
- * spending all branching near the root and making later Selects unary.
+ * Demand one argument from the still-complete local vocabulary.  A positive
+ * local_support is an explicit proposal truncation to the highest-ranked K
+ * cells; zero leaves the proposal distribution over the entire vocabulary.
+ * The draw chooses only which continuation is demanded.  It never supplies
+ * the observer result or chooses the Select witness.
  */
-static unsigned long long projection_term_exact_leaf_count(
-    const ProjectionProduct *product
+static int projection_term_sample_candidate(
+    ProjectionProduct *product,
+    const ProjectionSelectFrame *frame
 ) {
-    unsigned long long leaves = 1;
-    for (int position = 0; position < product->frame_count; position++) {
-        int demand_count = product->frames[position].candidate_count;
-        if (demand_count > product->local_support) {
-            demand_count = product->local_support;
+    if (frame->candidate_count == 1) return 0;
+    int support_count = frame->candidate_count;
+    if (product->local_support > 0 &&
+        support_count > product->local_support) {
+        support_count = product->local_support;
+    }
+    if (support_count <= 0) {
+        fprintf(stderr, "sampled Select has no proposal arguments\n");
+        exit(EXIT_FAILURE);
+    }
+    double maximum = frame->candidates[0].logit;
+    double mass = 0.0;
+    for (int index = 0; index < support_count; index++) {
+        mass += exp((double)frame->candidates[index].logit - maximum);
+    }
+    if (!(mass > 0.0) || !isfinite(mass)) {
+        fprintf(stderr, "invalid sampled Select proposal mass\n");
+        exit(EXIT_FAILURE);
+    }
+    double target = projection_random_unit(&product->sample_state) * mass;
+    double cumulative = 0.0;
+    int selected = support_count - 1;
+    for (int index = 0; index < support_count; index++) {
+        cumulative += exp(
+            (double)frame->candidates[index].logit - maximum
+        );
+        if (target < cumulative) {
+            selected = index;
+            break;
         }
-        if (demand_count < 1) demand_count = 1;
-        if (leaves > ULLONG_MAX / (unsigned long long)demand_count) {
-            fprintf(stderr, "exact sampled selection term exceeds leaf count range\n");
+    }
+    return selected;
+}
+
+/*
+ * Construct the finite dependent demand tree extensionally by sampling
+ * complete hypothetical paths.  Shared prefixes are represented once and
+ * repeated demands increment reachability.  No path is selected here: after
+ * the one family evaluation, projection_term_select supplies Escardo's
+ * recursive b(x), a, and a:b(a) over exactly this observed subtree.
+ */
+static void projection_term_sample_paths(
+    ProjectionProduct *product,
+    ProjectionTerm *term,
+    unsigned long long path_demands,
+    int *path
+) {
+    if (path_demands == 0) {
+        fprintf(stderr, "sampled selection requires a path demand\n");
+        exit(EXIT_FAILURE);
+    }
+    int *path_nodes = malloc(
+        (size_t)product->frame_count * sizeof(*path_nodes)
+    );
+    if (path_nodes == NULL) {
+        fprintf(stderr, "could not allocate sampled selection path\n");
+        exit(EXIT_FAILURE);
+    }
+    for (unsigned long long demand = 0; demand < path_demands; demand++) {
+        int parent = 0;
+        for (int position = 0; position < product->frame_count; position++) {
+            ProjectionSelectFrame *frame = &product->frames[position];
+            int candidate_index = projection_term_sample_candidate(
+                product,
+                frame
+            );
+            path[position] = candidate_index;
+            int child = projection_term_find_child(
+                term,
+                parent,
+                candidate_index
+            );
+            if (child < 0) {
+                child = projection_term_append_child(
+                    term,
+                    parent,
+                    position,
+                    candidate_index
+                );
+            }
+            path_nodes[position] = child;
+            parent = child;
+        }
+        if (term->nodes[parent].reachability == 0) term->leaf_count++;
+        if (term->nodes[0].reachability == ULLONG_MAX) {
+            fprintf(stderr, "selection reachability multiplicity overflow\n");
             exit(EXIT_FAILURE);
         }
-        leaves *= (unsigned long long)demand_count;
+        term->nodes[0].reachability++;
+        for (int position = 0; position < product->frame_count; position++) {
+            ProjectionTermNode *node = &term->nodes[path_nodes[position]];
+            if (node->reachability == ULLONG_MAX) {
+                fprintf(stderr, "selection reachability multiplicity overflow\n");
+                exit(EXIT_FAILURE);
+            }
+            node->reachability++;
+        }
+        term->path_demands++;
     }
-    return leaves;
+    free(path_nodes);
 }
 
 static void projection_term_path(
@@ -2414,7 +2492,7 @@ static void projection_term_free(ProjectionTerm *term) {
 
 static double projection_company_strength_select(
     ProjectionProduct *product,
-    unsigned long long leaf_limit,
+    unsigned long long path_demands,
     int *scratch_path,
     int *selected_path
 ) {
@@ -2428,23 +2506,10 @@ static double projection_company_strength_select(
         fprintf(stderr, "selection term lost its synthetic root\n");
         exit(EXIT_FAILURE);
     }
-    unsigned long long exact_leaf_count =
-        projection_term_exact_leaf_count(product);
-    if (leaf_limit != ULLONG_MAX && exact_leaf_count > leaf_limit) {
-        fprintf(
-            stderr,
-            "exact sampled selection term requires %llu leaves; "
-            "-b %llu would change its semantics\n",
-            exact_leaf_count,
-            leaf_limit
-        );
-        exit(EXIT_FAILURE);
-    }
-    projection_term_build(
+    projection_term_sample_paths(
         product,
         &term,
-        synthetic_root,
-        0,
+        path_demands,
         scratch_path
     );
     int row_count = term.count - 1;
@@ -2457,10 +2522,14 @@ static double projection_company_strength_select(
         fprintf(
             product->counters->trace,
             "{\"event\":\"selection_term_built\",\"rows\":%d,"
-            "\"leaves\":%llu,\"exact\":true,"
+            "\"unique_leaves\":%llu,\"path_demands\":%llu,"
+            "\"exact\":false,\"full_vocabulary_carrier\":true,"
+            "\"proposal_top_k\":%d,"
             "\"root_reachability\":%llu}\n",
             row_count,
             term.leaf_count,
+            term.path_demands,
+            product->local_support,
             term.nodes[0].reachability
         );
         fflush(product->counters->trace);
@@ -2828,8 +2897,13 @@ void generate_hidden_feedback_select(
     }
 
     Config *config = &transformer->config;
-    if (local_support <= 0 || local_support > config->vocab_size) {
-        fprintf(stderr, "local company support exceeds the vocabulary\n");
+    if (local_support < 0 || local_support > config->vocab_size) {
+        fprintf(stderr, "company proposal top-k exceeds the vocabulary\n");
+        exit(EXIT_FAILURE);
+    }
+    if (observer_kind == PROJECTION_OBSERVER_COMPANY_STRENGTH &&
+        leaf_limit == ULLONG_MAX) {
+        fprintf(stderr, "company selection requires explicit -b path demands\n");
         exit(EXIT_FAILURE);
     }
     int output_count = steps - num_prompt_tokens;
@@ -2889,7 +2963,7 @@ void generate_hidden_feedback_select(
             ",\"steps\":%d,\"prefill_unit_count\":%d,"
             "\"output_count\":%d,\"selection_frame_count\":%d,"
             "\"proposal_vocabulary_size\":%d,"
-            "\"local_demand_width\":%d,\"exact_leaf_limit\":%llu,"
+            "\"proposal_top_k\":%d,\"path_demands\":%llu,"
             "\"feedback_boundary\":\"%s\","
             "\"observer\":\"%s\"}\n",
             steps,
@@ -3084,6 +3158,9 @@ void generate_hidden_feedback_select(
         .observer_kind = observer_kind,
         .local_support = local_support,
         .sample_seed = sample_seed,
+        .sample_state = projection_mix(
+            sample_seed ^ 0x6a09e667f3bcc909ULL
+        ),
         .counters = &strength,
     };
 
@@ -3159,7 +3236,8 @@ void generate_hidden_feedback_select(
         "feedback_positions: %d\n"
         "deferred_projections: %d\n"
         "proposal_vocabulary_size: %d\n"
-        "local_demand_width: %d\n"
+        "proposal_top_k: %d\n"
+        "path_demands: %llu\n"
         "decoded_tokens: %d\n"
         "selection_carrier: ProjectionTermOutcome\n"
         "outcome_kind: %s\n"
@@ -3188,6 +3266,7 @@ void generate_hidden_feedback_select(
         output_count,
         config->vocab_size,
         local_support,
+        leaf_limit,
         decoded_count,
         projection_observer_name(observer_kind),
         projection_score_role(observer_kind),
@@ -3376,8 +3455,8 @@ void error_usage() {
     fprintf(stderr, "  -l <int>    exact completion positions; overrides total -n\n");
     fprintf(stderr, "  -g <string> feedback boundary: identity (default) or affine\n");
     fprintf(stderr, "  -r <string> observer: company (default) or logits\n");
-    fprintf(stderr, "  -k <int>    token memo cells demanded per prefix, default 4\n");
-    fprintf(stderr, "  -b <int>    optional exact-term leaf safety limit; never truncates\n");
+    fprintf(stderr, "  -k <int>    proposal top-k; 0 = full vocabulary (default)\n");
+    fprintf(stderr, "  -b <int>    complete hypothetical path demands (required)\n");
     fprintf(stderr, "  -s <int>    support sampling seed, default 42\n");
     fprintf(stderr, "  -i <string> input prompt\n");
     fprintf(stderr, "  -z <string> optional path to custom tokenizer\n");
@@ -3393,7 +3472,7 @@ int main(int argc, char *argv[]) {
     char *tokenizer_path = "tokenizer.bin";
     int steps = 256;            // number of steps to run for
     int completion_length = -1;
-    int local_support = 4;
+    int local_support = 0;
     unsigned long long leaf_limit = ULLONG_MAX;
     unsigned long long sample_seed = 42;
     FeedbackBoundary feedback_boundary = FEEDBACK_IDENTITY;
@@ -3439,13 +3518,14 @@ int main(int argc, char *argv[]) {
             errno = 0;
             char *end = NULL;
             unsigned long long parsed = strtoull(argv[i + 1], &end, 10);
-            if (errno != 0 || end == argv[i + 1] || *end != '\0' ||
-                parsed == 0) {
+            if (errno != 0 || end == argv[i + 1] || *end != '\0') {
                 error_usage();
             }
             if (argv[i][1] == 'b') {
+                if (parsed == 0) error_usage();
                 leaf_limit = parsed;
             } else if (argv[i][1] == 's') {
+                if (parsed == 0) error_usage();
                 sample_seed = parsed;
             } else {
                 if (parsed > INT_MAX) error_usage();
