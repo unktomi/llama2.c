@@ -1,28 +1,30 @@
 /*
- * Exact finite open-transformer term over llama.cpp.
+ * Exact finite product of model-backed selection functions over llama.cpp.
  *
- * A selection outcome is not a scalar reward. It is a token path together
- * with one KV summary cell and the final hidden state produced by its
- * recursively composed continuation. At a Select, every demanded child is
- * forced first. Their summary cells are then installed in one temporary
- * sequence and observed by one common hidden-state query. The model produces
- * one vocabulary covector, and siblings are compared only at their token
- * coordinates in that covector. The selected token path and the observer's
- * own KV/hidden summary are propagated to the parent. Only the root emits.
+ * There is one observer operation.  For a fixed selected suffix s it returns
+ * the causal posterior frame
  *
- * This deliberately contains no sampled AR path, path likelihood sum,
- * scalar backup, UCB bonus, or wall-clock search loop. The local carrier is
- * an explicit top-k support, and Escardo's product is evaluated exactly over
- * that finite carrier. Sibling token applications are submitted as one
- * llama.cpp batch; this changes numerical scheduling, not which continuation
- * terms are forced or how their structured outcomes are selected.
+ *   observe(left, s)[x'] = log P_model(x' ++ s | left).
  *
- * llama.cpp requires a new causal input to follow the maximum cached
- * position. Child summaries therefore share the span endpoint, the observer
- * query sits immediately after that endpoint, and its KV cell is shifted back
- * to the endpoint before propagation. Native self-attention also includes the
- * observer's own cell. The run trace names both backend differences from the
- * manually assembled llama2.c observer explicitly.
+ * Every coordinate in one frame has exactly the same left and right company,
+ * so its additive normalization is common.  This is the model-defined
+ * posterior over the missing constructor, not a later next-token logit
+ * repurposed as a retrospective score.  The empty suffix is exactly the
+ * model's existing proposal covector (the selection-product unit law).
+ *
+ * Escardo's dependent product is evaluated literally.  For every x, first
+ * obtain b(x) by recursively applying the suffix selection.  Then apply the
+ * same observer to (prefix, b(x)).  A branch attains when x is the maximum
+ * coordinate of its own observer covector over the common finite support.
+ * The local searchable-set selection returns the first attaining branch, or
+ * the final branch when none attains.  Values from distinct covector frames
+ * are never compared or added.  The selected outcome retains the complete
+ * position-indexed covector family, and only the root emits its token tuple.
+ *
+ * This deliberately contains no path-likelihood sum, scalar backup, UCB
+ * bonus, or sampled AR rollout.  Model applications at a causal frontier and
+ * bound-continuation observations are batched; batching changes numerical
+ * scheduling, not the selection-product law.
  */
 
 #include "llama.h"
@@ -282,17 +284,23 @@ struct NodeState {
     std::vector<float> hidden;
 };
 
+struct CovectorFrame {
+    uint64_t id = 0;
+    std::vector<llama_token> support;
+    std::vector<double> coordinates;
+    int maximum_rank = -1;
+};
+
 struct Outcome {
     std::vector<Value> path;
-    int summary_sequence = -1;
-    int summary_position = -1;
-    std::vector<float> final_hidden;
+    std::vector<CovectorFrame> observations;
 };
 
 struct Branch {
     Value value;
     Outcome outcome;
-    float shared_covector_logit = 0.0f;
+    CovectorFrame observation;
+    bool attains = false;
 };
 
 class BatchOwner {
@@ -367,7 +375,7 @@ public:
         embedding_in_(llama_model_n_embd_inp(model)),
         embedding_out_(llama_model_n_embd_out(model)),
         token_batch_(options.top_k, 0),
-        observer_batch_(1, llama_model_n_embd_inp(model)) {
+        observer_batch_(options.top_k, llama_model_n_embd_inp(model)) {
         if (embedding_in_ != embedding_out_) {
             fail("structured hidden feedback requires equal input/output widths");
         }
@@ -418,10 +426,7 @@ public:
 
     Outcome run() {
         NodeState prompt = decode_prompt();
-        Outcome result = select(prompt, options_.length, 0);
-        sequence_pool_->release(result.summary_sequence);
-        result.summary_sequence = -1;
-        return result;
+        return select(prompt, options_.length, 0);
     }
 
 private:
@@ -546,24 +551,115 @@ private:
         return states;
     }
 
-    NodeState decode_observer(
-        const std::vector<float> & hidden,
-        int position,
-        int observer_sequence
+    std::vector<CovectorFrame> observe_bound_continuations(
+        const NodeState & history,
+        const std::vector<Branch> & branches,
+        int remaining
     ) {
-        llama_batch & batch = observer_batch_.reset();
-        add_observer_embedding(
-            batch, hidden, position, observer_sequence
-        );
-        int result = llama_decode(context_.get(), batch);
-        if (result != 0) {
-            fail("selection observer decode failed with code " +
-                std::to_string(result));
+        if (branches.empty()) fail("observer received no bound continuations");
+        const int suffix_length = remaining - 1;
+        std::vector<Value> support;
+        support.reserve(branches.size());
+        for (const Branch & branch : branches) {
+            if (static_cast<int>(branch.outcome.path.size()) != remaining) {
+                fail("bound continuation has the wrong horizon");
+            }
+            support.push_back(branch.value);
         }
-        counters_.model_decode_calls++;
-        counters_.model_decoded_terms++;
-        counters_.observer_decode_calls++;
-        return copy_output(-1, observer_sequence, position);
+
+        std::vector<CovectorFrame> observations;
+        observations.reserve(branches.size());
+        for (const Branch & demanded : branches) {
+            CovectorFrame frame;
+            frame.id = next_observer_frame_++;
+            frame.maximum_rank = 0;
+            for (const Value & alternative : support) {
+                frame.support.push_back(alternative.token);
+                frame.coordinates.push_back(
+                    alternative.proposal_log_probability
+                );
+            }
+
+            if (suffix_length > 0) {
+                std::vector<int> sequences;
+                sequences.reserve(support.size());
+                for (size_t alternative = 0;
+                     alternative < support.size(); ++alternative) {
+                    int sequence = sequence_pool_->acquire();
+                    copy_sequence(history.sequence, sequence);
+                    sequences.push_back(sequence);
+                }
+                std::vector<NodeState> states = decode_sibling_tokens(
+                    support,
+                    history.position + 1,
+                    sequences
+                );
+                counters_.observer_decode_calls++;
+
+                for (int offset = 0; offset < suffix_length; ++offset) {
+                    const llama_token suffix_token = demanded.outcome.path[
+                        static_cast<size_t>(offset + 1)
+                    ].token;
+                    for (size_t alternative = 0;
+                         alternative < support.size(); ++alternative) {
+                        const NodeState & state = states[alternative];
+                        frame.coordinates[alternative] +=
+                            static_cast<double>(state.logits[
+                                static_cast<size_t>(suffix_token)
+                            ]) - log_partition(state.logits);
+                    }
+                    if (offset + 1 == suffix_length) break;
+
+                    llama_batch & batch = token_batch_.reset();
+                    for (size_t alternative = 0;
+                         alternative < support.size(); ++alternative) {
+                        add_token(
+                            batch,
+                            suffix_token,
+                            history.position + 2 + offset,
+                            sequences[alternative],
+                            true
+                        );
+                    }
+                    int result = llama_decode(context_.get(), batch);
+                    if (result != 0) {
+                        fail(
+                            "posterior suffix decode failed with code " +
+                            std::to_string(result)
+                        );
+                    }
+                    counters_.model_decode_calls++;
+                    counters_.model_decoded_terms += support.size();
+                    counters_.observer_decode_calls++;
+                    states.clear();
+                    states.reserve(support.size());
+                    for (size_t alternative = 0;
+                         alternative < support.size(); ++alternative) {
+                        states.push_back(copy_output(
+                            static_cast<int>(alternative),
+                            sequences[alternative],
+                            history.position + 2 + offset
+                        ));
+                    }
+                }
+                for (int sequence : sequences) {
+                    sequence_pool_->release(sequence);
+                }
+            }
+
+            for (size_t coordinate = 1;
+                 coordinate < frame.coordinates.size(); ++coordinate) {
+                const size_t incumbent = static_cast<size_t>(
+                    frame.maximum_rank
+                );
+                if (frame.coordinates[coordinate] >
+                        frame.coordinates[incumbent]) {
+                    frame.maximum_rank = static_cast<int>(coordinate);
+                }
+            }
+            observations.push_back(std::move(frame));
+        }
+        return observations;
     }
 
     void copy_sequence(
@@ -665,7 +761,9 @@ private:
             ",\"depth\":%d,\"remaining\":%d,\"token\":%d"
             ",\"local_rank\":%d,\"logit\":%.9g"
             ",\"proposal_log_probability\":%.17g"
-            ",\"shared_covector_logit\":%.9g,\"text\":",
+            ",\"observer_frame\":%llu,\"attains\":%s"
+            ",\"observer_max_rank\":%d,\"observer_max_token\":%d"
+            ",\"candidate_covector_logit\":%.9g,\"text\":",
             static_cast<unsigned long long>(frame),
             depth,
             remaining,
@@ -673,10 +771,38 @@ private:
             branch.value.local_rank,
             branch.value.proposal_logit,
             branch.value.proposal_log_probability,
-            branch.shared_covector_logit
+            static_cast<unsigned long long>(branch.observation.id),
+            branch.attains ? "true" : "false",
+            branch.observation.maximum_rank + 1,
+            branch.observation.support[static_cast<size_t>(
+                branch.observation.maximum_rank
+            )],
+            branch.observation.coordinates[static_cast<size_t>(
+                branch.value.local_rank - 1
+            )]
         );
         json_string(trace_.stream, path_text(branch.outcome));
-        std::fputs("}\n", trace_.stream);
+        std::fputs(",\"observer_support\":[", trace_.stream);
+        for (size_t index = 0;
+             index < branch.observation.support.size(); ++index) {
+            if (index != 0) std::fputc(',', trace_.stream);
+            std::fprintf(
+                trace_.stream,
+                "{\"rank\":%zu,\"token\":%d,\"piece\":",
+                index + 1,
+                branch.observation.support[index]
+            );
+            json_string(
+                trace_.stream,
+                token_piece(vocab_, branch.observation.support[index])
+            );
+            std::fprintf(
+                trace_.stream,
+                ",\"logit\":%.9g}",
+                branch.observation.coordinates[index]
+            );
+        }
+        std::fputs("]}\n", trace_.stream);
         trace_.flush();
     }
 
@@ -691,28 +817,22 @@ private:
             trace_.stream,
             "{\"event\":\"select\",\"frame\":%llu"
             ",\"depth\":%d,\"remaining\":%d,\"token\":%d"
-            ",\"local_rank\":%d,\"shared_covector_logit\":%.9g"
-            ",\"propagated\":\"structured_kv_hidden_outcome\""
+            ",\"local_rank\":%d,\"observer_frame\":%llu"
+            ",\"attains\":%s"
+            ",\"selection_rule\":\"first_attaining_else_last\""
+            ",\"propagated\":\"complete_covector_family\""
             ",\"text\":",
             static_cast<unsigned long long>(frame),
             depth,
             remaining,
             branch.value.token,
             branch.value.local_rank,
-            branch.shared_covector_logit
+            static_cast<unsigned long long>(branch.observation.id),
+            branch.attains ? "true" : "false"
         );
         json_string(trace_.stream, path_text(branch.outcome));
         std::fputs("}\n", trace_.stream);
         trace_.flush();
-    }
-
-    Outcome leaf_outcome(NodeState & child) {
-        Outcome outcome;
-        outcome.summary_sequence = child.sequence;
-        outcome.summary_position = child.position;
-        outcome.final_hidden = std::move(child.hidden);
-        child.sequence = -1;
-        return outcome;
     }
 
     Outcome select(
@@ -752,86 +872,47 @@ private:
         for (size_t index = 0; index < support.size(); ++index) {
             const Value value = support[index];
             NodeState & child = children[index];
-            Outcome outcome = remaining == 1
-                ? leaf_outcome(child)
-                : select(child, remaining - 1, depth + 1);
+            Outcome outcome;
+            if (remaining > 1) {
+                outcome = select(child, remaining - 1, depth + 1);
+            }
             if (child.sequence >= 0) {
                 sequence_pool_->release(child.sequence);
                 child.sequence = -1;
             }
             outcome.path.insert(outcome.path.begin(), value);
-            branches.push_back(Branch{value, std::move(outcome), 0.0f});
+            Branch branch;
+            branch.value = value;
+            branch.outcome = std::move(outcome);
+            branches.push_back(std::move(branch));
         }
 
-        int observer_sequence = sequence_pool_->acquire();
-        copy_sequence(history.sequence, observer_sequence);
-        for (const Branch & branch : branches) {
-            copy_sequence(
-                branch.outcome.summary_sequence,
-                observer_sequence,
-                branch.outcome.summary_position,
-                branch.outcome.summary_position + 1
-            );
-        }
-
-        const int summary_position = history.position + remaining;
-        const int query_position = summary_position + 1;
-        NodeState observation = decode_observer(
-            history.hidden,
-            query_position,
-            observer_sequence
+        std::vector<CovectorFrame> observations = observe_bound_continuations(
+            history,
+            branches,
+            remaining
         );
 
-        size_t best = 0;
+        size_t best = branches.size() - 1;
+        bool found_attaining = false;
         for (size_t index = 0; index < branches.size(); ++index) {
             Branch & branch = branches[index];
-            branch.shared_covector_logit = observation.logits[
-                static_cast<size_t>(branch.value.token)
-            ];
+            branch.observation = std::move(observations[index]);
+            branch.attains = branch.observation.maximum_rank ==
+                branch.value.local_rank - 1;
+            branch.outcome.observations.insert(
+                branch.outcome.observations.begin(),
+                branch.observation
+            );
             counters_.candidate_observations++;
             trace_candidate(frame, depth, remaining, branch);
-            if (index == 0) continue;
-            const Branch & winner = branches[best];
-            if (branch.shared_covector_logit >
-                    winner.shared_covector_logit ||
-                (branch.shared_covector_logit ==
-                    winner.shared_covector_logit &&
-                 branch.value.local_rank < winner.value.local_rank)) {
+            if (!found_attaining && branch.attains) {
                 best = index;
+                found_attaining = true;
             }
         }
         trace_select(frame, depth, remaining, branches[best]);
-
-        if (!llama_memory_seq_rm(
-                memory_, observer_sequence, -1, query_position)) {
-            fail("could not remove observer prefix from composed summary");
-        }
-        if (!llama_memory_seq_rm(
-                memory_, observer_sequence, query_position + 1, -1)) {
-            fail("could not trim composed summary after observer query");
-        }
-        const int shift = summary_position - query_position;
-        if (shift != 0) {
-            if (!llama_memory_can_shift(memory_)) {
-                fail("model KV memory cannot move a composed summary to its span");
-            }
-            llama_memory_seq_add(
-                memory_, observer_sequence,
-                query_position, query_position + 1, shift
-            );
-        }
-
-        for (Branch & branch : branches) {
-            sequence_pool_->release(branch.outcome.summary_sequence);
-            branch.outcome.summary_sequence = -1;
-        }
-
-        Outcome result;
-        result.path = std::move(branches[best].outcome.path);
-        result.summary_sequence = observer_sequence;
-        result.summary_position = summary_position;
-        result.final_hidden = std::move(observation.hidden);
-        return result;
+        return std::move(branches[best].outcome);
     }
 
     llama_model * model_ = nullptr;
@@ -849,6 +930,7 @@ private:
     llama_memory_t memory_ = nullptr;
     std::unique_ptr<SequencePool> sequence_pool_;
     uint64_t next_frame_ = 0;
+    uint64_t next_observer_frame_ = 0;
 };
 
 void quiet_log(enum ggml_log_level level, const char * text, void *) {
@@ -904,9 +986,10 @@ int main(int argc, char ** argv) {
                 trace.stream,
                 ",\"chat_template\":%s,\"enable_thinking\":%s"
                 ",\"length\":%d,\"proposal_top_k\":%d"
-                ",\"mode\":\"exact_structured_kv_shared_covector\""
+                ",\"mode\":\"exact_select_product_masked_company\""
                 ",\"observer_attention\":"
-                "\"causal_prefix_children_at_span_endpoint_then_self\"}\n",
+                "\"causal_posterior_over_fixed_bound_suffix\""
+                ",\"selection_rule\":\"first_attaining_else_last\"}\n",
                 options.use_chat_template ? "true" : "false",
                 options.enable_thinking ? "true" : "false",
                 options.length,
@@ -944,11 +1027,11 @@ int main(int argc, char ** argv) {
         std::puts("completion:");
         std::puts(displayed.c_str());
         std::printf(
-            "score_kind=shared_model_covector_per_select\n"
-            "selection_carrier=structured_kv_hidden_outcome\n"
-            "selection_observer=recursive_candidate_axis_attention\n"
+            "score_kind=bound_continuation_covector_attainment\n"
+            "selection_carrier=token_path_with_covector_family\n"
+            "selection_observer=causal_posterior_root_callback\n"
             "observer_attention="
-            "causal_prefix_children_at_span_endpoint_then_self\n"
+            "causal_posterior_over_fixed_bound_suffix\n"
             "aggregate_path_score=none\n"
             "root_terminalizations=1\n"
             "strength_nodes=%llu\n"
