@@ -1,4 +1,10 @@
-#include "escardo_product_runtime.h"
+/*
+ * QUARANTINED implementation for the rejected causal-posterior/boundary-
+ * aggregate selection contract.  Preserve for provenance; do not link it into
+ * the active GGUF evaluator.
+ */
+
+#include "causal-posterior-selection-runtime-don't-do-this.h"
 
 #include <algorithm>
 #include <cmath>

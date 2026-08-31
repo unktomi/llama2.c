@@ -1,3 +1,10 @@
+/*
+ * QUARANTINED with the causal-posterior/boundary-aggregate scorer that this
+ * runtime represents.  Its scheduling ideas may be inspected independently,
+ * but the typed outcome and backup API encode a scorer that failed system
+ * cases and must not be restored wholesale as an active inference contract.
+ */
+
 #ifndef LLAMA_CPP_ESCARDO_PRODUCT_RUNTIME_H
 #define LLAMA_CPP_ESCARDO_PRODUCT_RUNTIME_H
 

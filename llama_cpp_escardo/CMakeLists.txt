@@ -18,10 +18,7 @@ set(GGML_METAL_EMBED_LIBRARY ON CACHE BOOL "" FORCE)
 
 add_subdirectory("${LLAMA_CPP_SOURCE}" llama.cpp-build EXCLUDE_FROM_ALL)
 
-add_executable(run_escardo_gguf
-    run_escardo_gguf.cpp
-    escardo_product_runtime.cpp
-)
+add_executable(run_escardo_gguf run_escardo_gguf.cpp)
 target_compile_features(run_escardo_gguf PRIVATE cxx_std_17)
 target_compile_options(run_escardo_gguf PRIVATE -Wall -Wextra -Wpedantic)
 target_include_directories(run_escardo_gguf PRIVATE

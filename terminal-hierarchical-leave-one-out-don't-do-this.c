@@ -1,4 +1,16 @@
 /*
+ * QUARANTINED: this must not be used as the active joint projection.
+ *
+ * It invents a seven-matrix balanced token-span decoder and trains it with a
+ * handcrafted denoising objective.  That decoder is not obtained by composing
+ * the existing transformer layers, and its first-attaining backup is an
+ * unjustified extension of finite Boolean search to real logit covectors.
+ * Falling denoising loss therefore does not validate the requested Escardo
+ * inference term.  The source remains only as provenance for the failed
+ * experiment.
+ */
+
+/*
  * Hierarchical leave-one-out joint decoder for hidden-feedback llama2.c.
  *
  * The retained hidden tape is not assigned a scalar path energy.  A proposed

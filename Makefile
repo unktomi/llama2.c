@@ -63,12 +63,6 @@ runescardogguf:
 runhidden: run_hidden_feedback.c
 	$(CC) -O3 -o run_hidden_feedback run_hidden_feedback.c -lm
 
-.PHONY: terminaljoint
-terminaljoint: terminal_joint_observer.c run_hidden_feedback.c
-	$(CC) -std=c11 -O3 -Wall -Wextra -Werror \
-		-Wno-sign-compare -Wno-unused-variable -Wno-unused-function \
-		-o terminal_joint_observer terminal_joint_observer.c -lm
-
 .PHONY: runhiddenselect
 runhiddenselect: run_hidden_feedback_select.c llama_company.c llama_company.h atkey_term_c.c atkey_term_c.h run.c
 	$(CC) -std=c11 -O3 -Wall -Wextra -Werror \
@@ -202,7 +196,6 @@ clean:
 	rm -f metal_kernels.air
 	rm -f metal_kernels.metallib
 	rm -f run_hidden_feedback
-	rm -f terminal_joint_observer
 	rm -f run_hidden_feedback_select
 	rm -f run_atkey_term
 	rm -f run_atkey_term_strict
