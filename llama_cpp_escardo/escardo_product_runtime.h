@@ -105,6 +105,7 @@ struct FramedCoordinate {
 struct PositionCovector {
     std::size_t position = 0;
     ObservationFrame frame;
+    double vocabulary_log_partition = 0.0;
     std::vector<FramedCoordinate> coordinates;
 };
 
@@ -115,13 +116,15 @@ struct ObservationTuple {
 
 /*
  * One restricted root-observer argument p(x : b(x)). `candidate` names x and
- * selected_suffix fixes b(x). For every x' in common_support, the backend
- * returns the coordinate
+ * selected_suffix fixes b(x). The backend teacher-forces that one completed
+ * counterfactual path, then returns the model's vocabulary covector at its
+ * final completion endpoint. `common_support` identifies the coordinates that
+ * the finite local selection needs; `vocabulary_log_partition` is nevertheless
+ * computed over the model's complete vocabulary.
  *
- *     log P_model(x' ++ selected_suffix | fixed left history).
- *
- * All x' coordinates for this one fixed suffix inhabit one frame. Covectors
- * for two different suffixes are different frames and are never compared.
+ * Covectors for two different completed counterfactuals are different frames.
+ * Their raw coordinates are never compared. Selection compares only the typed
+ * evaluations log_softmax(root_covector)[candidate].
  */
 struct ObservationDemand {
     DemandId demand_id = 0;
@@ -148,36 +151,30 @@ struct ObservationBatchResult {
     std::vector<DemandObservation> observations;
 };
 
-using PosteriorLaneId = std::uint64_t;
+using TerminalRootLaneId = std::uint64_t;
 
 /*
- * Stable lowering identity for one coordinate of one demand. The GGUF
- * backend copies `history_before_candidate.kv_summary` to a lane sequence and
- * teacher-forces candidate_then_suffix. The coordinate is the history
- * proposal log-probability of candidate_token plus the conditional
- * log-probabilities of the fixed suffix tokens. This sum is internal to one
- * causal-posterior coordinate; it is not a score folded across Selects.
- *
- * For an empty suffix proposal_only is true: no decode is permitted, and the
- * coordinate comes directly from history_before_candidate.proposal.
+ * Stable lowering identity for one completed counterfactual observer demand.
+ * The backend copies `history_before_candidate.kv_summary` to a lane sequence,
+ * teacher-forces candidate_then_suffix all the way through its final token,
+ * and returns that final token's native unembedding covector. There is one
+ * lane per demand, including at the terminal selection position.
  */
-struct CausalPosteriorLane {
-    PosteriorLaneId lane_id = 0;
+struct TerminalRootLane {
+    TerminalRootLaneId lane_id = 0;
     DemandId demand_id = 0;
-    Token candidate_token = 0;
     StructuredOutcomeRef history_before_candidate;
     std::vector<Token> candidate_then_suffix;
-    bool proposal_only = false;
 };
 
-struct CausalPosteriorSchedule {
+struct TerminalRootSchedule {
     SelectionId selection_id = 0;
     std::size_t position = 0;
-    std::vector<CausalPosteriorLane> lanes;
+    std::vector<TerminalRootLane> lanes;
 };
 
 /* Expands demands without evaluating or rating them. */
-CausalPosteriorSchedule make_causal_posterior_schedule(
+TerminalRootSchedule make_terminal_root_schedule(
     const ObservationBatch & batch
 );
 
@@ -229,7 +226,7 @@ struct ObservedAlternative {
     const BoundPath * complete_path = nullptr;
     const PositionCovector * current_covector = nullptr;
     const ObservationTuple * observation_tuple = nullptr;
-    double own_company_log_probability = 0.0;
+    double root_ev_log_probability = 0.0;
     bool attains = false;
 };
 
@@ -279,15 +276,18 @@ struct ProductResult {
  *   a      = epsilon(x -> p(x : b(x)))
  *   result = a : b(a)
  *
- * For this finite-search epsilon, ev evaluates each x in its own p(x) frame:
+ * For this finite-search epsilon, ev evaluates each x in the terminal root
+ * covector of its recursively completed counterfactual p(x):
  *
- *   ev(x, p(x)) = p(x)[x] - logsumexp(p(x)[support]).
+ *   ev(x, p(x)) = root_logits(p(x))[x]
+ *                  - logsumexp(root_logits(p(x))[vocabulary]).
  *
- * The subtraction fixes the additive gauge before values from distinct frames
- * are ordered. The maximum normalized own-company log probability is selected
- * (local rank breaks exact ties). Whether x is also the argmax coordinate of
- * its own frame is retained only as a fixed-point/ambiguity diagnostic. The
- * selected current covector is prepended to b(a)'s position-indexed tuple.
+ * The subtraction fixes the additive gauge before evaluations from distinct
+ * frames are ordered. No path likelihood is constructed. The maximum root
+ * evaluation is selected (local rank breaks exact ties). Whether x is also the
+ * argmax coordinate of its own frame over the finite proposal support is
+ * retained only as a diagnostic. The selected current covector is prepended
+ * to b(a)'s position-indexed tuple.
  */
 class ExactProduct {
 public:

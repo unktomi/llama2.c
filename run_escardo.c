@@ -13,19 +13,21 @@
  *         (token path, layerwise K/V summary, final hidden, covector family).
  *
  * Once all child continuations of one Select are ready, the same root
- * observer is restricted to each bound continuation.  For fixed left company
- * L and the selected suffix s = b(x), it returns one causal-posterior frame
+ * observer is restricted to each complete bound path T = x : b(x).  It
+ * teacher-forces T once and returns only the final endpoint's full-vocabulary
+ * unembedding covector
  *
- *     observe(L, s)[x'] = log P_model(x' ++ s | L).
+ *     q(T) = logits(final_endpoint(T)).
  *
- * Every coordinate in a frame therefore has the same left and right company.
- * Coordinates from different suffix frames are never compared or added.  A
- * branch's model-native rating is its own coordinate after normalizing that
- * frame: log P(x | L, s, finite support).  Finite Select maximizes this one
- * returned observation for every x; it does not fold ratings across token
- * positions.  Attainment (whether x is the maximum in its own frame) remains
- * a fixed-point diagnostic.  The selected outcome retains the complete
- * position-indexed family of frames, and only the root emits its token tuple.
+ * The local selection observes its own constructor in that covector:
+ *
+ *     ev(x, q(T)) = logsoftmax(q(T))[x].
+ *
+ * No conditional probabilities along T are accumulated.  Finite Select
+ * maximizes this single endpoint observation for every x; it does not fold
+ * ratings across token positions.  The selected outcome retains the complete
+ * position-indexed family of endpoint covectors, and only the root emits its
+ * token tuple.
  *
  * This executable currently exposes only exact evaluation of an explicitly
  * requested finite local support. The former wall-clock implementation was
@@ -1022,14 +1024,12 @@ typedef struct Search Search;
 typedef struct SelectJob SelectJob;
 typedef struct SelectBranch SelectBranch;
 typedef struct CovectorFrame CovectorFrame;
-typedef struct PosteriorCoordinate PosteriorCoordinate;
 
 struct CovectorFrame {
     uint64_t id;
-    int count;
-    int *tokens;
-    double *coordinates;
-    int maximum_rank;
+    ModelNode *endpoint;
+    int maximum_token;
+    int evaluated_token_rank;
     CovectorFrame *tail;
 };
 
@@ -1046,7 +1046,7 @@ struct Search {
     uint64_t next_observer_frame_id;
     uint64_t candidate_observations;
     uint64_t continuation_demands;
-    uint64_t posterior_coordinates;
+    uint64_t endpoint_covectors;
     uint64_t attaining_alternatives;
     uint64_t ambiguous_selection_nodes;
     uint64_t zero_attainer_nodes;
@@ -1058,7 +1058,7 @@ struct SelectBranch {
     ModelLogit value;
     SelectionOutcome *outcome;
     CovectorFrame *observation;
-    double company_log_probability;
+    double endpoint_log_probability;
     bool attains;
     bool ready;
 };
@@ -1074,17 +1074,8 @@ struct SelectJob {
     int branch_count;
     int started_count;
     int ready_count;
-    int observation_expected_count;
-    int observation_ready_count;
     int attainer_count;
     bool observation_started;
-};
-
-struct PosteriorCoordinate {
-    SelectJob *job;
-    CovectorFrame *frame;
-    int coordinate_rank;
-    LogitPath *remaining_suffix;
 };
 
 static void json_string(FILE *stream, const char *text) {
@@ -1188,20 +1179,28 @@ static void trace_decoded_path(
     fputc('"', stream);
 }
 
+static int *top_covector_tokens(const Tensor *logits, int count);
+
 static void trace_candidate(SelectBranch *branch) {
     Search *search = branch->job->search;
     if (search->trace == NULL) return;
     FILE *stream = search->trace;
+    CovectorFrame *frame = branch->observation;
+    ModelNode *endpoint = frame->endpoint;
+    const int evaluated_token = branch->value.token;
     fprintf(
         stream,
         "{\"event\":\"candidate\",\"frame\":%" PRIu64
         ",\"depth\":%d,\"remaining\":%d,\"token\":%d"
         ",\"local_rank\":%d,\"logit\":%.9g"
         ",\"proposal_log_probability\":%.17g"
-        ",\"observer_frame\":%" PRIu64 ",\"attains\":%s"
-        ",\"observer_max_rank\":%d,\"observer_max_token\":%d"
+        ",\"observer_frame\":%" PRIu64
+        ",\"observer_kind\":\"terminal_endpoint_unembedding\""
+        ",\"endpoint_node\":%" PRIu64 ",\"endpoint_position\":%d"
+        ",\"attains\":%s,\"observer_max_token\":%d"
+        ",\"candidate_covector_rank\":%d"
         ",\"candidate_covector_logit\":%.17g"
-        ",\"company_log_probability\":%.17g"
+        ",\"endpoint_log_probability\":%.17g"
         ",\"text\":",
         branch->job->frame_id,
         branch->job->history->position - search->prompt_count + 1,
@@ -1210,41 +1209,49 @@ static void trace_candidate(SelectBranch *branch) {
         branch->value.local_rank,
         branch->value.logit,
         branch->value.log_probability,
-        branch->observation->id,
+        frame->id,
+        endpoint->id,
+        endpoint->position,
         branch->attains ? "true" : "false",
-        branch->observation->maximum_rank + 1,
-        branch->observation->tokens[branch->observation->maximum_rank],
-        branch->observation->coordinates[branch->value.local_rank - 1],
-        branch->company_log_probability
+        frame->maximum_token,
+        frame->evaluated_token_rank,
+        endpoint->logits->values[evaluated_token],
+        branch->endpoint_log_probability
     );
     trace_decoded_path(
         search,
         branch->job->history,
         branch->outcome->path
     );
-    fputs(",\"observer_support\":[", stream);
-    for (int index = 0; index < branch->observation->count; index++) {
+    int *observer_top = top_covector_tokens(
+        endpoint->logits,
+        branch->job->branch_count
+    );
+    fputs(",\"observer_top\":[", stream);
+    for (int index = 0; index < branch->job->branch_count; index++) {
         if (index != 0) fputc(',', stream);
+        const int token = observer_top[index];
         fprintf(
             stream,
             "{\"rank\":%d,\"token\":%d,\"piece\":",
             index + 1,
-            branch->observation->tokens[index]
+            token
         );
         json_string(
             stream,
             atkey_decode(
                 search->model->runtime,
-                branch->job->history->token,
-                branch->observation->tokens[index]
+                endpoint->token,
+                token
             )
         );
         fprintf(
             stream,
             ",\"logit\":%.17g}",
-            branch->observation->coordinates[index]
+            endpoint->logits->values[token]
         );
     }
+    free(observer_top);
     fputs("]}\n", stream);
     fflush(stream);
 }
@@ -1259,8 +1266,8 @@ static void trace_choice(SelectJob *job, const SelectBranch *branch) {
         ",\"local_rank\":%d,\"observer_frame\":%" PRIu64
         ",\"attains\":%s"
         ",\"attainer_count\":%d"
-        ",\"company_log_probability\":%.17g"
-        ",\"selection_rule\":\"max_normalized_self_company\""
+        ",\"endpoint_log_probability\":%.17g"
+        ",\"selection_rule\":\"max_terminal_endpoint_ev\""
         ",\"propagated\":\"complete_covector_family\",\"text\":",
         job->frame_id,
         job->history->position - search->prompt_count + 1,
@@ -1270,7 +1277,7 @@ static void trace_choice(SelectJob *job, const SelectBranch *branch) {
         branch->observation->id,
         branch->attains ? "true" : "false",
         job->attainer_count,
-        branch->company_log_probability
+        branch->endpoint_log_probability
     );
     trace_decoded_path(search, job->history, branch->outcome->path);
     fputs("}\n", search->trace);
@@ -1304,6 +1311,35 @@ static int logit_precedes(const Tensor *logits, int left, int right) {
     if (logits->values[left] > logits->values[right]) return 1;
     if (logits->values[left] < logits->values[right]) return 0;
     return left < right;
+}
+
+static int *top_covector_tokens(const Tensor *logits, int count) {
+    if (logits == NULL || count <= 0 || count > logits->width) {
+        escardo_fail("invalid endpoint-covector display width");
+    }
+    int *tokens = escardo_calloc((size_t)count, sizeof(*tokens));
+    int filled = 0;
+    for (int token = 0; token < logits->width; token++) {
+        int insertion = filled;
+        while (insertion > 0 && logit_precedes(
+                logits,
+                token,
+                tokens[insertion - 1]
+            )) {
+            insertion--;
+        }
+        if (insertion >= count) continue;
+        int upper = filled < count ? filled : count - 1;
+        for (int index = upper; index > insertion; index--) {
+            tokens[index] = tokens[index - 1];
+        }
+        tokens[insertion] = token;
+        if (filled < count) filled++;
+    }
+    if (filled != count) {
+        escardo_fail("could not inspect terminal endpoint covector");
+    }
+    return tokens;
 }
 
 static int *top_tokens(
@@ -1351,10 +1387,10 @@ static double log_partition(const Tensor *logits) {
 
 static double model_node_log_probability(ModelNode *node, int token) {
     if (node == NULL || !node->ready || node->logits == NULL) {
-        escardo_fail("posterior observer received an unavailable model node");
+        escardo_fail("endpoint observer received an unavailable model node");
     }
     if (token < 0 || token >= node->logits->width) {
-        escardo_fail("posterior observer token lies outside the vocabulary");
+        escardo_fail("endpoint observer token lies outside the vocabulary");
     }
     if (!node->log_partition_ready) {
         node->log_partition = log_partition(node->logits);
@@ -1427,23 +1463,8 @@ static void select_branch_history_ready(
 
 static void select_start_branch(SelectBranch *branch) {
     SelectJob *job = branch->job;
-    if (job->remaining == 1) {
-        /* Unit of the finite product: the empty suffix observes the proposal
-         * already present at `history`.  Decoding the selected constructor
-         * here would manufacture a child state no continuation can inspect. */
-        SelectionOutcome *suffix = arena_allocate(
-            &job->search->model->arena,
-            sizeof(*suffix)
-        );
-        *suffix = (SelectionOutcome){
-            .terminal = job->history,
-            .keys = job->history->keys,
-            .values = job->history->values,
-            .final_hidden = job->history->final_hidden,
-        };
-        select_job_finish_branch(branch, suffix);
-        return;
-    }
+    /* Even the final constructor must traverse the model.  q([x]) is the
+     * unembedding covector at x's endpoint, not the proposal at `history`. */
     model_request_node(
         job->search->model,
         job->history,
@@ -1475,121 +1496,82 @@ static int path_length(const LogitPath *path) {
     return count;
 }
 
-static CovectorFrame *covector_frame_new(SelectJob *job) {
+static int tensor_maximum_token(const Tensor *logits) {
+    if (logits == NULL || logits->width <= 0) {
+        escardo_fail("cannot maximize an empty endpoint covector");
+    }
+    int maximum = 0;
+    for (int token = 1; token < logits->width; token++) {
+        if (logits->values[token] > logits->values[maximum]) {
+            maximum = token;
+        }
+    }
+    return maximum;
+}
+
+static int tensor_token_rank(const Tensor *logits, int selected) {
+    if (logits == NULL || selected < 0 || selected >= logits->width) {
+        escardo_fail("cannot rank a token outside the endpoint covector");
+    }
+    int rank = 1;
+    for (int token = 0; token < logits->width; token++) {
+        if (logits->values[token] > logits->values[selected] ||
+            (logits->values[token] == logits->values[selected] &&
+             token < selected)) {
+            rank++;
+        }
+    }
+    return rank;
+}
+
+static CovectorFrame *covector_frame_new(
+    SelectJob *job,
+    SelectBranch *branch
+) {
     Search *search = job->search;
     ModelTerm *model = search->model;
+    ModelNode *endpoint = branch->outcome->terminal;
+    if (endpoint == NULL || !endpoint->ready || endpoint->logits == NULL ||
+        endpoint->logits->width != model->vocab_size) {
+        escardo_fail("bound path has no terminal unembedding covector");
+    }
     CovectorFrame *frame = arena_allocate(&model->arena, sizeof(*frame));
     memset(frame, 0, sizeof(*frame));
     frame->id = search->next_observer_frame_id++;
-    frame->count = job->branch_count;
-    frame->tokens = arena_allocate(
-        &model->arena,
-        (size_t)frame->count * sizeof(*frame->tokens)
+    frame->endpoint = endpoint;
+    frame->maximum_token = tensor_maximum_token(endpoint->logits);
+    frame->evaluated_token_rank = tensor_token_rank(
+        endpoint->logits,
+        branch->value.token
     );
-    frame->coordinates = arena_allocate(
-        &model->arena,
-        (size_t)frame->count * sizeof(*frame->coordinates)
-    );
-    for (int index = 0; index < frame->count; index++) {
-        frame->tokens[index] = job->branches[index].value.token;
-        frame->coordinates[index] =
-            job->branches[index].value.log_probability;
-    }
-    search->posterior_coordinates += (uint64_t)frame->count;
+    search->endpoint_covectors++;
     return frame;
 }
 
-static double covector_log_partition(const CovectorFrame *frame) {
-    double maximum = -DBL_MAX;
-    for (int index = 0; index < frame->count; index++) {
-        if (frame->coordinates[index] > maximum) {
-            maximum = frame->coordinates[index];
-        }
-    }
-    double mass = 0.0;
-    for (int index = 0; index < frame->count; index++) {
-        mass += exp(frame->coordinates[index] - maximum);
-    }
-    if (!(mass > 0.0) || !isfinite(mass)) {
-        escardo_fail("invalid causal-posterior covector");
-    }
-    return maximum + log(mass);
-}
-
-static void posterior_coordinate_finish(PosteriorCoordinate *coordinate) {
-    SelectJob *job = coordinate->job;
-    job->observation_ready_count++;
-    if (job->observation_ready_count > job->observation_expected_count) {
-        escardo_fail("posterior observer completed a coordinate twice");
-    }
-    if (job->observation_ready_count == job->observation_expected_count) {
-        select_job_finish_observation(job);
-    }
-}
-
-static void posterior_coordinate_advance(
-    void *environment,
-    ModelNode *node
-) {
-    PosteriorCoordinate *coordinate = environment;
-    LogitPath *suffix = coordinate->remaining_suffix;
-    if (suffix == NULL) {
-        escardo_fail("posterior observer advanced beyond its fixed suffix");
-    }
-
-    const int token = suffix->head.token;
-    coordinate->frame->coordinates[coordinate->coordinate_rank] +=
-        model_node_log_probability(node, token);
-    coordinate->remaining_suffix = suffix->tail;
-    if (coordinate->remaining_suffix == NULL) {
-        posterior_coordinate_finish(coordinate);
-        return;
-    }
-
-    model_request_node(
-        coordinate->job->search->model,
-        node,
-        token,
-        posterior_coordinate_advance,
-        coordinate
-    );
-}
-
 static void select_job_finish_observation(SelectJob *job) {
-    if (job->observation_ready_count != job->observation_expected_count) {
-        escardo_fail("selection observer terminated with missing coordinates");
-    }
-
     int selected_index = 0;
     for (int demand = 0; demand < job->branch_count; demand++) {
         SelectBranch *branch = &job->branches[demand];
         CovectorFrame *frame = branch->observation;
-        if (frame == NULL || frame->count != job->branch_count) {
+        if (frame == NULL || frame->endpoint == NULL) {
             escardo_fail("selection observer returned an invalid frame");
         }
 
-        frame->maximum_rank = 0;
-        for (int coordinate = 1; coordinate < frame->count; coordinate++) {
-            if (frame->coordinates[coordinate] >
-                    frame->coordinates[frame->maximum_rank]) {
-                frame->maximum_rank = coordinate;
-            }
-        }
-        branch->attains =
-            frame->maximum_rank == branch->value.local_rank - 1;
-        branch->company_log_probability =
-            frame->coordinates[branch->value.local_rank - 1] -
-            covector_log_partition(frame);
+        branch->attains = frame->maximum_token == branch->value.token;
+        branch->endpoint_log_probability = model_node_log_probability(
+            frame->endpoint,
+            branch->value.token
+        );
         if (branch->attains) job->attainer_count++;
         frame->tail = branch->outcome->observations;
         job->search->candidate_observations++;
         trace_candidate(branch);
         SelectBranch *incumbent = &job->branches[selected_index];
         if (demand == 0 ||
-            branch->company_log_probability >
-                incumbent->company_log_probability ||
-            (branch->company_log_probability ==
-                 incumbent->company_log_probability &&
+            branch->endpoint_log_probability >
+                incumbent->endpoint_log_probability ||
+            (branch->endpoint_log_probability ==
+                 incumbent->endpoint_log_probability &&
              branch->value.local_rank < incumbent->value.local_rank)) {
             selected_index = demand;
         }
@@ -1625,50 +1607,9 @@ static void select_job_start_observation(SelectJob *job) {
             path_length(branch->outcome->path) != job->remaining) {
             escardo_fail("bound continuation has the wrong horizon");
         }
-        branch->observation = covector_frame_new(job);
+        branch->observation = covector_frame_new(job, branch);
     }
-
-    const int suffix_length = job->remaining - 1;
-    if (suffix_length == 0) {
-        job->observation_expected_count = 0;
-        select_job_finish_observation(job);
-        return;
-    }
-
-    if (job->branch_count > INT_MAX / job->branch_count) {
-        escardo_fail("posterior coordinate count overflow");
-    }
-    job->observation_expected_count =
-        job->branch_count * job->branch_count;
-    for (int demand = 0; demand < job->branch_count; demand++) {
-        SelectBranch *branch = &job->branches[demand];
-        LogitPath *suffix = branch->outcome->path->tail;
-        if (path_length(suffix) != suffix_length) {
-            escardo_fail("observer restriction lost its selected suffix");
-        }
-
-        for (int coordinate_rank = 0;
-             coordinate_rank < job->branch_count;
-             coordinate_rank++) {
-            PosteriorCoordinate *coordinate = arena_allocate(
-                &job->search->model->arena,
-                sizeof(*coordinate)
-            );
-            *coordinate = (PosteriorCoordinate){
-                .job = job,
-                .frame = branch->observation,
-                .coordinate_rank = coordinate_rank,
-                .remaining_suffix = suffix,
-            };
-            model_request_node(
-                job->search->model,
-                job->history,
-                job->branches[coordinate_rank].value.token,
-                posterior_coordinate_advance,
-                coordinate
-            );
-        }
-    }
+    select_job_finish_observation(job);
 }
 
 static void select_job_after_branch(SelectJob *job) {
@@ -2042,9 +1983,9 @@ int main(int argc, char **argv) {
         fprintf(
             trace,
             ",\"backend\":\"%s\",\"mode\":\"%s\""
-            ",\"selection_rule\":\"max_normalized_self_company\"}\n",
+            ",\"selection_rule\":\"max_terminal_endpoint_ev\"}\n",
             atkey_backend_name(runtime),
-            "exact_select_product_causal_posterior"
+            "exact_select_product_terminal_endpoint_covector"
         );
         fflush(trace);
     }
@@ -2070,16 +2011,17 @@ int main(int argc, char **argv) {
     puts("completion:");
     print_selected(&search, result.selected);
     printf(
-        "score_kind=normalized_self_company_log_probability\n"
+        "score_kind=full_vocabulary_terminal_endpoint_logsoftmax_coordinate\n"
         "selection_carrier=token_path_with_covector_family\n"
-        "selection_observer=causal_posterior_root_callback\n"
-        "observer_attention=causal_posterior_over_fixed_bound_suffix\n"
+        "selection_observer=terminal_endpoint_unembedding_root_callback\n"
+        "observer_attention=teacher_forced_bound_path_final_endpoint\n"
+        "observer_lowering=one_completed_path_lane_per_candidate\n"
         "aggregate_path_score=none\n"
         "root_terminalizations=1\n"
         "strength_nodes=%" PRIu64 "\n"
         "candidate_observations=%" PRIu64 "\n"
         "continuation_demands=%" PRIu64 "\n"
-        "posterior_coordinates=%" PRIu64 "\n"
+        "endpoint_covectors=%" PRIu64 "\n"
         "attaining_alternatives=%" PRIu64 "\n"
         "ambiguous_selection_nodes=%" PRIu64 "\n"
         "zero_attainer_nodes=%" PRIu64 "\n"
@@ -2087,7 +2029,7 @@ int main(int argc, char **argv) {
         search.strength_nodes,
         search.candidate_observations,
         search.continuation_demands,
-        search.posterior_coordinates,
+        search.endpoint_covectors,
         search.attaining_alternatives,
         search.ambiguous_selection_nodes,
         search.zero_attainer_nodes,
@@ -2111,9 +2053,13 @@ int main(int argc, char **argv) {
         fprintf(
             trace,
             "{\"event\":\"run_end\",\"strength_nodes\":%" PRIu64
-            ",\"candidate_observations\":%" PRIu64 "}\n",
+            ",\"candidate_observations\":%" PRIu64
+            ",\"endpoint_covectors\":%" PRIu64
+            ",\"model_token_terms\":%" PRIu64 "}\n",
             search.strength_nodes,
-            search.candidate_observations
+            search.candidate_observations,
+            search.endpoint_covectors,
+            model.model_steps
         );
         fflush(trace);
         fclose(trace);

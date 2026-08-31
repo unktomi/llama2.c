@@ -128,29 +128,23 @@ Token argmax_token(
     return best->token;
 }
 
-double normalized_coordinate(
+double root_evaluation(
     const PositionCovector & covector,
     Token token
 ) {
     if (covector.coordinates.empty()) {
-        invalid("cannot normalize an empty covector");
+        invalid("cannot evaluate an empty terminal root covector");
     }
-    double maximum = covector.coordinates.front().value;
     for (const FramedCoordinate & coordinate : covector.coordinates) {
         if (coordinate.frame != covector.frame) {
-            invalid("cannot normalize coordinates from different frames");
+            invalid("terminal root covector mixes observation frames");
         }
-        if (coordinate.value > maximum) maximum = coordinate.value;
     }
-    double total = 0.0;
-    for (const FramedCoordinate & coordinate : covector.coordinates) {
-        total += std::exp(coordinate.value - maximum);
-    }
-    if (!(total > 0.0) || !std::isfinite(total)) {
-        invalid("cannot normalize a non-finite covector");
+    if (!std::isfinite(covector.vocabulary_log_partition)) {
+        invalid("terminal root covector has no vocabulary partition");
     }
     return coordinate_for(covector, token).value -
-        (maximum + std::log(total));
+        covector.vocabulary_log_partition;
 }
 
 } // namespace
@@ -175,41 +169,35 @@ bool ObservationFrame::operator!=(const ObservationFrame & other) const {
     return !(*this == other);
 }
 
-CausalPosteriorSchedule make_causal_posterior_schedule(
+TerminalRootSchedule make_terminal_root_schedule(
     const ObservationBatch & batch
 ) {
     if (batch.selection_id == 0) invalid("schedule has no selection id");
     if (batch.demands.empty()) invalid("schedule has no observer demands");
 
-    CausalPosteriorSchedule schedule;
+    TerminalRootSchedule schedule;
     schedule.selection_id = batch.selection_id;
     schedule.position = batch.selecting_position;
-    PosteriorLaneId next_lane_id = 1;
+    TerminalRootLaneId next_lane_id = 1;
     for (const ObservationDemand & demand : batch.demands) {
         if (demand.demand_id == 0 || demand.candidate.binding_id == 0) {
             invalid("schedule contains an unbound observer demand");
         }
         validate_outcome(
             demand.history_before_candidate,
-            "posterior lane history"
+            "terminal root lane history"
         );
         const std::vector<Token> suffix = demand.selected_suffix.tokens();
-        for (Token candidate : demand.common_support) {
-            CausalPosteriorLane lane;
-            lane.lane_id = next_lane_id++;
-            lane.demand_id = demand.demand_id;
-            lane.candidate_token = candidate;
-            lane.history_before_candidate =
-                demand.history_before_candidate;
-            lane.candidate_then_suffix.reserve(1 + suffix.size());
-            lane.candidate_then_suffix.push_back(candidate);
-            lane.candidate_then_suffix.insert(
-                lane.candidate_then_suffix.end(),
-                suffix.begin(), suffix.end()
-            );
-            lane.proposal_only = suffix.empty();
-            schedule.lanes.push_back(std::move(lane));
-        }
+        TerminalRootLane lane;
+        lane.lane_id = next_lane_id++;
+        lane.demand_id = demand.demand_id;
+        lane.history_before_candidate = demand.history_before_candidate;
+        lane.candidate_then_suffix.reserve(1 + suffix.size());
+        lane.candidate_then_suffix.push_back(demand.candidate.token);
+        lane.candidate_then_suffix.insert(
+            lane.candidate_then_suffix.end(), suffix.begin(), suffix.end()
+        );
+        schedule.lanes.push_back(std::move(lane));
     }
     return schedule;
 }
@@ -313,6 +301,9 @@ std::vector<PositionCovector> ExactProduct::observe_restrictions(
             covector.frame.frame_id == 0) {
             invalid("root observer returned an invalid frame");
         }
+        if (!std::isfinite(covector.vocabulary_log_partition)) {
+            invalid("root observer omitted the vocabulary partition");
+        }
         if (covector.coordinates.size() != support.size()) {
             invalid("root observer did not return the complete common support");
         }
@@ -409,8 +400,8 @@ ProductResult ExactProduct::evaluate(
         }
     }
 
-    /* No observer demand needs a child KV state: every causal-posterior lane
-     * starts at the common history and teacher-forces x' ++ selected_suffix.
+    /* No observer demand needs a child KV state: every terminal-root lane
+     * starts at the common history and teacher-forces x ++ selected_suffix.
      * Release the local frontier before invoking the root observer. */
     node_guard.release();
 
@@ -463,16 +454,16 @@ ProductResult ExactProduct::evaluate(
         );
         const bool satisfies = attained == node.alternatives[index].token;
         if (satisfies) attaining_count++;
-        const double own_company = normalized_coordinate(
+        const double root_ev = root_evaluation(
             complete_observations.back().positions.front(),
             node.alternatives[index].token
         );
-        if (index == 0 || own_company > selected_value ||
-            (own_company == selected_value &&
+        if (index == 0 || root_ev > selected_value ||
+            (root_ev == selected_value &&
              node.alternatives[index].local_rank <
                  node.alternatives[selected_index].local_rank)) {
             selected_index = index;
-            selected_value = own_company;
+            selected_value = root_ev;
         }
 
         ObservedAlternative alternative;
@@ -482,7 +473,7 @@ ProductResult ExactProduct::evaluate(
         alternative.current_covector =
             &complete_observations[index].positions.front();
         alternative.observation_tuple = &complete_observations[index];
-        alternative.own_company_log_probability = own_company;
+        alternative.root_ev_log_probability = root_ev;
         alternative.attains = satisfies;
         alternatives.push_back(alternative);
         if (events_ != nullptr) {
