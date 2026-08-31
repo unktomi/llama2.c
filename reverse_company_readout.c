@@ -78,6 +78,7 @@ typedef struct {
     double learning_rate;
     const char *trace_path;
     const char *save_path;
+    const char *load_path;
 } Options;
 
 typedef struct {
@@ -106,6 +107,8 @@ typedef struct {
     int selected_negative;
     double ar_score;
     double reverse_score;
+    double reverse_token_only_score;
+    double reverse_suffix_only_score;
     double embedding_score;
     double left_score;
     int ar_rank;
@@ -191,7 +194,8 @@ static void usage(const char *program) {
         "  --seed N        deterministic seed (default 42)\n"
         "  --shown N       decoded validation pairs (default 12)\n"
         "  --trace PATH    flushed JSONL validation trace\n"
-        "  --save PATH     save the trained reverse head\n",
+        "  --save PATH     save the trained reverse head\n"
+        "  --load PATH     load a trained reverse head\n",
         program
     );
     exit(EXIT_FAILURE);
@@ -213,6 +217,7 @@ static Options parse_options(int argc, char **argv) {
         .learning_rate = 0.001,
         .trace_path = NULL,
         .save_path = NULL,
+        .load_path = NULL,
     };
     for (int index = 4; index < argc; index++) {
         if (index + 1 >= argc) usage(argv[0]);
@@ -244,6 +249,8 @@ static Options parse_options(int argc, char **argv) {
             options.trace_path = value;
         } else if (strcmp(flag, "--save") == 0) {
             options.save_path = value;
+        } else if (strcmp(flag, "--load") == 0) {
+            options.load_path = value;
         } else {
             usage(argv[0]);
         }
@@ -976,6 +983,46 @@ static void save_head(
     if (fclose(file) != 0) fail("could not close reverse head file");
 }
 
+static void load_head(
+    ReverseHead *head,
+    const Transformer *transformer,
+    const char *path
+) {
+    FILE *file = fopen(path, "rb");
+    if (file == NULL) fail("could not open reverse head file");
+    SavedHeadHeader header;
+    if (fread(&header, sizeof(header), 1, file) != 1) {
+        fclose(file);
+        fail("could not read reverse head header");
+    }
+    const unsigned char magic[8] = {'R', 'E', 'V', 'C', 'O', 'M', 'P', '1'};
+    if (memcmp(header.magic, magic, sizeof(magic)) != 0 ||
+        header.version != 1 ||
+        header.model_dim != (uint32_t)transformer->config.dim ||
+        header.model_layers != (uint32_t)transformer->config.n_layers ||
+        header.feature_dim != (uint32_t)head->feature_dim ||
+        header.token_dim != (uint32_t)head->token_dim ||
+        header.hidden_dim != (uint32_t)head->hidden_dim ||
+        header.parameter_count != (uint64_t)head->parameter_count) {
+        fclose(file);
+        fail("reverse head is incompatible with this model or configuration");
+    }
+    if (fread(
+            head->parameters,
+            sizeof(*head->parameters),
+            head->parameter_count,
+            file
+        ) != head->parameter_count) {
+        fclose(file);
+        fail("could not read reverse head parameters");
+    }
+    if (fgetc(file) != EOF || ferror(file)) {
+        fclose(file);
+        fail("reverse head has trailing data or could not be read");
+    }
+    if (fclose(file) != 0) fail("could not close reverse head file");
+}
+
 static ScoreCache make_cache(int token_capacity, int hidden_dim) {
     ScoreCache cache = {
         .states = checked_calloc(
@@ -1546,6 +1593,26 @@ static void report_candidate_support(
             READOUT_ALL_LAYERS_SUFFIX,
             full_cache
         );
+        candidate->reverse_token_only_score = score_company(
+            full,
+            transformer,
+            pair->positive_features,
+            tokens,
+            pair->token_count,
+            pair->target,
+            READOUT_ALL_LAYERS_SUFFIX,
+            full_cache
+        );
+        candidate->reverse_suffix_only_score = score_company(
+            full,
+            transformer,
+            features,
+            pair->positive_tokens,
+            pair->token_count,
+            pair->target,
+            READOUT_ALL_LAYERS_SUFFIX,
+            full_cache
+        );
         candidate->embedding_score = score_company(
             embedding,
             transformer,
@@ -1619,7 +1686,8 @@ static void report_candidate_support(
                 printf(
                     "    reverse_rank=%d piece=\"%s\" token=%d "
                     "reverse=%.9f delta=%.9f embedding=%.9f "
-                    "left=%.9f ar=%.9f ranks[e:%d l:%d ar:%d]%s%s\n",
+                    "left=%.9f ar=%.9f token_only_delta=%.9f "
+                    "suffix_only_delta=%.9f ranks[e:%d l:%d ar:%d]%s%s\n",
                     candidate->reverse_rank,
                     piece,
                     candidate->token,
@@ -1628,6 +1696,10 @@ static void report_candidate_support(
                     candidate->embedding_score,
                     candidate->left_score,
                     candidate->ar_score,
+                    candidate->reverse_token_only_score -
+                        observed->reverse_token_only_score,
+                    candidate->reverse_suffix_only_score -
+                        observed->reverse_suffix_only_score,
                     candidate->embedding_rank,
                     candidate->left_rank,
                     candidate->ar_rank,
@@ -1665,6 +1737,10 @@ static void report_candidate_support(
                     ",\"observed\":%s,\"selected_negative\":%s,"
                     "\"reverse_rank\":%d,\"reverse_score\":%.17g,"
                     "\"reverse_delta_from_observed\":%.17g,"
+                    "\"reverse_token_only_score\":%.17g,"
+                    "\"reverse_token_only_delta_from_observed\":%.17g,"
+                    "\"reverse_suffix_only_score\":%.17g,"
+                    "\"reverse_suffix_only_delta_from_observed\":%.17g,"
                     "\"embedding_rank\":%d,\"embedding_score\":%.17g,"
                     "\"embedding_delta_from_observed\":%.17g,"
                     "\"left_rank\":%d,\"left_score\":%.17g,"
@@ -1676,6 +1752,12 @@ static void report_candidate_support(
                     candidate->reverse_rank,
                     candidate->reverse_score,
                     candidate->reverse_score - observed->reverse_score,
+                    candidate->reverse_token_only_score,
+                    candidate->reverse_token_only_score -
+                        observed->reverse_token_only_score,
+                    candidate->reverse_suffix_only_score,
+                    candidate->reverse_suffix_only_score -
+                        observed->reverse_suffix_only_score,
                     candidate->embedding_rank,
                     candidate->embedding_score,
                     candidate->embedding_score - observed->embedding_score,
@@ -1986,6 +2068,9 @@ int main(int argc, char **argv) {
         options.head_dim,
         &embedding_rng
     );
+    if (options.load_path != NULL) {
+        load_head(&full, &transformer, options.load_path);
+    }
     fprintf(
         stderr,
         "readout allocated_parameters=%zu active_parameters="
@@ -2025,19 +2110,23 @@ int main(int argc, char **argv) {
         &embedding_rng,
         "embedding_reverse_control"
     );
-    train_head(
-        &full,
-        &transformer,
-        training,
-        options.train_count,
-        validation,
-        options.validation_count,
-        options.sequence_tokens,
-        READOUT_ALL_LAYERS_SUFFIX,
-        &options,
-        &full_rng,
-        "reverse_company"
-    );
+    if (options.load_path == NULL) {
+        train_head(
+            &full,
+            &transformer,
+            training,
+            options.train_count,
+            validation,
+            options.validation_count,
+            options.sequence_tokens,
+            READOUT_ALL_LAYERS_SUFFIX,
+            &options,
+            &full_rng,
+            "reverse_company"
+        );
+    } else {
+        fprintf(stderr, "reverse_company loaded=%s\n", options.load_path);
+    }
 
     Metrics left_metrics = evaluate(
         &left,

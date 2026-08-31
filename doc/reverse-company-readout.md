@@ -134,6 +134,8 @@ alternative with:
 
 - fully decoded candidate text;
 - raw `reverse`, `embedding`, `left`, and AR coordinates;
+- reverse-head hybrid coordinates that change only the filler embedding or
+  only the candidate-specific suffix reaction;
 - deltas from the observed filler;
 - within-hole ranks for all four coordinates;
 - observed and selected-training-negative flags.
@@ -175,6 +177,44 @@ receive no loss at all. Thus 81.84% success against the single sampled negative
 coexists with the incorrect support-wide ordering above. These measurements
 invalidate the current scorer as the requested Firth observer; they do not
 show that the frozen transformer lacks the desired information.
+
+The original support builder also allocated one choice slot per sequence token
+while appending up to `top_k` choices per token. A corrected 64-token/top-16
+replay measured 67 choices in one training story, exceeding the old 64-slot
+allocation. The storage is now sized to `tokens * top_k`, guarded at every
+append, and the actual count is recorded as `viable_choices`. Address and
+undefined-behavior sanitizers pass the corrected 256-token/top-16 path. After
+removing the new diagnostic field, the complete corrected 64-token trace is
+identical to the earlier trace, so the overflow was real undefined behavior but
+did not cause the ranking failure measured here.
+
+The corrected trace localizes that failure more sharply. The selected training
+negative is below the observed filler in 857/1,024 holes (83.69%). Yet the
+observed filler is top-1 in only 299/1,024 holes. Of the 725 wrong winners, 700
+are alternatives that were not the selected training negative. Across all
+unselected alternatives, 3,507/15,360 outrank the observed filler.
+
+For a 256-hole diagnostic slice, two hybrid scores separate the tested filler
+from its downstream reaction:
+
+- `reverse_token_only_score` changes the filler while retaining the observed
+  company's suffix activations;
+- `reverse_suffix_only_score` retains the observed filler while substituting
+  the candidate company's suffix activations.
+
+In `room to see`, the malformed `for` filler receives +2.006783 from the
+filler-only hybrid while the suffix-only hybrid changes the score by -1.088884.
+These are nonlinear interventions, not additive components. The combined head
+still gives `for see` +0.947342 over `to see`. Across the 181
+wrong top-1 decisions in this slice, 64 have this same sign pattern: the suffix
+reaction rejects the rival but the filler branch overrules it. The suffix
+hybrid also prefers the wrong rival in the other 117 cases, so deleting the
+filler branch is not sufficient; it raises observed top-1 only from 75/256 to
+86/256.
+
+`--load HEAD.bin` reloads a compatible saved reverse head for repeatable
+hybrid tracing without retraining that head. The controls are still trained
+for the requested run, and their epoch count remains controlled by `--epochs`.
 
 ## What this establishes
 
