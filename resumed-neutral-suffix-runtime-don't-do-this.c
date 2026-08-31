@@ -1,13 +1,22 @@
 /*
- * History-dependent selection-product interpreter over llama2.c companies.
+ * DO NOT USE AS THE ESCARDO RUNTIME.
  *
- * A generated local Select is suspended until its prefix company has returned
- * a covector.  It then demands one token constructor, embeds that constructor,
- * and suspends the resulting longer prefix before invoking the next Select.
- * Thus no final-layer hidden state is inserted directly at the embedding
- * boundary and no unobserved suffix is supplied by a fixed tape.  Completed
- * demanded continuations retain their full outcome through memoized strength;
- * only the root terminalizes the selected witness.
+ * This quarantined attempt resumes previously reached Selects, but completes
+ * every newly introduced prefix with the fixed hidden-feedback default before
+ * observing that prefix.  Its sampled subtree therefore couples a useful new
+ * earlier token to an unrelated neutral suffix.  The measured six-token,
+ * four-sweep tree contained 84 leaves, but all inherited malformed tails; the
+ * selected `Lily was sick a a sick sick.` is evidence of this scheduler bug,
+ * not a successful Firthian selection.
+ *
+ * Resumable selection-product interpreter over llama2.c hidden feedback.
+ *
+ * This file deliberately does not construct complete candidate paths before
+ * observation. A local Select demands one argument, its nested continuation
+ * eventually suspends at a complete company observation, and the frozen model
+ * evaluates all suspensions reached in that round as one family. The returned
+ * prefix-owned covectors resume the same memoized Selects and provide their
+ * next demanded arguments. Only the last round terminalizes the root witness.
  *
  * Numerical transformer code is inherited from the standalone hidden-feedback
  * reference. Its CLI is excluded; this file owns only the higher-order control
@@ -26,6 +35,9 @@
 
 typedef struct {
     int token;
+    int fixed_rank;
+    float fixed_logit;
+    double fixed_log_probability;
 } SelectCandidate;
 
 typedef struct {
@@ -49,7 +61,8 @@ typedef struct {
 
 typedef enum {
     DEMAND_SELECT_UNIT,
-    DEMAND_HISTORY_CONTEXT_COVECTOR,
+    DEMAND_INITIAL_HIDDEN_FEEDBACK,
+    DEMAND_RESUMED_CONTEXT_COVECTOR,
 } DemandSource;
 
 typedef enum {
@@ -67,7 +80,6 @@ typedef struct {
     int *children;
     int child_count;
     int child_capacity;
-    int round_target_children;
     unsigned long long reachability;
     float *context_logits;
     int context_logits_ready;
@@ -88,7 +100,6 @@ typedef struct {
 typedef struct {
     unsigned long long continuation_demands;
     unsigned long long company_batches;
-    unsigned long long context_refreshes;
     unsigned long long company_rows;
     unsigned long long family_filler_calls;
     unsigned long long family_scalar_reads;
@@ -165,8 +176,10 @@ static uint64_t mix_u64(uint64_t value) {
 static const char *demand_source_name(DemandSource source) {
     switch (source) {
         case DEMAND_SELECT_UNIT: return "select_unit";
-        case DEMAND_HISTORY_CONTEXT_COVECTOR:
-            return "history_dependent_context_covector";
+        case DEMAND_INITIAL_HIDDEN_FEEDBACK:
+            return "initial_hidden_feedback_demand";
+        case DEMAND_RESUMED_CONTEXT_COVECTOR:
+            return "resumed_callback_context_covector";
     }
     return "invalid";
 }
@@ -215,6 +228,16 @@ static double log_partition(const float *logits, int count) {
         select_fail("invalid logit covector");
     }
     return maximum + log(total);
+}
+
+static int candidate_compare(const void *left_value, const void *right_value) {
+    const SelectCandidate *left = left_value;
+    const SelectCandidate *right = right_value;
+    if (left->fixed_logit > right->fixed_logit) return -1;
+    if (left->fixed_logit < right->fixed_logit) return 1;
+    if (left->token < right->token) return -1;
+    if (left->token > right->token) return 1;
+    return 0;
 }
 
 static int ordered_coordinate_compare(
@@ -339,37 +362,47 @@ static CandidateDemand next_demand(
     }
     SelectNode *context = &runtime->term.nodes[parent];
     if (!context->context_logits_ready) {
-        select_fail("generated Select was forced before its prefix observer");
-    }
-    int selected = -1;
-    float selected_logit = -INFINITY;
-    uint64_t selected_tie = UINT64_MAX;
-    for (int token = 0; token < runtime->vocab_size; token++) {
-        if (term_child_has_token(runtime, parent, position, token)) continue;
-        float logit = context->context_logits[token];
-        uint64_t tie = mix_u64(runtime->tie_seed ^ (uint64_t)(unsigned)token);
-        if (selected < 0 || logit > selected_logit ||
-            (logit == selected_logit && tie < selected_tie)) {
-            selected = token;
-            selected_logit = logit;
-            selected_tie = tie;
+        for (int index = 0; index < frame->count; index++) {
+            int token = frame->candidates[index].token;
+            if (!term_child_has_token(runtime, parent, position, token)) {
+                return (CandidateDemand){
+                    index,
+                    frame->candidates[index].fixed_rank,
+                    DEMAND_INITIAL_HIDDEN_FEEDBACK,
+                };
+            }
         }
-    }
-    if (selected >= 0) {
-        int candidate_index = frame->by_token[selected];
-        if (candidate_index < 0 || candidate_index >= frame->count) {
-            select_fail("context covector escaped its token frame");
+    } else {
+        int selected = -1;
+        float selected_logit = -INFINITY;
+        uint64_t selected_tie = UINT64_MAX;
+        for (int token = 0; token < runtime->vocab_size; token++) {
+            if (term_child_has_token(runtime, parent, position, token)) continue;
+            float logit = context->context_logits[token];
+            uint64_t tie = mix_u64(runtime->tie_seed ^ (uint64_t)(unsigned)token);
+            if (selected < 0 || logit > selected_logit ||
+                (logit == selected_logit && tie < selected_tie)) {
+                selected = token;
+                selected_logit = logit;
+                selected_tie = tie;
+            }
         }
-        return (CandidateDemand){
-            candidate_index,
-            context_rank(
-                context->context_logits,
-                runtime->vocab_size,
-                selected,
-                runtime->tie_seed
-            ),
-            DEMAND_HISTORY_CONTEXT_COVECTOR,
-        };
+        if (selected >= 0) {
+            int candidate_index = frame->by_token[selected];
+            if (candidate_index < 0 || candidate_index >= frame->count) {
+                select_fail("context covector escaped its token frame");
+            }
+            return (CandidateDemand){
+                candidate_index,
+                context_rank(
+                    context->context_logits,
+                    runtime->vocab_size,
+                    selected,
+                    runtime->tie_seed
+                ),
+                DEMAND_RESUMED_CONTEXT_COVECTOR,
+            };
+        }
     }
     select_fail("Select exhausted its vocabulary");
     return (CandidateDemand){0};
@@ -434,7 +467,7 @@ static void trace_demand(
         runtime->trace,
         "{\"event\":\"continuation_demand\",\"round\":%d,"
         "\"context_node\":%d,\"node\":%d,\"position\":%d,"
-        "\"token\":%d,\"context_proposal_rank\":%d,"
+        "\"token\":%d,\"demand_rank\":%d,\"fixed_tape_rank\":%d,"
         "\"source\":\"%s\",\"piece\":",
         round,
         parent,
@@ -442,6 +475,7 @@ static void trace_demand(
         entry->position,
         candidate->token,
         entry->demand_rank,
+        candidate->fixed_rank,
         demand_source_name(entry->demand_source)
     );
     json_piece(runtime->trace, runtime->tokenizer, candidate->token);
@@ -449,40 +483,17 @@ static void trace_demand(
     fflush(runtime->trace);
 }
 
-static void prepare_sweep(SelectRuntime *runtime) {
-    for (int index = 0; index < runtime->term.count; index++) {
-        SelectNode *node = &runtime->term.nodes[index];
-        int position = node->position + 1;
-        if (position >= runtime->frame_count) {
-            node->round_target_children = 0;
-            continue;
-        }
-        SelectFrame *frame = &runtime->frames[position];
-        if (frame->count == 1) {
-            node->round_target_children = 1;
-            continue;
-        }
-        int target = node->child_count + 1;
-        if (target > runtime->maximum_demands_per_select) {
-            target = runtime->maximum_demands_per_select;
-        }
-        if (target > frame->count) target = frame->count;
-        node->round_target_children = target;
-    }
-}
-
-static int resume_wave(
+static void resume_round(
     SelectRuntime *runtime,
     int parent,
     int position,
     int round
 ) {
-    if (position == runtime->frame_count) return 0;
+    if (position == runtime->frame_count) return;
     SelectFrame *frame = &runtime->frames[position];
-    SelectNode *context = &runtime->term.nodes[parent];
-    int expanded = 0;
-    if (context->child_count < context->round_target_children &&
-        (frame->count == 1 || context->context_logits_ready)) {
+    int limit = frame->count == 1 ? 1 : runtime->maximum_demands_per_select;
+    if (limit <= 0 || limit > frame->count) limit = frame->count;
+    if (runtime->term.nodes[parent].child_count < limit) {
         CandidateDemand demand = next_demand(runtime, parent, position);
         int child = term_append_child(
             &runtime->term,
@@ -490,12 +501,9 @@ static int resume_wave(
             position,
             demand
         );
-        runtime->term.nodes[child].round_target_children =
-            position + 1 < runtime->frame_count ? 1 : 0;
         runtime->counters.continuation_demands++;
         if (position == runtime->frame_count - 1) runtime->term.leaf_count++;
         trace_demand(runtime, round, parent, child);
-        expanded++;
     }
 
     int child_count = runtime->term.nodes[parent].child_count;
@@ -506,24 +514,9 @@ static int resume_wave(
         (size_t)child_count * sizeof(*children)
     );
     for (int ordinal = 0; ordinal < child_count; ordinal++) {
-        expanded += resume_wave(
-            runtime,
-            children[ordinal],
-            position + 1,
-            round
-        );
+        resume_round(runtime, children[ordinal], position + 1, round);
     }
     free(children);
-    return expanded;
-}
-
-static void require_sweep_complete(const SelectRuntime *runtime) {
-    for (int index = 0; index < runtime->term.count; index++) {
-        const SelectNode *node = &runtime->term.nodes[index];
-        if (node->child_count < node->round_target_children) {
-            select_fail("history-dependent sweep stopped at an unobserved Select");
-        }
-    }
 }
 
 static unsigned long long update_reachability(SelectTerm *term, int node_index) {
@@ -724,7 +717,7 @@ static void trace_choice(
         runtime->trace,
         "{\"event\":\"%s\",\"round\":%d,\"frame\":%d,"
         "\"position\":%d,\"token\":%d,\"demand_rank\":%d,"
-        "\"observer_leaf\":%d,"
+        "\"fixed_tape_rank\":%d,\"observer_leaf\":%d,"
         "\"worst_opinion\":%.17g,\"text\":",
         event,
         round,
@@ -732,6 +725,7 @@ static void trace_choice(
         entry->position,
         candidate->token,
         entry->demand_rank,
+        candidate->fixed_rank,
         selected_leaf,
         outcome->leximin_coordinates[0]
     );
@@ -824,13 +818,12 @@ static void update_context_covectors(
     }
 }
 
-static LlamaCompanyResult run_company_batch(
-    SelectRuntime *runtime,
-    int round,
-    const char *phase
-) {
+static int observe_round(SelectRuntime *runtime, int round) {
+    clear_round_outcomes(runtime);
     int row_count = runtime->term.count - 1;
-    if (row_count <= 0) select_fail("company term has no token occurrences");
+    if (row_count <= 0 || runtime->term.leaf_count == 0) {
+        select_fail("resumed term has no complete observation");
+    }
     int *tokens = select_calloc((size_t)row_count, sizeof(*tokens));
     int *positions = select_calloc((size_t)row_count, sizeof(*positions));
     int *parents = select_calloc((size_t)row_count, sizeof(*parents));
@@ -859,8 +852,7 @@ static LlamaCompanyResult run_company_batch(
         sizeof(*reads_before)
     );
     for (int filler = 0; filler < filler_count; filler++) {
-        calls_before[filler] =
-            atkey_filler_calls(runtime->company_runtime, filler);
+        calls_before[filler] = atkey_filler_calls(runtime->company_runtime, filler);
         reads_before[filler] =
             atkey_filler_scalar_reads(runtime->company_runtime, filler);
     }
@@ -879,15 +871,13 @@ static LlamaCompanyResult run_company_batch(
     runtime->counters.company_nanoseconds += elapsed;
     runtime->counters.company_batches++;
     runtime->counters.company_rows += (unsigned long long)row_count;
-    if (strcmp(phase, "terminal") != 0) runtime->counters.context_refreshes++;
 
     unsigned long long batch_calls = 0;
     unsigned long long batch_reads = 0;
     for (int filler = 0; filler < filler_count; filler++) {
         size_t calls = atkey_filler_calls(runtime->company_runtime, filler) -
             calls_before[filler];
-        size_t reads =
-            atkey_filler_scalar_reads(runtime->company_runtime, filler) -
+        size_t reads = atkey_filler_scalar_reads(runtime->company_runtime, filler) -
             reads_before[filler];
         runtime->filler_calls_by_id[filler] += calls;
         runtime->counters.family_filler_calls += calls;
@@ -903,16 +893,11 @@ static LlamaCompanyResult run_company_batch(
     if (runtime->trace != NULL) {
         fprintf(
             runtime->trace,
-            "{\"event\":\"company_run\",\"round\":%d,\"phase\":",
-            round
-        );
-        json_string(runtime->trace, phase);
-        fprintf(
-            runtime->trace,
-            ",\"rows\":%d,\"batch_filler_calls\":%llu,"
-            "\"batch_scalar_reads\":%llu,"
+            "{\"event\":\"company_run\",\"round\":%d,\"rows\":%d,"
+            "\"batch_filler_calls\":%llu,\"batch_scalar_reads\":%llu,"
             "\"cumulative_maximum_calls_per_filler\":%llu,"
             "\"model_ms\":%.9g}\n",
+            round,
             row_count,
             batch_calls,
             batch_reads,
@@ -923,34 +908,6 @@ static LlamaCompanyResult run_company_batch(
     }
 
     update_context_covectors(runtime, &result);
-    free(reads_before);
-    free(calls_before);
-    free(parents);
-    free(positions);
-    free(tokens);
-    return result;
-}
-
-static void refresh_contexts(
-    SelectRuntime *runtime,
-    int round,
-    const char *phase
-) {
-    LlamaCompanyResult result = run_company_batch(runtime, round, phase);
-    llama_company_result_free(&result);
-}
-
-static int observe_round(SelectRuntime *runtime, int round) {
-    clear_round_outcomes(runtime);
-    int row_count = runtime->term.count - 1;
-    if (row_count <= 0 || runtime->term.leaf_count == 0) {
-        select_fail("resumed term has no complete observation");
-    }
-    LlamaCompanyResult result = run_company_batch(
-        runtime,
-        round,
-        "terminal"
-    );
     int *nodes = select_calloc(
         (size_t)runtime->frame_count,
         sizeof(*nodes)
@@ -963,15 +920,6 @@ static int observe_round(SelectRuntime *runtime, int round) {
     }
     free(nodes);
 
-    int filler_count = atkey_filler_count(runtime->company_runtime);
-    size_t *calls_before = select_calloc(
-        (size_t)filler_count,
-        sizeof(*calls_before)
-    );
-    size_t *reads_before = select_calloc(
-        (size_t)filler_count,
-        sizeof(*reads_before)
-    );
     for (int filler = 0; filler < filler_count; filler++) {
         calls_before[filler] = atkey_filler_calls(runtime->company_runtime, filler);
         reads_before[filler] =
@@ -1012,6 +960,9 @@ static int observe_round(SelectRuntime *runtime, int round) {
     llama_company_result_free(&result);
     free(reads_before);
     free(calls_before);
+    free(parents);
+    free(positions);
+    free(tokens);
     return selected_leaf;
 }
 
@@ -1060,7 +1011,19 @@ static SelectFrame *build_frames(
     Config *config = &transformer->config;
     int frame_count = prompt_count + completion_count;
     SelectFrame *frames = select_calloc((size_t)frame_count, sizeof(*frames));
+    float *hidden = select_calloc(
+        (size_t)(completion_count + 1) * config->dim,
+        sizeof(*hidden)
+    );
     for (int position = 0; position < prompt_count; position++) {
+        float *value = forward_token_hidden(
+            transformer,
+            prompt_tokens[position],
+            position
+        );
+        if (position == prompt_count - 1) {
+            memcpy(hidden, value, (size_t)config->dim * sizeof(*hidden));
+        }
         frames[position] = (SelectFrame){
             .position = position,
             .count = 1,
@@ -1068,7 +1031,17 @@ static SelectFrame *build_frames(
         };
         frames[position].candidates[0] = (SelectCandidate){
             .token = prompt_tokens[position],
+            .fixed_rank = 1,
         };
+    }
+    for (int index = 1; index <= completion_count; index++) {
+        int position = prompt_count + index - 1;
+        float *value = forward_feedback_hidden(transformer, position);
+        memcpy(
+            hidden + (size_t)index * config->dim,
+            value,
+            (size_t)config->dim * sizeof(*hidden)
+        );
     }
 
     for (int output = 0; output < completion_count; output++) {
@@ -1084,13 +1057,37 @@ static SelectFrame *build_frames(
             (size_t)config->vocab_size,
             sizeof(*frame->by_token)
         );
+        matmul(
+            transformer->state.logits,
+            hidden + (size_t)output * config->dim,
+            transformer->weights.wcls,
+            config->dim,
+            config->vocab_size
+        );
+        double partition = log_partition(
+            transformer->state.logits,
+            config->vocab_size
+        );
         for (int token = 0; token < config->vocab_size; token++) {
             frame->candidates[token] = (SelectCandidate){
                 .token = token,
+                .fixed_logit = transformer->state.logits[token],
+                .fixed_log_probability =
+                    (double)transformer->state.logits[token] - partition,
             };
-            frame->by_token[token] = token;
+        }
+        qsort(
+            frame->candidates,
+            (size_t)frame->count,
+            sizeof(*frame->candidates),
+            candidate_compare
+        );
+        for (int rank = 0; rank < frame->count; rank++) {
+            frame->candidates[rank].fixed_rank = rank + 1;
+            frame->by_token[frame->candidates[rank].token] = rank;
         }
     }
+    free(hidden);
     return frames;
 }
 
@@ -1177,7 +1174,7 @@ static void run_resumable_selection(
         fprintf(
             trace,
             "{\"event\":\"run\",\"mode\":"
-            "\"history_dependent_company_select\","
+            "\"resumable_hidden_feedback_select\","
             "\"prompt_positions\":%d,\"completion_positions\":%d,"
             "\"vocabulary_size\":%d,\"maximum_demands_per_select\":%d,"
             "\"leaf_safety_limit\":%llu,"
@@ -1191,39 +1188,22 @@ static void run_resumable_selection(
         fflush(trace);
     }
 
-    runtime.term.nodes[0].round_target_children = 1;
-    if (resume_wave(&runtime, 0, 0, 0) != prompt_count) {
-        select_fail("prefill unit selections did not form one prompt spine");
-    }
-    refresh_contexts(&runtime, 0, "prefill_context");
-
     int selected_leaf = -1;
     for (int round = 1; round <= maximum_demands_per_select; round++) {
-        prepare_sweep(&runtime);
-        for (;;) {
-            int expanded = resume_wave(&runtime, 0, 0, round);
-            if (expanded == 0) break;
-            if (leaf_safety_limit != ULLONG_MAX &&
-                runtime.term.leaf_count > leaf_safety_limit) {
-                fprintf(
-                    stderr,
-                    "history-dependent round %d requires %llu leaves; "
-                    "-b %llu is only a safety limit and cannot reshape "
-                    "the term\n",
-                    round,
-                    runtime.term.leaf_count,
-                    leaf_safety_limit
-                );
-                exit(EXIT_FAILURE);
-            }
-            refresh_contexts(
-                &runtime,
-                round,
-                "continuation_frontier"
-            );
-        }
-        require_sweep_complete(&runtime);
+        resume_round(&runtime, 0, 0, round);
         update_reachability(&runtime.term, 0);
+        if (leaf_safety_limit != ULLONG_MAX &&
+            runtime.term.leaf_count > leaf_safety_limit) {
+            fprintf(
+                stderr,
+                "resumed round %d requires %llu leaves; -b %llu is only "
+                "a safety limit and cannot reshape the term\n",
+                round,
+                runtime.term.leaf_count,
+                leaf_safety_limit
+            );
+            exit(EXIT_FAILURE);
+        }
         trace_term_round(&runtime, round);
         selected_leaf = observe_round(&runtime, round);
     }
@@ -1252,14 +1232,13 @@ static void run_resumable_selection(
     print_selected_path(&runtime, selected_leaf);
     fprintf(
         stderr,
-        "mode: history_dependent_company_select\n"
+        "mode: resumable_hidden_feedback_select\n"
         "prompt_positions: %d\n"
         "completion_positions: %d\n"
         "maximum_demands_per_select: %d\n"
         "continuation_demands: %llu\n"
         "final_unique_leaves: %llu\n"
         "company_batches: %llu\n"
-        "context_refreshes: %llu\n"
         "cumulative_company_rows: %llu\n"
         "family_filler_calls: %llu\n"
         "maximum_calls_per_filler: %llu\n"
@@ -1279,7 +1258,6 @@ static void run_resumable_selection(
         runtime.counters.continuation_demands,
         runtime.term.leaf_count,
         runtime.counters.company_batches,
-        runtime.counters.context_refreshes,
         runtime.counters.company_rows,
         runtime.counters.family_filler_calls,
         runtime.counters.maximum_calls_per_filler,
@@ -1300,7 +1278,6 @@ static void run_resumable_selection(
             trace,
             "{\"event\":\"run_end\",\"continuation_demands\":%llu,"
             "\"final_unique_leaves\":%llu,\"company_batches\":%llu,"
-            "\"context_refreshes\":%llu,"
             "\"cumulative_company_rows\":%llu,"
             "\"family_filler_calls\":%llu,"
             "\"maximum_calls_per_filler\":%llu,"
@@ -1310,7 +1287,6 @@ static void run_resumable_selection(
             runtime.counters.continuation_demands,
             runtime.term.leaf_count,
             runtime.counters.company_batches,
-            runtime.counters.context_refreshes,
             runtime.counters.company_rows,
             runtime.counters.family_filler_calls,
             runtime.counters.maximum_calls_per_filler,

@@ -1,13 +1,23 @@
 /*
- * History-dependent selection-product interpreter over llama2.c companies.
+ * DO NOT USE INTERMEDIATE UNEMBEDDINGS AS THE COMPANY ORDER.
  *
- * A generated local Select is suspended until its prefix company has returned
- * a covector.  It then demands one token constructor, embeds that constructor,
- * and suspends the resulting longer prefix before invoking the next Select.
- * Thus no final-layer hidden state is inserted directly at the embedding
- * boundary and no unobserved suffix is supplied by a fixed tape.  Completed
- * demanded continuations retain their full outcome through memoized strength;
- * only the root terminalizes the selected witness.
+ * This diagnostic applies the model's final RMS/output head to the embedding
+ * and every completed layer.  Those projections are observable and useful in
+ * a trace, but they are not trained next-token heads at the earlier scales.
+ * On the measured `Lily was a a a sick sick girl` path, the embedding-scale
+ * projection assigns repeated tokens log probabilities approximately zero:
+ * it recognizes the current constructor and therefore rewards copying it.
+ * Folding or ordering by this scale zip would worsen the precise low-scale
+ * failure it was meant to diagnose.  Keep this source only as evidence.
+ *
+ * Resumable selection-product interpreter over llama2.c hidden feedback.
+ *
+ * This file deliberately does not construct complete candidate paths before
+ * observation. A local Select demands one argument, its nested continuation
+ * eventually suspends at a complete company observation, and the frozen model
+ * evaluates all suspensions reached in that round as one family. The returned
+ * prefix-owned covectors resume the same memoized Selects and provide their
+ * next demanded arguments. Only the last round terminalizes the root witness.
  *
  * Numerical transformer code is inherited from the standalone hidden-feedback
  * reference. Its CLI is excluded; this file owns only the higher-order control
@@ -26,6 +36,9 @@
 
 typedef struct {
     int token;
+    int fixed_rank;
+    float fixed_logit;
+    double fixed_log_probability;
 } SelectCandidate;
 
 typedef struct {
@@ -37,9 +50,13 @@ typedef struct {
 
 typedef struct {
     int count;
+    int scale_count;
     double *coordinates;
     int *leximin_positions;
     double *leximin_coordinates;
+    double *scale_coordinates;
+    int *scale_leximin_positions;
+    double *scale_leximin_coordinates;
     int *context_nodes;
     int *company_nodes;
     int *company_tokens;
@@ -49,7 +66,8 @@ typedef struct {
 
 typedef enum {
     DEMAND_SELECT_UNIT,
-    DEMAND_HISTORY_CONTEXT_COVECTOR,
+    DEMAND_INITIAL_HIDDEN_FEEDBACK,
+    DEMAND_RESUMED_CONTEXT_COVECTOR,
 } DemandSource;
 
 typedef enum {
@@ -67,11 +85,14 @@ typedef struct {
     int *children;
     int child_count;
     int child_capacity;
-    int round_target_children;
     unsigned long long reachability;
     float *context_logits;
     int context_logits_ready;
     double log_partition;
+    float *context_scale_logits;
+    double *context_scale_log_partitions;
+    int context_scale_count;
+    int context_scales_ready;
     SelectOutcome *outcome;
     SelectState state;
     int selected_child;
@@ -88,7 +109,6 @@ typedef struct {
 typedef struct {
     unsigned long long continuation_demands;
     unsigned long long company_batches;
-    unsigned long long context_refreshes;
     unsigned long long company_rows;
     unsigned long long family_filler_calls;
     unsigned long long family_scalar_reads;
@@ -165,8 +185,10 @@ static uint64_t mix_u64(uint64_t value) {
 static const char *demand_source_name(DemandSource source) {
     switch (source) {
         case DEMAND_SELECT_UNIT: return "select_unit";
-        case DEMAND_HISTORY_CONTEXT_COVECTOR:
-            return "history_dependent_context_covector";
+        case DEMAND_INITIAL_HIDDEN_FEEDBACK:
+            return "initial_hidden_feedback_demand";
+        case DEMAND_RESUMED_CONTEXT_COVECTOR:
+            return "resumed_callback_context_covector";
     }
     return "invalid";
 }
@@ -215,6 +237,16 @@ static double log_partition(const float *logits, int count) {
         select_fail("invalid logit covector");
     }
     return maximum + log(total);
+}
+
+static int candidate_compare(const void *left_value, const void *right_value) {
+    const SelectCandidate *left = left_value;
+    const SelectCandidate *right = right_value;
+    if (left->fixed_logit > right->fixed_logit) return -1;
+    if (left->fixed_logit < right->fixed_logit) return 1;
+    if (left->token < right->token) return -1;
+    if (left->token > right->token) return 1;
+    return 0;
 }
 
 static int ordered_coordinate_compare(
@@ -339,37 +371,47 @@ static CandidateDemand next_demand(
     }
     SelectNode *context = &runtime->term.nodes[parent];
     if (!context->context_logits_ready) {
-        select_fail("generated Select was forced before its prefix observer");
-    }
-    int selected = -1;
-    float selected_logit = -INFINITY;
-    uint64_t selected_tie = UINT64_MAX;
-    for (int token = 0; token < runtime->vocab_size; token++) {
-        if (term_child_has_token(runtime, parent, position, token)) continue;
-        float logit = context->context_logits[token];
-        uint64_t tie = mix_u64(runtime->tie_seed ^ (uint64_t)(unsigned)token);
-        if (selected < 0 || logit > selected_logit ||
-            (logit == selected_logit && tie < selected_tie)) {
-            selected = token;
-            selected_logit = logit;
-            selected_tie = tie;
+        for (int index = 0; index < frame->count; index++) {
+            int token = frame->candidates[index].token;
+            if (!term_child_has_token(runtime, parent, position, token)) {
+                return (CandidateDemand){
+                    index,
+                    frame->candidates[index].fixed_rank,
+                    DEMAND_INITIAL_HIDDEN_FEEDBACK,
+                };
+            }
         }
-    }
-    if (selected >= 0) {
-        int candidate_index = frame->by_token[selected];
-        if (candidate_index < 0 || candidate_index >= frame->count) {
-            select_fail("context covector escaped its token frame");
+    } else {
+        int selected = -1;
+        float selected_logit = -INFINITY;
+        uint64_t selected_tie = UINT64_MAX;
+        for (int token = 0; token < runtime->vocab_size; token++) {
+            if (term_child_has_token(runtime, parent, position, token)) continue;
+            float logit = context->context_logits[token];
+            uint64_t tie = mix_u64(runtime->tie_seed ^ (uint64_t)(unsigned)token);
+            if (selected < 0 || logit > selected_logit ||
+                (logit == selected_logit && tie < selected_tie)) {
+                selected = token;
+                selected_logit = logit;
+                selected_tie = tie;
+            }
         }
-        return (CandidateDemand){
-            candidate_index,
-            context_rank(
-                context->context_logits,
-                runtime->vocab_size,
-                selected,
-                runtime->tie_seed
-            ),
-            DEMAND_HISTORY_CONTEXT_COVECTOR,
-        };
+        if (selected >= 0) {
+            int candidate_index = frame->by_token[selected];
+            if (candidate_index < 0 || candidate_index >= frame->count) {
+                select_fail("context covector escaped its token frame");
+            }
+            return (CandidateDemand){
+                candidate_index,
+                context_rank(
+                    context->context_logits,
+                    runtime->vocab_size,
+                    selected,
+                    runtime->tie_seed
+                ),
+                DEMAND_RESUMED_CONTEXT_COVECTOR,
+            };
+        }
     }
     select_fail("Select exhausted its vocabulary");
     return (CandidateDemand){0};
@@ -434,7 +476,7 @@ static void trace_demand(
         runtime->trace,
         "{\"event\":\"continuation_demand\",\"round\":%d,"
         "\"context_node\":%d,\"node\":%d,\"position\":%d,"
-        "\"token\":%d,\"context_proposal_rank\":%d,"
+        "\"token\":%d,\"demand_rank\":%d,\"fixed_tape_rank\":%d,"
         "\"source\":\"%s\",\"piece\":",
         round,
         parent,
@@ -442,6 +484,7 @@ static void trace_demand(
         entry->position,
         candidate->token,
         entry->demand_rank,
+        candidate->fixed_rank,
         demand_source_name(entry->demand_source)
     );
     json_piece(runtime->trace, runtime->tokenizer, candidate->token);
@@ -449,40 +492,17 @@ static void trace_demand(
     fflush(runtime->trace);
 }
 
-static void prepare_sweep(SelectRuntime *runtime) {
-    for (int index = 0; index < runtime->term.count; index++) {
-        SelectNode *node = &runtime->term.nodes[index];
-        int position = node->position + 1;
-        if (position >= runtime->frame_count) {
-            node->round_target_children = 0;
-            continue;
-        }
-        SelectFrame *frame = &runtime->frames[position];
-        if (frame->count == 1) {
-            node->round_target_children = 1;
-            continue;
-        }
-        int target = node->child_count + 1;
-        if (target > runtime->maximum_demands_per_select) {
-            target = runtime->maximum_demands_per_select;
-        }
-        if (target > frame->count) target = frame->count;
-        node->round_target_children = target;
-    }
-}
-
-static int resume_wave(
+static void resume_round(
     SelectRuntime *runtime,
     int parent,
     int position,
     int round
 ) {
-    if (position == runtime->frame_count) return 0;
+    if (position == runtime->frame_count) return;
     SelectFrame *frame = &runtime->frames[position];
-    SelectNode *context = &runtime->term.nodes[parent];
-    int expanded = 0;
-    if (context->child_count < context->round_target_children &&
-        (frame->count == 1 || context->context_logits_ready)) {
+    int limit = frame->count == 1 ? 1 : runtime->maximum_demands_per_select;
+    if (limit <= 0 || limit > frame->count) limit = frame->count;
+    if (runtime->term.nodes[parent].child_count < limit) {
         CandidateDemand demand = next_demand(runtime, parent, position);
         int child = term_append_child(
             &runtime->term,
@@ -490,12 +510,9 @@ static int resume_wave(
             position,
             demand
         );
-        runtime->term.nodes[child].round_target_children =
-            position + 1 < runtime->frame_count ? 1 : 0;
         runtime->counters.continuation_demands++;
         if (position == runtime->frame_count - 1) runtime->term.leaf_count++;
         trace_demand(runtime, round, parent, child);
-        expanded++;
     }
 
     int child_count = runtime->term.nodes[parent].child_count;
@@ -506,24 +523,9 @@ static int resume_wave(
         (size_t)child_count * sizeof(*children)
     );
     for (int ordinal = 0; ordinal < child_count; ordinal++) {
-        expanded += resume_wave(
-            runtime,
-            children[ordinal],
-            position + 1,
-            round
-        );
+        resume_round(runtime, children[ordinal], position + 1, round);
     }
     free(children);
-    return expanded;
-}
-
-static void require_sweep_complete(const SelectRuntime *runtime) {
-    for (int index = 0; index < runtime->term.count; index++) {
-        const SelectNode *node = &runtime->term.nodes[index];
-        if (node->child_count < node->round_target_children) {
-            select_fail("history-dependent sweep stopped at an unobserved Select");
-        }
-    }
 }
 
 static unsigned long long update_reachability(SelectTerm *term, int node_index) {
@@ -554,6 +556,9 @@ static void outcome_free(SelectOutcome *outcome) {
     free(outcome->context_nodes);
     free(outcome->leximin_coordinates);
     free(outcome->leximin_positions);
+    free(outcome->scale_leximin_coordinates);
+    free(outcome->scale_leximin_positions);
+    free(outcome->scale_coordinates);
     free(outcome->coordinates);
     free(outcome);
 }
@@ -597,10 +602,24 @@ static SelectOutcome *observe_leaf(
     path_nodes(runtime, leaf, nodes);
     SelectOutcome *outcome = select_calloc(1, sizeof(*outcome));
     int count = runtime->frame_count;
+    int scale_count = atkey_layer_count(runtime->company_runtime) + 1;
     outcome->count = count;
+    outcome->scale_count = scale_count;
     outcome->coordinates = select_calloc((size_t)count, sizeof(double));
     outcome->leximin_positions = select_calloc((size_t)count, sizeof(int));
     outcome->leximin_coordinates = select_calloc((size_t)count, sizeof(double));
+    outcome->scale_coordinates = select_calloc(
+        (size_t)scale_count * count,
+        sizeof(*outcome->scale_coordinates)
+    );
+    outcome->scale_leximin_positions = select_calloc(
+        (size_t)scale_count * count,
+        sizeof(*outcome->scale_leximin_positions)
+    );
+    outcome->scale_leximin_coordinates = select_calloc(
+        (size_t)scale_count * count,
+        sizeof(*outcome->scale_leximin_coordinates)
+    );
     outcome->context_nodes = select_calloc((size_t)count, sizeof(int));
     outcome->company_nodes = select_calloc((size_t)count, sizeof(int));
     outcome->company_tokens = select_calloc((size_t)count, sizeof(int));
@@ -622,11 +641,19 @@ static SelectOutcome *observe_leaf(
         outcome->company_tokens[position] = token;
         if (context_node == 0) {
             outcome->coordinates[position] = 0.0;
+            for (int scale = 0; scale < scale_count; scale++) {
+                outcome->scale_coordinates[(size_t)scale * count + position] =
+                    0.0;
+            }
         } else {
             SelectNode *context = &runtime->term.nodes[context_node];
             if (!context->context_logits_ready ||
                 !isfinite(context->log_partition)) {
                 select_fail("company outcome lacks its incoming context");
+            }
+            if (!context->context_scales_ready ||
+                context->context_scale_count != scale_count) {
+                select_fail("company outcome lacks its incoming scale zip");
             }
             double logit = context->context_logits[token];
             double coordinate = logit - context->log_partition;
@@ -634,6 +661,19 @@ static SelectOutcome *observe_leaf(
             outcome->logits[position] = logit;
             outcome->log_partitions[position] = context->log_partition;
             outcome->coordinates[position] = coordinate;
+            for (int scale = 0; scale < scale_count; scale++) {
+                double scale_logit = context->context_scale_logits[
+                    (size_t)scale * runtime->vocab_size + token
+                ];
+                double scale_coordinate = scale_logit -
+                    context->context_scale_log_partitions[scale];
+                if (!isfinite(scale_coordinate)) {
+                    select_fail("non-finite scale company opinion");
+                }
+                outcome->scale_coordinates[
+                    (size_t)scale * count + position
+                ] = scale_coordinate;
+            }
         }
         ordered[position] = (OrderedCoordinate){
             outcome->coordinates[position],
@@ -649,6 +689,28 @@ static SelectOutcome *observe_leaf(
     for (int rank = 0; rank < count; rank++) {
         outcome->leximin_positions[rank] = ordered[rank].position;
         outcome->leximin_coordinates[rank] = ordered[rank].coordinate;
+    }
+    for (int scale = 0; scale < scale_count; scale++) {
+        for (int position = 0; position < count; position++) {
+            ordered[position] = (OrderedCoordinate){
+                outcome->scale_coordinates[(size_t)scale * count + position],
+                position,
+            };
+        }
+        qsort(
+            ordered,
+            (size_t)count,
+            sizeof(*ordered),
+            ordered_coordinate_compare
+        );
+        for (int rank = 0; rank < count; rank++) {
+            outcome->scale_leximin_positions[
+                (size_t)scale * count + rank
+            ] = ordered[rank].position;
+            outcome->scale_leximin_coordinates[
+                (size_t)scale * count + rank
+            ] = ordered[rank].coordinate;
+        }
     }
     free(ordered);
     runtime->term.nodes[leaf].outcome = outcome;
@@ -701,6 +763,40 @@ static void trace_outcome(
             outcome->leximin_coordinates[rank]
         );
     }
+    fputs("],\"scale_coordinates\":[", stream);
+    for (int scale = 0; scale < outcome->scale_count; scale++) {
+        if (scale != 0) fputc(',', stream);
+        fputc('[', stream);
+        for (int position = 0; position < outcome->count; position++) {
+            if (position != 0) fputc(',', stream);
+            fprintf(
+                stream,
+                "%.17g",
+                outcome->scale_coordinates[
+                    (size_t)scale * outcome->count + position
+                ]
+            );
+        }
+        fputc(']', stream);
+    }
+    fputs("],\"scale_leximin\":[", stream);
+    for (int scale = 0; scale < outcome->scale_count; scale++) {
+        if (scale != 0) fputc(',', stream);
+        fputs("{\"scale\":", stream);
+        fprintf(stream, "%d,\"coordinates\":[", scale);
+        for (int rank = 0; rank < outcome->count; rank++) {
+            if (rank != 0) fputc(',', stream);
+            size_t offset = (size_t)scale * outcome->count + rank;
+            fprintf(
+                stream,
+                "{\"rank\":%d,\"position\":%d,\"opinion\":%.17g}",
+                rank,
+                outcome->scale_leximin_positions[offset],
+                outcome->scale_leximin_coordinates[offset]
+            );
+        }
+        fputs("]}", stream);
+    }
     fputs("],\"text\":", stream);
     trace_path(stream, runtime, leaf);
     fputs("}\n", stream);
@@ -724,17 +820,29 @@ static void trace_choice(
         runtime->trace,
         "{\"event\":\"%s\",\"round\":%d,\"frame\":%d,"
         "\"position\":%d,\"token\":%d,\"demand_rank\":%d,"
-        "\"observer_leaf\":%d,"
-        "\"worst_opinion\":%.17g,\"text\":",
+        "\"fixed_tape_rank\":%d,\"observer_leaf\":%d,"
+        "\"worst_opinion\":%.17g,\"scale_worst_opinions\":[",
         event,
         round,
         parent,
         entry->position,
         candidate->token,
         entry->demand_rank,
+        candidate->fixed_rank,
         selected_leaf,
         outcome->leximin_coordinates[0]
     );
+    for (int scale = 0; scale < outcome->scale_count; scale++) {
+        if (scale != 0) fputc(',', runtime->trace);
+        fprintf(
+            runtime->trace,
+            "%.17g",
+            outcome->scale_leximin_coordinates[
+                (size_t)scale * outcome->count
+            ]
+        );
+    }
+    fputs("],\"text\":", runtime->trace);
     trace_path(runtime->trace, runtime, selected_leaf);
     fputs("}\n", runtime->trace);
     fflush(runtime->trace);
@@ -803,6 +911,9 @@ static void update_context_covectors(
     SelectRuntime *runtime,
     const LlamaCompanyResult *result
 ) {
+    if (result->scale_count <= 0 || result->scale_logits == NULL) {
+        select_fail("company callback returned no scale-indexed observations");
+    }
     for (int index = 1; index < runtime->term.count; index++) {
         SelectNode *node = &runtime->term.nodes[index];
         const float *logits = result->logits +
@@ -821,16 +932,46 @@ static void update_context_covectors(
             (size_t)runtime->vocab_size * sizeof(*node->context_logits)
         );
         node->context_logits_ready = 1;
+        if (node->context_scale_count != result->scale_count) {
+            free(node->context_scale_log_partitions);
+            free(node->context_scale_logits);
+            node->context_scale_count = result->scale_count;
+            node->context_scale_log_partitions = select_calloc(
+                (size_t)result->scale_count,
+                sizeof(*node->context_scale_log_partitions)
+            );
+            node->context_scale_logits = select_calloc(
+                (size_t)result->scale_count * runtime->vocab_size,
+                sizeof(*node->context_scale_logits)
+            );
+        }
+        int row = index - 1;
+        for (int scale = 0; scale < result->scale_count; scale++) {
+            const float *scale_logits = result->scale_logits +
+                ((size_t)scale * result->row_count + row) *
+                    result->vocab_size;
+            float *stored = node->context_scale_logits +
+                (size_t)scale * runtime->vocab_size;
+            memcpy(
+                stored,
+                scale_logits,
+                (size_t)runtime->vocab_size * sizeof(*stored)
+            );
+            node->context_scale_log_partitions[scale] = log_partition(
+                stored,
+                runtime->vocab_size
+            );
+        }
+        node->context_scales_ready = 1;
     }
 }
 
-static LlamaCompanyResult run_company_batch(
-    SelectRuntime *runtime,
-    int round,
-    const char *phase
-) {
+static int observe_round(SelectRuntime *runtime, int round) {
+    clear_round_outcomes(runtime);
     int row_count = runtime->term.count - 1;
-    if (row_count <= 0) select_fail("company term has no token occurrences");
+    if (row_count <= 0 || runtime->term.leaf_count == 0) {
+        select_fail("resumed term has no complete observation");
+    }
     int *tokens = select_calloc((size_t)row_count, sizeof(*tokens));
     int *positions = select_calloc((size_t)row_count, sizeof(*positions));
     int *parents = select_calloc((size_t)row_count, sizeof(*parents));
@@ -859,8 +1000,7 @@ static LlamaCompanyResult run_company_batch(
         sizeof(*reads_before)
     );
     for (int filler = 0; filler < filler_count; filler++) {
-        calls_before[filler] =
-            atkey_filler_calls(runtime->company_runtime, filler);
+        calls_before[filler] = atkey_filler_calls(runtime->company_runtime, filler);
         reads_before[filler] =
             atkey_filler_scalar_reads(runtime->company_runtime, filler);
     }
@@ -870,7 +1010,7 @@ static LlamaCompanyResult run_company_batch(
     if (!llama_company_evaluate(
             runtime->company_runtime,
             &shape,
-            false,
+            true,
             &result
         )) {
         select_fail("company batch failed");
@@ -879,15 +1019,13 @@ static LlamaCompanyResult run_company_batch(
     runtime->counters.company_nanoseconds += elapsed;
     runtime->counters.company_batches++;
     runtime->counters.company_rows += (unsigned long long)row_count;
-    if (strcmp(phase, "terminal") != 0) runtime->counters.context_refreshes++;
 
     unsigned long long batch_calls = 0;
     unsigned long long batch_reads = 0;
     for (int filler = 0; filler < filler_count; filler++) {
         size_t calls = atkey_filler_calls(runtime->company_runtime, filler) -
             calls_before[filler];
-        size_t reads =
-            atkey_filler_scalar_reads(runtime->company_runtime, filler) -
+        size_t reads = atkey_filler_scalar_reads(runtime->company_runtime, filler) -
             reads_before[filler];
         runtime->filler_calls_by_id[filler] += calls;
         runtime->counters.family_filler_calls += calls;
@@ -903,16 +1041,11 @@ static LlamaCompanyResult run_company_batch(
     if (runtime->trace != NULL) {
         fprintf(
             runtime->trace,
-            "{\"event\":\"company_run\",\"round\":%d,\"phase\":",
-            round
-        );
-        json_string(runtime->trace, phase);
-        fprintf(
-            runtime->trace,
-            ",\"rows\":%d,\"batch_filler_calls\":%llu,"
-            "\"batch_scalar_reads\":%llu,"
+            "{\"event\":\"company_run\",\"round\":%d,\"rows\":%d,"
+            "\"batch_filler_calls\":%llu,\"batch_scalar_reads\":%llu,"
             "\"cumulative_maximum_calls_per_filler\":%llu,"
             "\"model_ms\":%.9g}\n",
+            round,
             row_count,
             batch_calls,
             batch_reads,
@@ -923,34 +1056,6 @@ static LlamaCompanyResult run_company_batch(
     }
 
     update_context_covectors(runtime, &result);
-    free(reads_before);
-    free(calls_before);
-    free(parents);
-    free(positions);
-    free(tokens);
-    return result;
-}
-
-static void refresh_contexts(
-    SelectRuntime *runtime,
-    int round,
-    const char *phase
-) {
-    LlamaCompanyResult result = run_company_batch(runtime, round, phase);
-    llama_company_result_free(&result);
-}
-
-static int observe_round(SelectRuntime *runtime, int round) {
-    clear_round_outcomes(runtime);
-    int row_count = runtime->term.count - 1;
-    if (row_count <= 0 || runtime->term.leaf_count == 0) {
-        select_fail("resumed term has no complete observation");
-    }
-    LlamaCompanyResult result = run_company_batch(
-        runtime,
-        round,
-        "terminal"
-    );
     int *nodes = select_calloc(
         (size_t)runtime->frame_count,
         sizeof(*nodes)
@@ -963,15 +1068,6 @@ static int observe_round(SelectRuntime *runtime, int round) {
     }
     free(nodes);
 
-    int filler_count = atkey_filler_count(runtime->company_runtime);
-    size_t *calls_before = select_calloc(
-        (size_t)filler_count,
-        sizeof(*calls_before)
-    );
-    size_t *reads_before = select_calloc(
-        (size_t)filler_count,
-        sizeof(*reads_before)
-    );
     for (int filler = 0; filler < filler_count; filler++) {
         calls_before[filler] = atkey_filler_calls(runtime->company_runtime, filler);
         reads_before[filler] =
@@ -999,11 +1095,23 @@ static int observe_round(SelectRuntime *runtime, int round) {
         fprintf(
             runtime->trace,
             "{\"event\":\"round_selected\",\"round\":%d,"
-            "\"selected_leaf\":%d,\"worst_opinion\":%.17g,\"text\":",
+            "\"selected_leaf\":%d,\"worst_opinion\":%.17g,"
+            "\"scale_worst_opinions\":[",
             round,
             selected_leaf,
             outcome->leximin_coordinates[0]
         );
+        for (int scale = 0; scale < outcome->scale_count; scale++) {
+            if (scale != 0) fputc(',', runtime->trace);
+            fprintf(
+                runtime->trace,
+                "%.17g",
+                outcome->scale_leximin_coordinates[
+                    (size_t)scale * outcome->count
+                ]
+            );
+        }
+        fputs("],\"text\":", runtime->trace);
         trace_path(runtime->trace, runtime, selected_leaf);
         fputs("}\n", runtime->trace);
         fflush(runtime->trace);
@@ -1012,6 +1120,9 @@ static int observe_round(SelectRuntime *runtime, int round) {
     llama_company_result_free(&result);
     free(reads_before);
     free(calls_before);
+    free(parents);
+    free(positions);
+    free(tokens);
     return selected_leaf;
 }
 
@@ -1044,6 +1155,8 @@ static void free_frames(SelectFrame *frames, int count) {
 static void free_term(SelectTerm *term) {
     for (int index = 0; index < term->count; index++) {
         free(term->nodes[index].children);
+        free(term->nodes[index].context_scale_log_partitions);
+        free(term->nodes[index].context_scale_logits);
         free(term->nodes[index].context_logits);
         outcome_free(term->nodes[index].outcome);
     }
@@ -1060,7 +1173,19 @@ static SelectFrame *build_frames(
     Config *config = &transformer->config;
     int frame_count = prompt_count + completion_count;
     SelectFrame *frames = select_calloc((size_t)frame_count, sizeof(*frames));
+    float *hidden = select_calloc(
+        (size_t)(completion_count + 1) * config->dim,
+        sizeof(*hidden)
+    );
     for (int position = 0; position < prompt_count; position++) {
+        float *value = forward_token_hidden(
+            transformer,
+            prompt_tokens[position],
+            position
+        );
+        if (position == prompt_count - 1) {
+            memcpy(hidden, value, (size_t)config->dim * sizeof(*hidden));
+        }
         frames[position] = (SelectFrame){
             .position = position,
             .count = 1,
@@ -1068,7 +1193,17 @@ static SelectFrame *build_frames(
         };
         frames[position].candidates[0] = (SelectCandidate){
             .token = prompt_tokens[position],
+            .fixed_rank = 1,
         };
+    }
+    for (int index = 1; index <= completion_count; index++) {
+        int position = prompt_count + index - 1;
+        float *value = forward_feedback_hidden(transformer, position);
+        memcpy(
+            hidden + (size_t)index * config->dim,
+            value,
+            (size_t)config->dim * sizeof(*hidden)
+        );
     }
 
     for (int output = 0; output < completion_count; output++) {
@@ -1084,13 +1219,37 @@ static SelectFrame *build_frames(
             (size_t)config->vocab_size,
             sizeof(*frame->by_token)
         );
+        matmul(
+            transformer->state.logits,
+            hidden + (size_t)output * config->dim,
+            transformer->weights.wcls,
+            config->dim,
+            config->vocab_size
+        );
+        double partition = log_partition(
+            transformer->state.logits,
+            config->vocab_size
+        );
         for (int token = 0; token < config->vocab_size; token++) {
             frame->candidates[token] = (SelectCandidate){
                 .token = token,
+                .fixed_logit = transformer->state.logits[token],
+                .fixed_log_probability =
+                    (double)transformer->state.logits[token] - partition,
             };
-            frame->by_token[token] = token;
+        }
+        qsort(
+            frame->candidates,
+            (size_t)frame->count,
+            sizeof(*frame->candidates),
+            candidate_compare
+        );
+        for (int rank = 0; rank < frame->count; rank++) {
+            frame->candidates[rank].fixed_rank = rank + 1;
+            frame->by_token[frame->candidates[rank].token] = rank;
         }
     }
+    free(hidden);
     return frames;
 }
 
@@ -1177,7 +1336,7 @@ static void run_resumable_selection(
         fprintf(
             trace,
             "{\"event\":\"run\",\"mode\":"
-            "\"history_dependent_company_select\","
+            "\"resumable_hidden_feedback_select\","
             "\"prompt_positions\":%d,\"completion_positions\":%d,"
             "\"vocabulary_size\":%d,\"maximum_demands_per_select\":%d,"
             "\"leaf_safety_limit\":%llu,"
@@ -1191,39 +1350,22 @@ static void run_resumable_selection(
         fflush(trace);
     }
 
-    runtime.term.nodes[0].round_target_children = 1;
-    if (resume_wave(&runtime, 0, 0, 0) != prompt_count) {
-        select_fail("prefill unit selections did not form one prompt spine");
-    }
-    refresh_contexts(&runtime, 0, "prefill_context");
-
     int selected_leaf = -1;
     for (int round = 1; round <= maximum_demands_per_select; round++) {
-        prepare_sweep(&runtime);
-        for (;;) {
-            int expanded = resume_wave(&runtime, 0, 0, round);
-            if (expanded == 0) break;
-            if (leaf_safety_limit != ULLONG_MAX &&
-                runtime.term.leaf_count > leaf_safety_limit) {
-                fprintf(
-                    stderr,
-                    "history-dependent round %d requires %llu leaves; "
-                    "-b %llu is only a safety limit and cannot reshape "
-                    "the term\n",
-                    round,
-                    runtime.term.leaf_count,
-                    leaf_safety_limit
-                );
-                exit(EXIT_FAILURE);
-            }
-            refresh_contexts(
-                &runtime,
-                round,
-                "continuation_frontier"
-            );
-        }
-        require_sweep_complete(&runtime);
+        resume_round(&runtime, 0, 0, round);
         update_reachability(&runtime.term, 0);
+        if (leaf_safety_limit != ULLONG_MAX &&
+            runtime.term.leaf_count > leaf_safety_limit) {
+            fprintf(
+                stderr,
+                "resumed round %d requires %llu leaves; -b %llu is only "
+                "a safety limit and cannot reshape the term\n",
+                round,
+                runtime.term.leaf_count,
+                leaf_safety_limit
+            );
+            exit(EXIT_FAILURE);
+        }
         trace_term_round(&runtime, round);
         selected_leaf = observe_round(&runtime, round);
     }
@@ -1243,6 +1385,17 @@ static void run_resumable_selection(
             if (position != 0) fputc(',', trace);
             fprintf(trace, "%.17g", outcome->coordinates[position]);
         }
+        fputs("],\"scale_worst_opinions\":[", trace);
+        for (int scale = 0; scale < outcome->scale_count; scale++) {
+            if (scale != 0) fputc(',', trace);
+            fprintf(
+                trace,
+                "%.17g",
+                outcome->scale_leximin_coordinates[
+                    (size_t)scale * outcome->count
+                ]
+            );
+        }
         fputs("],\"text\":", trace);
         trace_path(trace, &runtime, selected_leaf);
         fputs("}\n", trace);
@@ -1252,14 +1405,13 @@ static void run_resumable_selection(
     print_selected_path(&runtime, selected_leaf);
     fprintf(
         stderr,
-        "mode: history_dependent_company_select\n"
+        "mode: resumable_hidden_feedback_select\n"
         "prompt_positions: %d\n"
         "completion_positions: %d\n"
         "maximum_demands_per_select: %d\n"
         "continuation_demands: %llu\n"
         "final_unique_leaves: %llu\n"
         "company_batches: %llu\n"
-        "context_refreshes: %llu\n"
         "cumulative_company_rows: %llu\n"
         "family_filler_calls: %llu\n"
         "maximum_calls_per_filler: %llu\n"
@@ -1279,7 +1431,6 @@ static void run_resumable_selection(
         runtime.counters.continuation_demands,
         runtime.term.leaf_count,
         runtime.counters.company_batches,
-        runtime.counters.context_refreshes,
         runtime.counters.company_rows,
         runtime.counters.family_filler_calls,
         runtime.counters.maximum_calls_per_filler,
@@ -1300,7 +1451,6 @@ static void run_resumable_selection(
             trace,
             "{\"event\":\"run_end\",\"continuation_demands\":%llu,"
             "\"final_unique_leaves\":%llu,\"company_batches\":%llu,"
-            "\"context_refreshes\":%llu,"
             "\"cumulative_company_rows\":%llu,"
             "\"family_filler_calls\":%llu,"
             "\"maximum_calls_per_filler\":%llu,"
@@ -1310,7 +1460,6 @@ static void run_resumable_selection(
             runtime.counters.continuation_demands,
             runtime.term.leaf_count,
             runtime.counters.company_batches,
-            runtime.counters.context_refreshes,
             runtime.counters.company_rows,
             runtime.counters.family_filler_calls,
             runtime.counters.maximum_calls_per_filler,

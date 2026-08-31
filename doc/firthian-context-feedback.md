@@ -1,129 +1,126 @@
-# Firthian context feedback
+# History-dependent company selection
 
-`run_hidden_feedback_select.c` contains the active finite selection-product
-path. The hidden-feedback recurrence proposes a finite carrier; it does not
-select or feed back a token. The demanded token term is evaluated separately
-by `llama_company_evaluate`.
+`run_hidden_feedback_select.c` is the active finite, sampled selection-product
+path. It does not insert a final-layer hidden state directly at the next
+position's embedding boundary. That identity crossing is quarantined because
+it preserved coarse subject matter while producing low-scale failures such as
+`a a a sick sick`.
 
-## Completion-indexed outcomes
+## The term
 
-For each complete demanded branch `xs`, the model callback returns the entire
-position-indexed outcome
+The prompt positions are `Select` units. A generated position is a
+history-dependent selection whose available carrier is the vocabulary:
 
 ```text
-q(xs) = [Q_0(xs), ..., Q_(n-1)(xs)].
+epsilon_h : (Token -> Outcome) -> Token
 ```
 
-For every non-root occurrence, `Q_i(xs)` is the normalized observation of the
-candidate token in the covector at its incoming causal context:
+The model covector at prefix `h` is used only to propose the next previously
+undemanded argument of `epsilon_h`. It does not emit that token. Applying the
+continuation embeds the proposed constructor, extends the causal company, and
+suspends at the next selection. The longer prefix must be observed before that
+next selection can demand an argument.
+
+This is the strict-C organization of Escardo's history-dependent product:
 
 ```text
-Q_i(xs) = logsoftmax(logits(context_i))[token_i].
-```
-
-The first occurrence has no incoming context inside the term and retains a
-neutral coordinate. Prefill coordinates and completion coordinates remain in
-the same outcome. The trace records the complete vector and every
-context/company binding in a flushed `company_outcome` event.
-
-The callback result is not reduced to the final token and its coordinates are
-never added or averaged. `logsoftmax` supplies the explicit probability
-normalization used to compare them. Outcomes are ordered by the literal
-least-disliked-company order: sort each outcome's coordinates from least
-approving to most approving, maximize the least approving coordinate, then the
-second least, and so on. This is a leximin order on the complete outcome, not
-a scalar path reward.
-
-## Memoized strength
-
-`ProjectionTermNode.selection_state` is the memo cell for the recursive
-selection rooted at that node:
-
-```text
-b(x)   = force the selection below x once
-a      = Select(x -> q(x : b(x))) under the common leximin outcome order
+a    = epsilon_h (x -> p (x : b(x)))
+b(x) = product_(h ++ [x]) (xs -> p (x : xs))
 result = a : b(a)
 ```
 
-Every local Select receives the same kind of complete callback result. A node
-stores both `selected_leaf` and `selected_child`, so the suffix and outcome
-used while comparing `a` are the exact objects returned after `a` is selected;
-neither is recomputed. Only the root terminalizes the retained outcome to the
-token witness. The scalar printed as `selected_terminal_diagnostic` is the
-worst coordinate of that already-selected outcome and did not drive strength
-as an isolated reward.
+The demanded finite subtree is memoized by `SelectNode`. A sweep adds one
+previously undemanded continuation to every selection already reached at the
+start of that sweep. A selection first reached during the sweep demands one
+continuation so its caller can be rated. `-k K` bounds demands at any one
+selection; it is not an exhaustive top-K grid and does not claim exact search
+of the vocabulary product.
 
-## One family application
+## Company observation and strength
 
-The complete demanded occurrence tree is lowered to `LlamaCompanyShape`.
-`llama_company_evaluate` applies embedding, RMS, Q/K/V, attention output, MLP,
-final RMS, and output-head fillers to their whole row families. The runtime
-checks `maximum_calls_per_filler == 1` for this phase. Strength runs afterward
-over immutable outcomes and aborts if it causes any learned-filler call or
-scalar weight read.
+`llama_company_evaluate` lowers every currently demanded prefix to one causal
+row family. All rows in that batch cross each learned filler together. A new
+causal frontier requires another family application; the executable reports
+`company_batches` and `maximum_calls_per_filler` explicitly.
 
-## Sampled dependent demand tree
+For each complete leaf `xs`, the observer retains the full position-indexed
+outcome:
 
-Every generated frame retains the full 32,000-token vocabulary. `-k 0` leaves
-the proposal distribution over that full carrier. A positive `-k K` is an
-explicit top-K proposal restriction and is reported as such; it is never
-described as the semantic carrier or as exact full-vocabulary search.
+```text
+Q_i(xs) = logsoftmax(logits(context_i))[token_i]
+q(xs)   = [Q_0(xs), ..., Q_(n-1)(xs)]
+```
 
-`-b N` demands `N` complete hypothetical paths before the learned observer is
-run. Shared prefixes are represented once and repeated paths increment their
-reachability multiplicity. The resulting irregular prefix tree is a finite
-dependent selection term. After one whole-family `llama_company_evaluate`,
-memoized strength applies every local `Select` to the recursively selected
-suffix outcome. Sampling constructs the observed subtree; it does not choose
-the returned witness.
+Prompt and completion coordinates remain in the same outcome. Coordinates are
+not summed or averaged. The current total order sorts each outcome from its
+least approving coordinate upward, then compares those vectors
+lexicographically (leximin). This is still a causal model observer, not a
+claim that every possible Firthian, bidirectional company judgment has been
+recovered.
 
-The finite recursion is exact over the observed dependent subtree, but the
-subtree is only a sampled approximation to the full vocabulary product. The
-trace therefore records `exact:false`, `path_demands`, `unique_leaves`,
-`root_reachability`, and any positive `proposal_top_k`.
+`force_select` recursively applies every reached local selection to the backed
+outcomes of its children. Each node memoizes the selected child and leaf.
+Strength performs no model call or learned-weight read. Only the synthetic root
+turns the retained outcome into a token sequence.
 
-For six completion positions with 1,024 full-vocabulary path demands:
+## Measured boundary correction
+
+For Stories15M, prompt `Lily was`, six completion positions, two demand sweeps,
+and seed 42:
 
 ```sh
 ./run_hidden_feedback_select test/stories15M.bin \
-  -z tokenizer.bin -i "Lily was" -l 6 \
-  -r company -k 0 -b 1024 -s 42 -o candidates.jsonl
+  -z tokenizer.bin -i "Lily was" -l 6 -k 2 -s 42 \
+  -o candidates.jsonl
 ```
 
-Use `-l N` to request exactly `N` completion positions independently of the
-tokenized prompt length. This overrides the older total-position `-n` option
-and refuses prompts that would exceed the model context.
-
-The sampling proposal is still produced by independently unembedding the
-fixed hidden-feedback tape. That is a known coverage limitation, not a solved
-quality result. Backward induction cannot select a coherent completion that
-was never demanded. The active implementation reports the actual weak leaves;
-it does not repair them with an AR rollout, scalar likelihood sum, terminal
-token score, or truncated suffix.
-
-The first full-vocabulary system run above retained 1,023 unique leaves from
-1,024 path demands and selected:
+the demanded subtree has seven leaves and selects:
 
 ```text
-Lily was a a sad a very sad
+Lily was a little girl who liked to
 ```
 
-None of those leaves contained `girl`, `young`, `little`, `child`, or
-`person`. At the relevant fixed-tape frame, `girl` had local rank 516 and
-proposal probability `2.34597073e-06`, so 1,024 draws had expected occurrence
-count `0.00240227`. This is a measured failure of the fixed hidden-feedback
-proposal, not evidence that the recursive observer rejected a coherent leaf.
+The complete worst-first ordering is:
+
+```text
+a little girl who liked to
+a little girl who loved to
+very happy. She was going
+a big girl who liked to
+a little bird who liked to
+a little girl who liked c
+a little girl. She liked
+```
+
+This run uses 15 company batches (13 frontier refreshes and two terminal
+observations), so the maximum learned-filler call count is 15. It is a semantic
+correction and an inspectable sampled result, not the original one-physical-
+read performance goal.
 
 ## Trace
 
 Every JSONL record is flushed immediately. Relevant records are:
 
-- `selection_term_built`: exact rows, leaves, and root reachability;
-- `company_run`: learned-filler counts and model time;
-- `company_outcome`: decoded branch, complete coordinate vector, leximin order,
-  and context/company bindings;
-- `candidate_rated`: every local candidate and the complete backed outcome's
-  diagnostic worst coordinate;
-- `select`: the retained child and outcome at one memoized node;
-- `root_terminalized`: the single emitted witness and complete outcome;
-- `strength_run`: proof that strength performed no learned-filler work.
+- `continuation_demand`: decoded token, owning prefix, causal position, and
+  its rank in that prefix's proposal covector;
+- `company_run`: phase, rows, learned-filler counts, and model time;
+- `company_outcome`: every decoded complete candidate, its position scores,
+  and the full worst-first vector;
+- `candidate_rated`: every local continuation application and the complete
+  backed leaf it returned;
+- `select`: the retained continuation at each memoized selection;
+- `root_terminalized`: the one emitted witness and its complete outcome.
+
+The trace is the acceptance evidence. A fluent selected string does not hide
+bad alternatives or an implausible ordering; if the recorded order disagrees
+with the expected company judgment, that is an observer/runtime bug to expose.
+
+## Quarantined failures
+
+`prebuilt-sampled-path-runtime-don't-do-this.c` samples complete paths before
+local selections receive their observer. `resumed-neutral-suffix-runtime-
+don't-do-this.c` resumes earlier selections but fills new prefixes with an
+unobserved fixed-tape suffix. `intermediate-layer-unembedding-observer-
+don't-do-this.c` shows why applying the final output head at every intermediate
+layer is not a valid lower-scale reward: the embedding projection nearly
+assigns probability one to repeated copies of the current token.

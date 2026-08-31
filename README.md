@@ -154,7 +154,11 @@ Rejected inference shortcuts are retained only in
 `batched-ancestral-rollouts-don't-do-this.c`,
 `exhaustive-prefix-company-don't-do-this.c`,
 `exhaustive-logit-grid-don't-do-this.c`, and
-`entropy-distance-reward-don't-do-this.c`.  The later
+`entropy-distance-reward-don't-do-this.c`. The hidden-feedback selection work
+also quarantines `prebuilt-sampled-path-runtime-don't-do-this.c`,
+`resumed-neutral-suffix-runtime-don't-do-this.c`, and
+`intermediate-layer-unembedding-observer-don't-do-this.c`; their opening
+comments record the distinct continuation/suffix/observer failures. The later
 resident-weight-scope executable and trace are also archived: they were
 previously misrepresented as proof of one-shot physical weight use merely
 because each weight pointer was installed once. Their counters actually showed
