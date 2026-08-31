@@ -64,14 +64,16 @@ result = a : b(a)
 ```
 
 `X` is a model-produced `(token, logit, log_probability)` coordinate. Timed
-mode has no predetermined leaf count. It repeatedly invokes the same memoized
-selection product until a wall-clock deadline, sampling local observer
-arguments from the full model distribution by default. Demands are recorded
-before their suffix continuations run; multiplicity and completed-observation
-backups are appended to the JSONL trace and flushed immediately. `--top-k K`
-is an optional sampling-proposal truncation, not a leaf budget. Physical weight
-reuse is not inferred from scope installation; the printed numerical-
-application counters expose the actual number of family applications.
+mode has no predetermined leaf count. Each local `epsilon` samples an argument
+from the full model distribution by default, calls its recursively composed
+observer, and waits for `p(x : b(x))` to return before it may sample another
+argument. The wall-clock deadline only prevents a returned `epsilon` from
+making another observer call; there is no separate tree-construction or final
+backup phase. Demands, returned candidates, and local selections are appended
+to the JSONL trace and flushed immediately. `--top-k K` is an optional
+sampling-proposal truncation, not a leaf budget. Physical weight reuse is not
+inferred from scope installation; the printed numerical-application counters
+expose the actual number of family applications.
 
 ```bash
 make runescardo CC=clang
@@ -85,15 +87,11 @@ make runescardo CC=clang
 On macOS, the Metal target keeps each checkpoint tensor in a persistent
 `MTLBuffer`, applies batched matrix families with Metal Performance Shaders,
 and runs embedding/RMS families with the kernels in `metal_kernels.metal`.
-`--batch-size` controls only how many invocations of the composed selection
-term are in flight together; it does not truncate the local support or impose
-a candidate-count budget.
-
 ```bash
 make runescardometal
 ./run_escardo_metal test/stories260K.bin test/tok512.bin \
   --prompt "Lily was" --length 64 --sample-ms 10000 \
-  --batch-size 16 --seed 42 --trace candidates-metal.jsonl
+  --seed 42 --trace candidates-metal.jsonl
 ```
 
 The selection frames, observation callback, score backups, and final `tau`

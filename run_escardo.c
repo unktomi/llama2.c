@@ -31,13 +31,12 @@
  * used by every other local Select. Each constructor is paired with its own
  * incoming model covector; the coordinates are retained and ordered from
  * worst company opinion to best. They are never summed. Exact mode enumerates
- * an explicitly requested finite local support from the fixed tape.
- *
- * The former wall-clock sampled-trie evaluator remains below for provenance,
- * but main rejects it: it sampled complete tuples before returning the local
- * b(x) observations and therefore did not implement the requested operational
- * order. It must not be used as evidence for this term. No AR-prefix covector
- * participates in exact-mode proposal or selection.
+ * an explicitly requested finite local support from the fixed tape. Timed
+ * mode uses the same recursive interpreter: epsilon demands one x, the
+ * composed observer returns p(x : b(x)), and only then may epsilon demand its
+ * next x. The deadline only stops a returned epsilon from making another
+ * demand; it never separates candidate construction from selection. No
+ * AR-prefix covector participates in proposal or selection.
  *
  * The model evaluator below is CPS and batches currently ready kernel calls,
  * but it may evaluate a learned tensor many times while the selection product
@@ -393,7 +392,6 @@ typedef struct ModelNode ModelNode;
 typedef struct ModelChild ModelChild;
 typedef struct NodeWaiter NodeWaiter;
 typedef struct ModelStep ModelStep;
-typedef struct TimedSelectFrame TimedSelectFrame;
 typedef struct CompanyOutcome CompanyOutcome;
 
 typedef void (*NodeContinuation)(void *environment, ModelNode *node);
@@ -425,7 +423,6 @@ struct ModelNode {
     double log_partition;
     bool log_partition_ready;
     CompanyOutcome *company_outcome;
-    TimedSelectFrame *timed_selection;
     NodeWaiter *waiter_head;
     NodeWaiter *waiter_tail;
 };
@@ -1069,7 +1066,6 @@ typedef void (*OutcomeContinuation)(
 typedef struct Search Search;
 typedef struct SelectJob SelectJob;
 typedef struct SelectBranch SelectBranch;
-typedef struct TimedSelectEdge TimedSelectEdge;
 
 struct Search {
     ModelTerm *model;
@@ -1088,7 +1084,6 @@ struct Search {
      * a bound on the number of continuations the term may demand. */
     int top_k;
     int sample_milliseconds;
-    int batch_size;
     uint64_t sample_seed;
     bool sampling_enabled;
     bool deadline_armed;
@@ -1127,39 +1122,6 @@ struct SelectJob {
     int branch_count;
     int started_count;
     int ready_count;
-};
-
-/* A memoized local Select in the wall-clock-driven product. Sampling may
- * demand the same outgoing continuation repeatedly; the edge is stored once
- * while multiplicity records every demand. The edge retains b(x)'s terminal
- * outcome and its complete leximin company record. */
-struct TimedSelectEdge {
-    TimedSelectEdge *next;
-    TimedSelectFrame *owner;
-    TimedSelectFrame *suffix;
-    int token;
-    int local_rank;
-    float logit;
-    double log_probability;
-    uint64_t demand_count;
-    uint64_t observation_count;
-    bool observed;
-    double selected_rating;
-    CompanyOutcome *selected_company;
-    LogitPath *selected_path;
-    ModelNode *selected_terminal;
-    ModelNode *terminal;
-};
-
-struct TimedSelectFrame {
-    Search *search;
-    ModelNode *history;
-    TimedSelectEdge *edges;
-    TimedSelectEdge *selected;
-    int remaining;
-    uint64_t proposal_random_state;
-    uint64_t demand_count;
-    uint64_t observation_count;
 };
 
 static struct timespec monotonic_now(void) {
@@ -1648,75 +1610,16 @@ static int *top_tokens(
     return tokens;
 }
 
-/* Draw one not-yet-demanded continuation from the model's top-k support.
- * The returned probability is conditional on the remaining sampled support;
- * ModelLogit's reward remains its probability under the full vocabulary. */
-static int sample_next_local_rank(
-    const Tensor *logits,
-    const int *ranked_support,
-    int support_count,
-    const bool *already_sampled,
-    uint64_t *random_state,
-    double *support_probability,
-    double *draw
-) {
-    double maximum = -DBL_MAX;
-    int remaining = 0;
-    for (int rank = 0; rank < support_count; rank++) {
-        if (already_sampled[rank]) continue;
-        double value = logits->values[ranked_support[rank]];
-        if (value > maximum) maximum = value;
-        remaining++;
-    }
-    if (remaining == 0) escardo_fail("sampled empty local support");
-
-    double mass = 0.0;
-    for (int rank = 0; rank < support_count; rank++) {
-        if (already_sampled[rank]) continue;
-        mass += exp(
-            (double)logits->values[ranked_support[rank]] - maximum
-        );
-    }
-    if (!(mass > 0.0) || !isfinite(mass)) {
-        escardo_fail("invalid sampled local support mass");
-    }
-
-    *draw = sample_random_unit(random_state);
-    double target = *draw * mass;
-    double cumulative = 0.0;
-    int selected = -1;
-    for (int rank = 0; rank < support_count; rank++) {
-        if (already_sampled[rank]) continue;
-        cumulative += exp(
-            (double)logits->values[ranked_support[rank]] - maximum
-        );
-        selected = rank;
-        if (target < cumulative) break;
-    }
-    if (selected < 0) escardo_fail("could not sample local continuation");
-    *support_probability = exp(
-        (double)logits->values[ranked_support[selected]] - maximum
-    ) / mass;
-    return selected;
-}
-
-static double log_partition(const Tensor *logits) {
-    float maximum = -FLT_MAX;
-    for (int token = 0; token < logits->width; token++) {
-        if (logits->values[token] > maximum) maximum = logits->values[token];
-    }
-    double total = 0.0;
-    for (int token = 0; token < logits->width; token++) {
-        total += exp((double)logits->values[token] - maximum);
-    }
-    return (double)maximum + log(total);
-}
-
 static bool token_is_selectable(const Search *search, int token) {
     return search->allow_delimiter || token != ESCARDO_SEQUENCE_DELIMITER;
 }
 
-static int timed_local_rank(
+static int selectable_token_count(const Search *search) {
+    return search->model->vocab_size -
+        (search->allow_delimiter ? 0 : 1);
+}
+
+static int local_logit_rank(
     const Search *search,
     const Tensor *logits,
     int token
@@ -1730,145 +1633,85 @@ static int timed_local_rank(
     return rank;
 }
 
-/* Draw one argument of a local Select from its fixed proposal covector. The
- * draw is with replacement: a repeated constructor resumes the same memoized
- * b(x), and its demand count records the resulting reachability multiplicity.
- * Multiplicity schedules observer calls; it never enters ev(x, k(x)). */
-static ModelLogit timed_sample_argument(
-    Search *search,
-    TimedSelectFrame *frame
+typedef struct {
+    int token;
+    int local_rank;
+    double key;
+    double draw;
+    double probability;
+} SampledArgument;
+
+static int sampled_argument_compare(
+    const void *left_value,
+    const void *right_value
 ) {
-    ModelNode *history = frame->history;
-    Tensor *logits = selection_proposal_logits(search, history);
-    int *support = NULL;
-    int support_count = search->top_k;
-    if (support_count > 0) {
-        support = top_tokens(search, logits, support_count);
-    } else {
-        support_count = search->model->vocab_size -
-            (search->allow_delimiter ? 0 : 1);
-    }
-    if (support_count <= 0) escardo_fail("empty timed sampling support");
+    const SampledArgument *left = left_value;
+    const SampledArgument *right = right_value;
+    if (left->key > right->key) return -1;
+    if (left->key < right->key) return 1;
+    if (left->token < right->token) return -1;
+    if (left->token > right->token) return 1;
+    return 0;
+}
 
+/* A Gumbel ordering is a complete, without-replacement sampling order for
+ * epsilon's finite support. Constructing this order samples only arguments of
+ * the local selection; it does not evaluate any suffix or complete path. */
+static SampledArgument *sample_argument_order(
+    const Tensor *logits,
+    const int *support,
+    int support_count,
+    bool support_is_ranked,
+    uint64_t *random_state
+) {
+    SampledArgument *arguments = escardo_calloc(
+        (size_t)support_count,
+        sizeof(*arguments)
+    );
     double maximum = -DBL_MAX;
-    if (support != NULL) {
-        for (int index = 0; index < support_count; index++) {
-            int token = support[index];
-            double value = logits->values[token];
-            if (value > maximum) maximum = value;
-        }
-    } else {
-        for (int token = 0; token < search->model->vocab_size; token++) {
-            if (!token_is_selectable(search, token)) continue;
-            double value = logits->values[token];
-            if (value > maximum) maximum = value;
-        }
+    for (int index = 0; index < support_count; index++) {
+        double value = logits->values[support[index]];
+        if (value > maximum) maximum = value;
     }
-
     double mass = 0.0;
-    if (support != NULL) {
-        for (int index = 0; index < support_count; index++) {
-            int token = support[index];
-            mass += exp((double)logits->values[token] - maximum);
-        }
-    } else {
-        for (int token = 0; token < search->model->vocab_size; token++) {
-            if (!token_is_selectable(search, token)) continue;
-            mass += exp((double)logits->values[token] - maximum);
-        }
+    for (int index = 0; index < support_count; index++) {
+        mass += exp((double)logits->values[support[index]] - maximum);
     }
     if (!(mass > 0.0) || !isfinite(mass)) {
-        escardo_fail("invalid timed sampling mass");
+        escardo_fail("invalid sampled local support mass");
     }
-
-    double target = sample_random_unit(&frame->proposal_random_state) * mass;
-    double cumulative = 0.0;
-    int selected = -1;
-    if (support != NULL) {
-        for (int index = 0; index < support_count; index++) {
-            int token = support[index];
-            cumulative += exp((double)logits->values[token] - maximum);
-            selected = token;
-            if (target < cumulative) break;
-        }
-    } else {
-        for (int token = 0; token < search->model->vocab_size; token++) {
-            if (!token_is_selectable(search, token)) continue;
-            cumulative += exp((double)logits->values[token] - maximum);
-            selected = token;
-            if (target < cumulative) break;
-        }
+    for (int index = 0; index < support_count; index++) {
+        int token = support[index];
+        double draw = sample_random_unit(random_state);
+        if (draw <= 0.0) draw = 1.0 / 9007199254740992.0;
+        arguments[index] = (SampledArgument){
+            .token = token,
+            .local_rank = support_is_ranked ? index + 1 : 0,
+            .key = (double)logits->values[token] - log(-log(draw)),
+            .draw = draw,
+            .probability = exp((double)logits->values[token] - maximum) /
+                mass,
+        };
     }
-    free(support);
-    if (selected < 0) escardo_fail("timed sampler selected no argument");
-
-    double partition = log_partition(logits);
-    return (ModelLogit){
-        .context = history,
-        .token = selected,
-        .local_rank = timed_local_rank(search, logits, selected),
-        .logit = logits->values[selected],
-        .log_probability = (double)logits->values[selected] - partition,
-    };
+    qsort(
+        arguments,
+        (size_t)support_count,
+        sizeof(*arguments),
+        sampled_argument_compare
+    );
+    return arguments;
 }
 
-static TimedSelectFrame *timed_frame_for(
-    Search *search,
-    ModelNode *history,
-    int remaining
-) {
-    if (history == NULL || !history->ready || history->logits == NULL ||
-        remaining <= 0) {
-        escardo_fail("invalid timed selection frame");
+static double log_partition(const Tensor *logits) {
+    float maximum = -FLT_MAX;
+    for (int token = 0; token < logits->width; token++) {
+        if (logits->values[token] > maximum) maximum = logits->values[token];
     }
-    TimedSelectFrame *frame = history->timed_selection;
-    if (frame != NULL) {
-        if (frame->search != search || frame->remaining != remaining) {
-            escardo_fail("memoized timed selection frame changed meaning");
-        }
-        return frame;
+    double total = 0.0;
+    for (int token = 0; token < logits->width; token++) {
+        total += exp((double)logits->values[token] - maximum);
     }
-    frame = arena_allocate(&search->model->arena, sizeof(*frame));
-    memset(frame, 0, sizeof(*frame));
-    frame->search = search;
-    frame->history = history;
-    frame->remaining = remaining;
-    frame->proposal_random_state = sample_position_state(
-        search,
-        selection_depth(search, history)
-    );
-    history->timed_selection = frame;
-    search->strength_nodes++;
-    return frame;
-}
-
-static TimedSelectEdge *timed_edge_for(
-    TimedSelectFrame *frame,
-    ModelLogit value
-) {
-    for (TimedSelectEdge *edge = frame->edges; edge != NULL;
-         edge = edge->next) {
-        if (edge->token != value.token) continue;
-        if (edge->local_rank != value.local_rank ||
-            edge->logit != value.logit ||
-            fabs(edge->log_probability - value.log_probability) > 1e-12) {
-            escardo_fail("memoized timed continuation changed model value");
-        }
-        return edge;
-    }
-    TimedSelectEdge *edge = arena_allocate(
-        &frame->search->model->arena,
-        sizeof(*edge)
-    );
-    memset(edge, 0, sizeof(*edge));
-    edge->owner = frame;
-    edge->token = value.token;
-    edge->local_rank = value.local_rank;
-    edge->logit = value.logit;
-    edge->log_probability = value.log_probability;
-    edge->next = frame->edges;
-    frame->edges = edge;
-    return edge;
+    return (double)maximum + log(total);
 }
 
 static LogitPath *path_cons(
@@ -1940,6 +1783,7 @@ static void select_branch_history_ready(
             .terminal = child,
             .company = company_outcome_for_terminal(job->search, child),
         };
+        job->search->completed_samples++;
         select_job_finish_branch(branch, suffix);
         return;
     }
@@ -1987,6 +1831,13 @@ static void select_admit_branch(SelectJob *job, int index) {
         escardo_fail("invalid continuation admission");
     }
     SelectBranch *branch = &job->branches[index];
+    if (branch->value.local_rank == 0) {
+        branch->value.local_rank = local_logit_rank(
+            job->search,
+            selection_proposal_logits(job->search, job->history),
+            branch->value.token
+        );
+    }
     job->started_count++;
     if (branch->sampled) job->search->sampled_candidate_demands++;
     trace_continuation_demand(
@@ -2045,7 +1896,8 @@ static int demanded_branch_count(
     Search *search,
     uint64_t budget
 ) {
-    int count = search->top_k;
+    int count = search->top_k > 0 ?
+        search->top_k : selectable_token_count(search);
     if (budget != UINT64_MAX && budget < (uint64_t)count) {
         count = (int)budget;
     }
@@ -2119,31 +1971,47 @@ static void select_path(
         (size_t)job->branch_count * sizeof(*job->branches));
     search->strength_nodes++;
 
-    int support_count = search->top_k;
-    int *tokens = top_tokens(search, proposal_logits, support_count);
-    bool *sampled_ranks = escardo_calloc(
-        (size_t)support_count,
-        sizeof(*sampled_ranks)
-    );
+    int support_count = search->top_k > 0 ?
+        search->top_k : selectable_token_count(search);
+    bool support_is_ranked = search->top_k > 0;
+    int *tokens;
+    if (support_is_ranked) {
+        tokens = top_tokens(search, proposal_logits, support_count);
+    } else {
+        tokens = escardo_calloc((size_t)support_count, sizeof(*tokens));
+        int index = 0;
+        for (int token = 0; token < search->model->vocab_size; token++) {
+            if (!token_is_selectable(search, token)) continue;
+            tokens[index++] = token;
+        }
+        if (index != support_count) {
+            escardo_fail("could not construct full local support");
+        }
+    }
     uint64_t random_state = sample_position_state(search, depth);
+    SampledArgument *sampled_arguments = NULL;
+    if (search->sampling_enabled) {
+        sampled_arguments = sample_argument_order(
+            proposal_logits,
+            tokens,
+            support_count,
+            support_is_ranked,
+            &random_state
+        );
+    }
     double partition = log_partition(proposal_logits);
     for (int index = 0; index < job->branch_count; index++) {
-        int candidate_rank = index;
+        int token = tokens[index];
+        int local_rank = index + 1;
         double support_probability = 0.0;
         double draw = 0.0;
         if (search->sampling_enabled) {
-            candidate_rank = sample_next_local_rank(
-                proposal_logits,
-                tokens,
-                support_count,
-                sampled_ranks,
-                &random_state,
-                &support_probability,
-                &draw
-            );
-            sampled_ranks[candidate_rank] = true;
+            SampledArgument sampled = sampled_arguments[index];
+            token = sampled.token;
+            local_rank = sampled.local_rank;
+            support_probability = sampled.probability;
+            draw = sampled.draw;
         }
-        int token = tokens[candidate_rank];
         uint64_t child_budget = branch_budget(
             budget,
             job->branch_count,
@@ -2155,7 +2023,7 @@ static void select_path(
             .value = {
                 .context = history,
                 .token = token,
-                .local_rank = candidate_rank + 1,
+                .local_rank = local_rank,
                 .logit = proposal_logits->values[token],
                 .log_probability =
                     (double)proposal_logits->values[token] - partition,
@@ -2166,7 +2034,7 @@ static void select_path(
             .draw = draw,
         };
     }
-    free(sampled_ranks);
+    free(sampled_arguments);
     free(tokens);
     if (search->sample_milliseconds > 0) {
         select_admit_branch(job, 0);
@@ -2402,357 +2270,29 @@ static RootRun escardo_exact_run(
     return root;
 }
 
-typedef struct {
-    Search *search;
-    TimedSelectFrame *frame;
-    TimedSelectEdge **edges;
-    ModelLogit *values;
-    uint64_t sample_id;
-    int depth;
-    int count;
-    bool done;
-    LogitPath *path;
-    ModelNode *terminal;
-} TimedSample;
-
-static void timed_trace_demand(
-    TimedSample *sample,
-    TimedSelectEdge *edge
-) {
-    Search *search = sample->search;
-    if (search->trace == NULL) return;
-    fprintf(
-        search->trace,
-        "{\"event\":\"continuation_demand\",\"sample\":%" PRIu64
-        ",\"frame\":%" PRIu64 ",\"depth\":%d,\"remaining\":%d"
-        ",\"token\":%d,\"local_rank\":%d,\"logit\":%.9g"
-        ",\"proposal_log_probability\":%.17g"
-        ",\"multiplicity\":%" PRIu64 "}\n",
-        sample->sample_id,
-        edge->owner->history->id,
-        sample->depth,
-        edge->owner->remaining,
-        edge->token,
-        edge->local_rank,
-        edge->logit,
-        edge->log_probability,
-        edge->demand_count
-    );
-    fflush(search->trace);
-}
-
-static bool timed_edge_improves(
-    const TimedSelectEdge *candidate,
-    const TimedSelectEdge *selected
-) {
-    if (selected == NULL) return true;
-    int order = company_outcome_compare(
-        candidate->selected_company,
-        selected->selected_company
-    );
-    if (order > 0) return true;
-    if (order < 0) return false;
-    if (candidate->local_rank < selected->local_rank) return true;
-    if (candidate->local_rank > selected->local_rank) return false;
-    return candidate->token < selected->token;
-}
-
-static void timed_trace_terminal_observation(TimedSample *sample) {
-    Search *search = sample->search;
-    if (search->trace == NULL) return;
-    fprintf(
-        search->trace,
-        "{\"event\":\"terminal_observation\",\"sample\":%" PRIu64
-        ",\"token_count\":%d,\"terminal_node\":%" PRIu64
-        ",\"selection_pending\":true,\"text\":",
-        sample->sample_id,
-        sample->count,
-        sample->terminal->id
-    );
-    trace_decoded_path(
-        search,
-        sample->edges[0]->owner->history,
-        sample->path
-    );
-    fputs("}\n", search->trace);
-    fflush(search->trace);
-}
-
-static void timed_trace_candidate(TimedSelectEdge *edge) {
-    Search *search = edge->owner->search;
-    if (search->trace == NULL) return;
-    fprintf(
-        search->trace,
-        "{\"event\":\"candidate\",\"frame\":%" PRIu64
-        ",\"depth\":%d,\"remaining\":%d,\"token\":%d"
-        ",\"local_rank\":%d,\"multiplicity\":%" PRIu64
-        ",\"terminal_node\":%" PRIu64
-        ",\"frame_observations\":%" PRIu64
-        ",\"worst_company_coordinate\":%.17g",
-        edge->owner->history->id,
-        edge->owner->history->position - search->prompt_count + 1,
-        edge->owner->remaining,
-        edge->token,
-        edge->local_rank,
-        edge->demand_count,
-        edge->selected_terminal->id,
-        edge->owner->observation_count,
-        edge->selected_rating
-    );
-    trace_company_outcome(search->trace, edge->selected_company);
-    fputs(",\"text\":", search->trace);
-    trace_decoded_path(search, edge->owner->history, edge->selected_path);
-    fputs("}\n", search->trace);
-    fflush(search->trace);
-}
-
-static ModelLogit timed_edge_value(const TimedSelectEdge *edge) {
-    return (ModelLogit){
-        .context = edge->owner->history,
-        .token = edge->token,
-        .local_rank = edge->local_rank,
-        .logit = edge->logit,
-        .log_probability = edge->log_probability,
-    };
-}
-
-/* Force Escardo's product over exactly the memo cells sampled so far. Each
- * edge is re-observed only when its recursively selected terminal outcome
- * changes. This is b(x) memoization; there is no rollout reward or path
- * backup. */
-static bool timed_strength_force(TimedSelectFrame *frame) {
-    TimedSelectEdge *best = NULL;
-    for (TimedSelectEdge *edge = frame->edges; edge != NULL;
-         edge = edge->next) {
-        ModelNode *terminal = NULL;
-        LogitPath *tail = NULL;
-        if (edge->suffix != NULL) {
-            if (!timed_strength_force(edge->suffix)) continue;
-            TimedSelectEdge *suffix = edge->suffix->selected;
-            terminal = suffix->selected_terminal;
-            tail = suffix->selected_path;
-        } else {
-            terminal = edge->terminal;
-        }
-        if (terminal == NULL) continue;
-
-        if (!edge->observed || edge->selected_terminal != terminal) {
-            edge->selected_terminal = terminal;
-            edge->selected_path = path_cons(
-                frame->search,
-                timed_edge_value(edge),
-                tail
-            );
-            edge->selected_company = company_outcome_for_terminal(
-                frame->search,
-                terminal
-            );
-            edge->selected_rating = company_outcome_diagnostic(
-                edge->selected_company
-            );
-            edge->observed = true;
-            edge->observation_count++;
-            frame->observation_count++;
-            frame->search->candidate_observations++;
-            timed_trace_candidate(edge);
-        }
-        if (timed_edge_improves(edge, best)) best = edge;
-    }
-    frame->selected = best;
-    return best != NULL;
-}
-
-static void timed_sample_finish(TimedSample *sample) {
-    if (sample->count <= 0 || sample->edges[sample->count - 1] == NULL ||
-        sample->edges[sample->count - 1]->terminal == NULL) {
-        escardo_fail("sampled observer returned no terminal outcome");
-    }
-    LogitPath *path = NULL;
-    for (int index = sample->count - 1; index >= 0; index--) {
-        path = path_cons(sample->search, sample->values[index], path);
-    }
-    sample->path = path;
-    sample->terminal = sample->edges[sample->count - 1]->terminal;
-    timed_trace_terminal_observation(sample);
-    sample->search->completed_samples++;
-    sample->done = true;
-}
-
-static void timed_sample_step(TimedSample *sample);
-
-static void timed_sample_child_ready(void *environment, ModelNode *child) {
-    TimedSample *sample = environment;
-    TimedSelectEdge *edge = sample->edges[sample->depth];
-    if (edge->owner->remaining == 1 ||
-        (sample->search->allow_delimiter &&
-         edge->token == ESCARDO_SEQUENCE_DELIMITER)) {
-        if (edge->terminal != NULL && edge->terminal != child) {
-            escardo_fail("memoized terminal continuation changed node");
-        }
-        edge->terminal = child;
-        timed_sample_finish(sample);
-        return;
-    }
-    TimedSelectFrame *suffix = timed_frame_for(
-        sample->search,
-        child,
-        edge->owner->remaining - 1
-    );
-    if (edge->suffix != NULL && edge->suffix != suffix) {
-        escardo_fail("timed continuation changed suffix frame");
-    }
-    edge->suffix = suffix;
-    sample->frame = suffix;
-    sample->depth++;
-    timed_sample_step(sample);
-}
-
-/* One stochastic invocation of the recursively composed product.  Each local
- * Select samples one observer argument, records it immediately in its
- * persistent frame, and passes the still-open observation to the suffix
- * Select.  The wall-clock loop invokes the same memoized product repeatedly;
- * it never predetermines a leaf count or divides one across early branches. */
-static void timed_sample_step(TimedSample *sample) {
-    TimedSelectFrame *frame = sample->frame;
-    ModelLogit value = timed_sample_argument(sample->search, frame);
-    TimedSelectEdge *edge = timed_edge_for(frame, value);
-    frame->demand_count++;
-    edge->demand_count++;
-    sample->search->sampled_candidate_demands++;
-    sample->edges[sample->depth] = edge;
-    sample->values[sample->depth] = value;
-    sample->count = sample->depth + 1;
-    timed_trace_demand(sample, edge);
-
-    model_request_node(
-        sample->search->model,
-        frame->history,
-        value.token,
-        timed_sample_child_ready,
-        sample
-    );
-}
-
-static void timed_trace_selected(Search *search, TimedSelectFrame *root) {
-    if (search->trace == NULL || root == NULL || root->selected == NULL) return;
-    TimedSelectFrame *frame = root;
-    int depth = 0;
-    while (frame != NULL && frame->selected != NULL) {
-        TimedSelectEdge *edge = frame->selected;
-        int alternatives = 0;
-        for (TimedSelectEdge *member = frame->edges; member != NULL;
-             member = member->next) {
-            if (member->observed) alternatives++;
-        }
-        fprintf(
-            search->trace,
-            "{\"event\":\"select\",\"frame\":%" PRIu64
-            ",\"depth\":%d,\"token\":%d,\"local_rank\":%d"
-            ",\"alternatives\":%d,\"multiplicity\":%" PRIu64
-            ",\"terminal_node\":%" PRIu64
-            ",\"worst_company_coordinate\":%.17g",
-            frame->history->id,
-            depth,
-            edge->token,
-            edge->local_rank,
-            alternatives,
-            edge->demand_count,
-            edge->selected_terminal->id,
-            edge->selected_rating
-        );
-        trace_company_outcome(search->trace, edge->selected_company);
-        fputs("}\n", search->trace);
-        fflush(search->trace);
-        frame = edge->suffix;
-        depth++;
-    }
-}
-
 static RootRun escardo_timed_run(
     Search *search,
-    ModelNode *prompt_node
+    ModelNode *prompt
 ) {
-    TimedSelectFrame *root_frame = timed_frame_for(
-        search,
-        prompt_node,
-        search->horizon
-    );
+    RootRun root = {.search = search};
     search->deadline = add_milliseconds(
         monotonic_now(),
         search->sample_milliseconds
     );
     search->deadline_armed = true;
-
-    TimedSample *samples = escardo_calloc(
-        (size_t)search->batch_size,
-        sizeof(*samples)
+    select_path(
+        search,
+        prompt,
+        search->horizon,
+        UINT64_MAX,
+        tau_selection_ready,
+        &root
     );
-    bool first = true;
-    while (first || !deadline_reached(search)) {
-        first = false;
-        uint64_t first_sample_id = search->completed_samples;
-        int active_count = search->batch_size;
-        for (int index = 0; index < active_count; index++) {
-            TimedSample *sample = &samples[index];
-            *sample = (TimedSample){
-                .search = search,
-                .frame = root_frame,
-                .sample_id = first_sample_id + (uint64_t)index,
-            };
-            sample->edges = escardo_calloc(
-                (size_t)root_frame->remaining,
-                sizeof(*sample->edges)
-            );
-            sample->values = escardo_calloc(
-                (size_t)root_frame->remaining,
-                sizeof(*sample->values)
-            );
-        }
-
-        /* Each root observer application follows x into its memoized b(x).
-         * Repeated draws resume that same function-tree branch. No selection
-         * is returned while the timed demand set is still open. */
-        for (int index = 0; index < active_count; index++) {
-            timed_sample_step(&samples[index]);
-        }
-        for (;;) {
-            bool all_done = true;
-            for (int index = 0; index < active_count; index++) {
-                if (!samples[index].done) {
-                    all_done = false;
-                    break;
-                }
-            }
-            if (all_done) break;
-            if (!scheduler_step(&search->model->scheduler)) {
-                escardo_fail("timed continuation scheduler reached a deadlock");
-            }
-        }
-        for (int index = 0; index < active_count; index++) {
-            free(samples[index].values);
-            free(samples[index].edges);
+    while (!root.done) {
+        if (!scheduler_step(&search->model->scheduler)) {
+            escardo_fail("timed continuation scheduler reached a deadlock");
         }
     }
-    free(samples);
-
-    /* Close the sampled argument set exactly once. This recursively returns
-     * every suspended b(x) before its enclosing epsilon compares x. */
-    if (!timed_strength_force(root_frame) ||
-        root_frame->selected == NULL ||
-        root_frame->selected->selected_path == NULL ||
-        root_frame->selected->selected_terminal == NULL) {
-        escardo_fail("timed selection produced no complete observation");
-    }
-    timed_trace_selected(search, root_frame);
-    RootRun root = {
-        .search = search,
-        .done = true,
-        .selected = root_frame->selected->selected_path,
-        .terminal = root_frame->selected->selected_terminal,
-        .score = root_frame->selected->selected_rating,
-    };
-    /* The root alone forgets the selected structured outcome and emits the
-     * token witness. It does not run another model observation. */
     return root;
 }
 
@@ -2778,7 +2318,6 @@ typedef struct {
     int length;
     int top_k;
     int sample_milliseconds;
-    int batch_size;
     uint64_t sample_seed;
     const char *metal_library;
     bool allow_delimiter;
@@ -2813,7 +2352,7 @@ _Noreturn static void usage(const char *program) {
         stderr,
         "usage: %s CHECKPOINT TOKENIZER --prompt TEXT --length N "
         "(--sample-ms MS [--top-k K] | --exact --top-k K) "
-        "[--batch-size N] [--seed N] [--trace FILE] [--allow-delimiter] "
+        "[--seed N] [--trace FILE] [--allow-delimiter] "
         "[--metal [--metal-library FILE] | --cpu]\n",
         program
     );
@@ -2828,7 +2367,6 @@ static Options parse_options(int argc, char **argv) {
         .length = -1,
         .top_k = 0,
         .sample_milliseconds = -1,
-        .batch_size = 1,
         .sample_seed = UINT64_C(42),
         .metal_library = "metal_kernels.metallib",
 #ifdef ATKEY_METAL
@@ -2868,10 +2406,6 @@ static Options parse_options(int argc, char **argv) {
             long parsed = parse_long(value, "sample-ms");
             if (parsed <= 0 || parsed > INT_MAX) usage(argv[0]);
             options.sample_milliseconds = (int)parsed;
-        } else if (strcmp(flag, "--batch-size") == 0) {
-            long parsed = parse_long(value, "batch-size");
-            if (parsed <= 0 || parsed > INT_MAX) usage(argv[0]);
-            options.batch_size = (int)parsed;
         } else if (strcmp(flag, "--seed") == 0) {
             options.sample_seed = parse_u64(value, "seed");
         } else if (strcmp(flag, "--trace") == 0) {
@@ -2934,11 +2468,6 @@ static void print_model_summary(ModelTerm *model) {
 
 int main(int argc, char **argv) {
     Options options = parse_options(argc, argv);
-    if (!options.exact) {
-        escardo_fail(
-            "timed sampled-trie mode is quarantined; direct selection-product replacement is not yet installed"
-        );
-    }
     AtkeyRuntime *runtime = atkey_runtime_new(
         options.checkpoint,
         options.tokenizer
@@ -2982,11 +2511,10 @@ int main(int argc, char **argv) {
         else fprintf(trace, "%d", options.sample_milliseconds);
         fprintf(
             trace,
-            ",\"seed\":%" PRIu64 ",\"batch_size\":%d"
+            ",\"seed\":%" PRIu64
             ",\"backend\":\"%s\",\"mode\":\"%s\""
             ",\"proposal\":\"candidate_independent_hidden_feedback\"}\n",
             options.sample_seed,
-            options.batch_size,
             atkey_backend_name(runtime),
             options.exact ? "exact_product" : "timed_sampled_product"
         );
@@ -3002,7 +2530,6 @@ int main(int argc, char **argv) {
         .top_k = options.top_k,
         .sample_milliseconds = options.exact ? 0 :
             options.sample_milliseconds,
-        .batch_size = options.batch_size,
         .sample_seed = options.sample_seed,
         .sampling_enabled = !options.exact,
         .allow_delimiter = options.allow_delimiter,
@@ -3044,14 +2571,12 @@ int main(int argc, char **argv) {
         "backend_device=%s\n"
         "backend_dispatches=%" PRIu64 "\n"
         "backend_weight_uploads=%" PRIu64 "\n"
-        "backend_weight_upload_bytes=%" PRIu64 "\n"
-        "search_batch_size=%d\n",
+        "backend_weight_upload_bytes=%" PRIu64 "\n",
         atkey_backend_name(runtime),
         atkey_backend_device_name(runtime),
         atkey_backend_dispatch_count(runtime),
         atkey_backend_weight_upload_count(runtime),
-        atkey_backend_weight_upload_bytes(runtime),
-        options.batch_size
+        atkey_backend_weight_upload_bytes(runtime)
     );
     print_model_summary(&model);
 
