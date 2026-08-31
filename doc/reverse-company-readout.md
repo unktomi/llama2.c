@@ -69,6 +69,11 @@ The measured 260K run used:
 The checkpoint and trace paths are local artifacts and are intentionally not
 committed. Every JSONL observation is flushed immediately.
 
+For long-continuation experiments, `--min-suffix N` requires at least `N`
+tokens after the tested filler. The trace records both `token_count` and
+`suffix_tokens`, so increasing the context ceiling cannot silently select only
+short continuations.
+
 The base model had 260K parameters. Each readout allocated 27,745 coefficients.
 The active counts were 14,401 for `left`, 17,505 for `embedding`, and 27,745
 for `reverse`. The best validation-loss checkpoints produced:
@@ -92,6 +97,32 @@ both wrong:           38
 The AR number is low by construction: the data builder preferentially retains
 holes where AR ranks the replacement above the corpus word. The relevant
 comparisons are among the three learned readouts.
+
+## Long-continuation measurements
+
+Two further runs constrained the tested filler to have a genuinely long
+continuation. They retained the same 1,024/256 split sizes, top-8 hard-negative
+construction, width 32, 20 epochs, batch 16, and seed 42.
+
+```text
+context cap  required suffix  observed suffix       left    embedding  reverse
+128 tokens   >= 64 tokens     64..125, mean 89.46   72.27%  75.00%     82.42%
+256 tokens   >= 128 tokens    128..253, mean 183.73 64.06%  61.33%     72.66%
+```
+
+For 128 tokens, `reverse` made 36 decisions that `embedding` missed and lost
+17 in the other direction. For 256 tokens those counts were 45 and 16.
+
+The lower absolute 256-token result is not a monotonic suffix-length collapse
+inside that validation set. `reverse` accuracy by actual suffix bin was
+54/76, 47/69, 59/77, and 26/34 for suffixes 128–159, 160–191, 192–223, and
+224–253 respectively. The 128- and 256-token builders necessarily select
+different stories and holes, so this experiment does not by itself separate a
+harder example distribution from optimization or recurrence limitations.
+
+These are complete, teacher-forced corpus/corruption companies. They test the
+observer across long future context; they are not generated completions from
+an integrated selection decoder.
 
 ## What this establishes
 

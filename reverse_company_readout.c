@@ -58,6 +58,7 @@ typedef struct {
     int train_count;
     int validation_count;
     int sequence_tokens;
+    int min_suffix;
     int top_k;
     int epochs;
     int batch_size;
@@ -148,6 +149,7 @@ static void usage(const char *program) {
         "  --train N       training stories (default 192)\n"
         "  --validation N  validation stories (default 48)\n"
         "  --tokens N      maximum tokens per story (default 32)\n"
+        "  --min-suffix N  required tokens after the tested filler (default 1)\n"
         "  --top-k N       plausible replacement support (default 8)\n"
         "  --epochs N      epochs per head (default 20)\n"
         "  --batch N       minibatch size (default 8)\n"
@@ -168,6 +170,7 @@ static Options parse_options(int argc, char **argv) {
         .train_count = 192,
         .validation_count = 48,
         .sequence_tokens = 32,
+        .min_suffix = 1,
         .top_k = 8,
         .epochs = 20,
         .batch_size = 8,
@@ -188,6 +191,8 @@ static Options parse_options(int argc, char **argv) {
             options.validation_count = parse_positive(value, "validation count");
         } else if (strcmp(flag, "--tokens") == 0) {
             options.sequence_tokens = parse_positive(value, "token count");
+        } else if (strcmp(flag, "--min-suffix") == 0) {
+            options.min_suffix = parse_positive(value, "minimum suffix");
         } else if (strcmp(flag, "--top-k") == 0) {
             options.top_k = parse_positive(value, "top-k");
         } else if (strcmp(flag, "--epochs") == 0) {
@@ -211,6 +216,9 @@ static Options parse_options(int argc, char **argv) {
         }
     }
     if (options.sequence_tokens < 8) fail("--tokens must be at least 8");
+    if (options.min_suffix >= options.sequence_tokens - 2) {
+        fail("--min-suffix leaves no eligible filler position");
+    }
     if (options.top_k < 2) fail("--top-k must be at least 2");
     return options;
 }
@@ -468,6 +476,7 @@ static int choose_challenging_word_replacement(
     int token_count,
     const float *all_logits,
     int top_k,
+    int min_suffix,
     unsigned long long *rng,
     int *target,
     int *replacement,
@@ -485,7 +494,7 @@ static int choose_challenging_word_replacement(
     int fallback_replacement = -1;
     double fallback_margin = DBL_MAX;
 
-    for (int position = 2; position < token_count - 1; position++) {
+    for (int position = 2; position < token_count - min_suffix; position++) {
         int original = tokens[position];
         if (!word_lexicon[original] ||
             !begins_next_word_or_punctuation(tokenizer, tokens[position + 1])) {
@@ -632,6 +641,7 @@ static CompanyPair *make_dataset(
     const unsigned char *word_lexicon,
     int pair_count,
     int sequence_tokens,
+    int min_suffix,
     int top_k,
     unsigned long long *rng,
     const char *split
@@ -704,6 +714,7 @@ static CompanyPair *make_dataset(
                 pair->token_count,
                 logits,
                 top_k,
+                min_suffix,
                 rng,
                 &pair->target,
                 &pair->negative_token,
@@ -1442,11 +1453,14 @@ static void report_pairs(
 
         if (index < display_count) {
             printf(
-                "pair=%d position=%d positive=\"%s\" negative=\"%s\" "
+                "pair=%d position=%d tokens=%d suffix=%d "
+                "positive=\"%s\" negative=\"%s\" "
                 "reverse_margin=%.6f embedding_margin=%.6f "
                 "left_margin=%.6f ar_margin=%.6f\n",
                 index,
                 pair->target,
+                pair->token_count,
+                pair->token_count - pair->target - 1,
                 positive_piece,
                 negative_piece,
                 full_positive_score - full_negative_score,
@@ -1461,10 +1475,13 @@ static void report_pairs(
             fprintf(
                 trace,
                 "{\"event\":\"company_pair\",\"index\":%d,\"position\":%d,"
+                "\"token_count\":%d,\"suffix_tokens\":%d,"
                 "\"positive_token\":%d,\"negative_token\":%d,"
                 "\"positive_piece\":",
                 index,
                 pair->target,
+                pair->token_count,
+                pair->token_count - pair->target - 1,
                 pair->positive_token,
                 pair->negative_token
             );
@@ -1553,6 +1570,7 @@ int main(int argc, char **argv) {
         word_lexicon,
         options.train_count,
         options.sequence_tokens,
+        options.min_suffix,
         options.top_k,
         &data_rng,
         "training"
@@ -1564,6 +1582,7 @@ int main(int argc, char **argv) {
         word_lexicon,
         options.validation_count,
         options.sequence_tokens,
+        options.min_suffix,
         options.top_k,
         &data_rng,
         "validation"
