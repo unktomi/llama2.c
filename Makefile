@@ -63,6 +63,12 @@ runescardogguf:
 runhidden: run_hidden_feedback.c
 	$(CC) -O3 -o run_hidden_feedback run_hidden_feedback.c -lm
 
+.PHONY: reversecompany
+reversecompany: reverse_company_readout.c run.c
+	$(CC) -std=c11 -O3 -Wall -Wextra -Werror \
+		-Wno-sign-compare -Wno-unused-variable \
+		reverse_company_readout.c -lm -o reverse_company_readout
+
 .PHONY: runhiddenselect
 runhiddenselect: run_hidden_feedback_select.c llama_company.c llama_company.h atkey_term_c.c atkey_term_c.h run.c
 	$(CC) -std=c11 -O3 -Wall -Wextra -Werror \
@@ -196,6 +202,7 @@ clean:
 	rm -f metal_kernels.air
 	rm -f metal_kernels.metallib
 	rm -f run_hidden_feedback
+	rm -f reverse_company_readout
 	rm -f run_hidden_feedback_select
 	rm -f run_atkey_term
 	rm -f run_atkey_term_strict

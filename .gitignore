@@ -12,6 +12,8 @@ __pycache__/
 /run_escardo_metal
 /run_hidden_feedback
 /run_hidden_feedback_select
+/reverse_company_readout
+/reverse-company-*.jsonl
 /candidate_dump
 /candidate_probe
 /company_probe
