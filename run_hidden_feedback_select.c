@@ -2617,6 +2617,7 @@ void generate_hidden_feedback_select(
     Tokenizer *tokenizer,
     char *prompt,
     int steps,
+    int local_support,
     unsigned long long leaf_budget,
     unsigned long long sample_seed,
     FeedbackBoundary feedback_boundary,
@@ -2641,6 +2642,10 @@ void generate_hidden_feedback_select(
     }
 
     Config *config = &transformer->config;
+    if (local_support <= 0 || local_support > config->vocab_size) {
+        fprintf(stderr, "local company support exceeds the vocabulary\n");
+        exit(EXIT_FAILURE);
+    }
     int output_count = steps - num_prompt_tokens;
     int frame_count = steps;
     size_t hidden_count =
@@ -2697,14 +2702,16 @@ void generate_hidden_feedback_select(
             trace,
             ",\"steps\":%d,\"prefill_unit_count\":%d,"
             "\"output_count\":%d,\"selection_frame_count\":%d,"
-            "\"local_carrier_size\":%d,"
+            "\"local_carrier_size\":%d,\"leaf_budget\":%llu,"
             "\"feedback_boundary\":\"%s\","
             "\"observer\":\"%s\"}\n",
             steps,
             num_prompt_tokens,
             output_count,
             frame_count,
-            config->vocab_size,
+            observer_kind == PROJECTION_OBSERVER_COMPANY_STRENGTH
+                ? local_support : config->vocab_size,
+            leaf_budget,
             feedback_boundary_name(feedback_boundary),
             projection_observer_name(observer_kind)
         );
@@ -2785,7 +2792,8 @@ void generate_hidden_feedback_select(
             .position = position,
             .candidate_count = position < num_prompt_tokens
                 ? 1
-                : config->vocab_size,
+                : (observer_kind == PROJECTION_OBSERVER_COMPANY_STRENGTH
+                    ? local_support : config->vocab_size),
             .candidates = projection_candidates +
                 (size_t)position * config->vocab_size,
             .selected_index = -1,
@@ -2966,9 +2974,9 @@ void generate_hidden_feedback_select(
         "deferred_projections: %d\n"
         "projection_carrier_size: %d\n"
         "decoded_tokens: %d\n"
-        "selection_carrier: DeferredModelLogit\n"
-        "score_kind: %s\n"
-        "selected_score_role: %s\n"
+        "selection_carrier: ProjectionTermOutcome\n"
+        "outcome_kind: %s\n"
+        "selected_coordinate_role: %s\n"
         "strength_nodes: %llu\n"
         "whole_path_observer_applications: %llu\n"
         "structured_leaf_outcomes: %llu\n"
@@ -2982,7 +2990,7 @@ void generate_hidden_feedback_select(
         "strength_model_scalar_reads: %llu\n"
         "company_model_ms: %.3f\n"
         "pure_strength_ms: %.3f\n"
-        "selected_score: %.17g\n"
+        "selected_first_variable_coordinate: %.17g\n"
         "recurrence_ms: %ld\n"
         "projection_ms: %ld\n"
         "observer_product_ms: %ld\n",
@@ -2991,7 +2999,8 @@ void generate_hidden_feedback_select(
         num_prompt_tokens,
         output_count,
         output_count,
-        config->vocab_size,
+        observer_kind == PROJECTION_OBSERVER_COMPANY_STRENGTH
+            ? local_support : config->vocab_size,
         decoded_count,
         projection_observer_name(observer_kind),
         projection_score_role(observer_kind),
@@ -3016,8 +3025,9 @@ void generate_hidden_feedback_select(
     if (trace != NULL) {
         fprintf(
             trace,
-            "{\"event\":\"run_end\",\"selected_score\":%.17g,"
-            "\"selected_score_role\":\"%s\","
+            "{\"event\":\"run_end\","
+            "\"selected_first_variable_coordinate\":%.17g,"
+            "\"selected_coordinate_role\":\"%s\","
             "\"structured_leaf_outcomes\":%llu,"
             "\"strength_nodes\":%llu,"
             "\"whole_path_observer_applications\":%llu,"
@@ -3178,6 +3188,7 @@ void error_usage() {
     fprintf(stderr, "  -n <int>    number of steps to run for, default 256. 0 = max_seq_len\n");
     fprintf(stderr, "  -g <string> feedback boundary: identity (default) or affine\n");
     fprintf(stderr, "  -r <string> observer: company (default) or logits\n");
+    fprintf(stderr, "  -k <int>    local company carrier size, default 4\n");
     fprintf(stderr, "  -b <int>    sampled leaf support for company observer, default 64\n");
     fprintf(stderr, "  -s <int>    support sampling seed, default 42\n");
     fprintf(stderr, "  -i <string> input prompt\n");
@@ -3193,6 +3204,7 @@ int main(int argc, char *argv[]) {
     char *checkpoint_path = NULL;  // e.g. out/model.bin
     char *tokenizer_path = "tokenizer.bin";
     int steps = 256;            // number of steps to run for
+    int local_support = 4;
     unsigned long long leaf_budget = 64;
     unsigned long long sample_seed = 42;
     FeedbackBoundary feedback_boundary = FEEDBACK_IDENTITY;
@@ -3229,7 +3241,8 @@ int main(int argc, char *argv[]) {
                 error_usage();
             }
         }
-        else if (argv[i][1] == 'b' || argv[i][1] == 's') {
+        else if (argv[i][1] == 'b' || argv[i][1] == 's' ||
+                 argv[i][1] == 'k') {
             errno = 0;
             char *end = NULL;
             unsigned long long parsed = strtoull(argv[i + 1], &end, 10);
@@ -3237,8 +3250,14 @@ int main(int argc, char *argv[]) {
                 parsed == 0) {
                 error_usage();
             }
-            if (argv[i][1] == 'b') leaf_budget = parsed;
-            else sample_seed = parsed;
+            if (argv[i][1] == 'b') {
+                leaf_budget = parsed;
+            } else if (argv[i][1] == 's') {
+                sample_seed = parsed;
+            } else {
+                if (parsed > INT_MAX) error_usage();
+                local_support = (int)parsed;
+            }
         }
         else if (argv[i][1] == 'i') { prompt = argv[i + 1]; }
         else if (argv[i][1] == 'z') { tokenizer_path = argv[i + 1]; }
@@ -3285,6 +3304,7 @@ int main(int argc, char *argv[]) {
             &tokenizer,
             prompt,
             steps,
+            local_support,
             leaf_budget,
             sample_seed,
             feedback_boundary,

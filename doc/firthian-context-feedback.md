@@ -1,100 +1,87 @@
 # Firthian context feedback
 
 `run_hidden_feedback_select.c` contains the active finite selection-product
-path.  Its company evaluator is separate from the carrier that proposes a
-finite token support.
+path. The hidden-feedback recurrence proposes a finite carrier; it does not
+select or feed back a token. The demanded token term is evaluated separately
+by `llama_company_evaluate`.
 
-## Structured outcome
+## Completion-indexed outcomes
 
-For each demanded token occurrence `n`, `llama_company_evaluate` produces one
-contextual hidden state and applies the learned output head to the entire
-family:
+The global callback does not return a path sum or one terminal covector. For
+each complete demanded branch `xs`, it returns a position-indexed outcome:
 
 ```text
-Q(n) = E^T h(n) : Token -> Logit
+q(xs) = [Q_0(xs), ..., Q_(n-1)(xs)]
 ```
 
-`Q(n)` is retained as a token-indexed observation.  It is not reduced to a
-path score.  `ProjectionTermNode` retains the demanded continuation children,
-the child selected by backward induction, the selected leaf, and the row's
-log-partition.
+Each `Q_i(xs)` is one normalized constructor/company coordinate from the
+model-produced covector at that position. At an internal position it observes
+the selected successor in the current occurrence's covector. At the finite
+right boundary it observes the final constructor in its incoming covector.
+The trace records the complete vector and every context/company binding in a
+flushed `company_outcome` event.
 
-The selection at a non-terminal occurrence `x` first recursively selects its
-continuation.  If the selected immediate successor is `y`, it rates `x` by
+The outcome is retained as `ProjectionTermOutcome`. A local Select at position
+`i` forces its candidate-specific suffix and reads only coordinate `i` from
+the complete outcome `q(x : b(x))`. It then propagates the winning outcome
+unchanged. Coordinates from different positions are never added, averaged,
+geometrically combined, or converted to a path score.
+
+## Memoized strength
+
+`ProjectionTermNode.selection_state` is the memo cell for the recursive
+selection rooted at that node:
 
 ```text
-log_softmax(Q(x))[y]
-```
-
-and chooses the `x` whose selected company has the greatest learned
-observation.  The selected `y` was itself chosen against its selected `z`, so
-the operation recurses backward through the term.
-
-The recursion is the literal memoized product:
-
-```text
-b(x)   = force the selection rooted below x once
-a      = Select(x -> score(x, b(x)))
+b(x)   = force the selection below x once
+a      = Select_i (x -> q(x : b(x))[i])
 result = a : b(a)
 ```
 
-Each occurrence records whether its `b(x)` is unforced, currently forcing, or
-forced.  The selected suffix stored while rating `a` is returned directly; it
-is not recomputed.
-
-The finite right boundary does not invent EOS.  With no right-hand company,
-the last filler is rated by the incoming contextual row that reaches it.  This
-is recorded as `observer_direction: "incoming_boundary"`; all internal
-pairings are recorded as `observer_direction: "outgoing"`.
-
-The old sum of company density ratios remains in the trace only as
-`path_density_log_ratio_diagnostic`.  It does not participate in selection.
+The node stores both `selected_leaf` and `selected_child`. Consequently the
+suffix and complete outcome used while comparing `a` are the exact objects
+returned after `a` is selected; neither is recomputed. Sampling changes which
+token-indexed cells exist in the finite term, not this recursion.
 
 ## One family application
 
-The demanded occurrence term is converted to a `LlamaCompanyShape` and passed
-once to `llama_company_evaluate`.  Embedding, RMS, attention projections, MLP
-projections, final RMS, and the output head each receive their complete row
-family in one call.  `maximum_calls_per_filler` checks that property for this
-family evaluation.
+The complete demanded occurrence tree is lowered to `LlamaCompanyShape`.
+`llama_company_evaluate` applies embedding, RMS, Q/K/V, attention output, MLP,
+final RMS, and output-head fillers to their whole row families. The runtime
+checks `maximum_calls_per_filler == 1` for this phase. Strength runs afterward
+over immutable outcomes and aborts if it causes any learned-filler call or
+scalar weight read.
 
-That call completes before selection strength begins.  Strength then receives
-only the immutable `LlamaCompanyResult` logit table.  The executable snapshots
-all learned-filler counters at this boundary and aborts if either a filler call
-or scalar weight read occurs during the memoized product.  The trace records
-the two phases separately as `company_run` and `strength_run`, including their
-independent timings.
+## Finite support
 
-This does not yet establish that the carrier recurrence preceding the family
-evaluation is one-shot.  That recurrence still uses the reference numerical
-path to construct its fixed proposal frames.
+`-k` bounds the local proposal carrier and `-b` bounds complete demanded
+leaves. They are distinct. For example, a three-token completion with `-k 4
+-b 64` contains the complete `4 x 4 x 4` product: 4 ratings at the first
+position, 16 at the second, and 64 at the third.
+
+```sh
+./run_hidden_feedback_select test/stories260K.bin \
+  -z test/tok512.bin -i "Lily was" -n 6 \
+  -r company -k 4 -b 64 -s 42 -o candidates.jsonl
+```
+
+The proposal carrier is still produced by independently unembedding the fixed
+hidden-feedback tape. That is a known semantic limitation, not a solved
+quality result. In the measured 15-token Stories260K run, exact binary support
+formed all `2^15` leaves and strength was genuinely non-unary at every
+position, but the later carrier contained mostly character fragments such as
+`c` and `w`; backward induction cannot select a coherent token absent from its
+carrier. Making demand continuation-sensitive without returning to repeated
+eager model passes is the next representation problem.
 
 ## Trace
 
-Every demanded candidate is appended and flushed immediately.  A
-`candidate_rated` event records:
+The JSONL trace is flushed after every event. Relevant records are:
 
-- the decoded complete continuation in `text`;
-- the candidate token and local carrier rank;
-- the contextual row and selected company occurrence;
-- the company token coordinate, raw logit, and log-partition;
-- whether the pairing is outgoing or the incoming finite boundary;
-- the exact normalized rating used by the local `Select`.
-
-Only the root emits `root_terminalization: true`.
-
-## Current support limitation
-
-The carrier currently provides one fixed top-k frame per absolute token
-position.  These frames are not dependent on the prefix selected by strength.
-Consequently, a coherent continuation may be absent even when every one of
-its internal learned edge scores is good.  In the measured four-token
-`Lily was` term, `a little girl .` is impossible because the final fixed frame
-contains `She`, `It`, `Today`, and `Her`; `.` is below rank 512 in that frame.
-
-Likewise, a 32-leaf/top-16 term explores 16 alternatives at the first variable
-slot, 2 at the second, and 1 at every later slot.  Text after that point is an
-unchallenged sampled continuation.  Making sampled support continuation-
-dependent without reintroducing repeated eager model runs is the remaining
-representation problem; changing the Firthian rating cannot manufacture a
-token that is absent from the term.
+- `selection_term_built`: demanded rows and leaves;
+- `company_run`: learned-filler counts and model time;
+- `company_outcome`: decoded branch, full coordinate vector, and bindings;
+- `candidate_rated`: every local candidate and the coordinate actually used;
+- `select`: the retained child and outcome at one memoized node;
+- `root_terminalized`: the single emitted witness and its full outcome;
+- `strength_run`: proof that strength performed no learned-filler work.
