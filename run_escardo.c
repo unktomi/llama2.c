@@ -4,9 +4,9 @@
  * that is a later lowering and performance problem.
  *
  * The selection carrier is a hypothetical token constructor and the outcome
- * is the frozen model trace at the endpoint of the completed branch:
+ * is the frozen model trace of the completed hypothetical company:
  *
- *     R = (selected suffix, terminal model node, terminal logit covector)
+ *     R = (selected suffix, terminal node, token-indexed company covectors)
  *     J_R ModelLogit = (ModelLogit -> R) -> ModelLogit
  *
  * Before selection, the prompt is evaluated once and its final normalized
@@ -27,17 +27,17 @@
  * retained outcome and emits the token witness.
  *
  * For a demanded constructor x, the local Select first forces and memoizes
- * b(x), then compares
+ * b(x), then compares the whole outcome x : b(x) with the same leximin order
+ * used by every other local Select. Each constructor is paired with its own
+ * incoming model covector; the coordinates are retained and ordered from
+ * worst company opinion to best. They are never summed. Exact mode enumerates
+ * an explicitly requested finite local support from the fixed tape.
  *
- *     ev(x, root_covector(x : b(x))).
- *
- * No path likelihood is formed.  Exact mode enumerates an explicitly
- * requested finite local support from the fixed tape.  Timed mode has no
- * leaf-count bound: until a wall-clock deadline it samples which memo cells
- * are demanded, then re-forces this same product over the retained finite
- * function tree.  A positive --top-k truncates only the fixed proposal tape;
- * the default proposal is the full selectable vocabulary.  No AR-prefix
- * covector participates in proposal or selection.
+ * The former wall-clock sampled-trie evaluator remains below for provenance,
+ * but main rejects it: it sampled complete tuples before returning the local
+ * b(x) observations and therefore did not implement the requested operational
+ * order. It must not be used as evidence for this term. No AR-prefix covector
+ * participates in exact-mode proposal or selection.
  *
  * The model evaluator below is CPS and batches currently ready kernel calls,
  * but it may evaluate a learned tensor many times while the selection product
@@ -394,6 +394,7 @@ typedef struct ModelChild ModelChild;
 typedef struct NodeWaiter NodeWaiter;
 typedef struct ModelStep ModelStep;
 typedef struct TimedSelectFrame TimedSelectFrame;
+typedef struct CompanyOutcome CompanyOutcome;
 
 typedef void (*NodeContinuation)(void *environment, ModelNode *node);
 
@@ -421,6 +422,9 @@ struct ModelNode {
     Tensor **scales;
     Tensor *final_hidden;
     Tensor *logits;
+    double log_partition;
+    bool log_partition_ready;
+    CompanyOutcome *company_outcome;
     TimedSelectFrame *timed_selection;
     NodeWaiter *waiter_head;
     NodeWaiter *waiter_tail;
@@ -1046,6 +1050,14 @@ struct LogitPath {
 struct SelectionOutcome {
     LogitPath *path;
     ModelNode *terminal;
+    CompanyOutcome *company;
+};
+
+struct CompanyOutcome {
+    int count;
+    double *coordinates;
+    int *leximin_positions;
+    double *leximin_coordinates;
 };
 
 typedef void (*OutcomeContinuation)(
@@ -1089,8 +1101,6 @@ struct Search {
     uint64_t strength_nodes;
     uint64_t sampled_candidate_demands;
     uint64_t completed_samples;
-    TimedSelectFrame *demand_queue_head;
-    TimedSelectFrame *demand_queue_tail;
 };
 
 struct SelectBranch {
@@ -1122,7 +1132,7 @@ struct SelectJob {
 /* A memoized local Select in the wall-clock-driven product. Sampling may
  * demand the same outgoing continuation repeatedly; the edge is stored once
  * while multiplicity records every demand. The edge retains b(x)'s terminal
- * outcome and its ev(x, root_covector(x : b(x))) coordinate. */
+ * outcome and its complete leximin company record. */
 struct TimedSelectEdge {
     TimedSelectEdge *next;
     TimedSelectFrame *owner;
@@ -1135,6 +1145,7 @@ struct TimedSelectEdge {
     uint64_t observation_count;
     bool observed;
     double selected_rating;
+    CompanyOutcome *selected_company;
     LogitPath *selected_path;
     ModelNode *selected_terminal;
     ModelNode *terminal;
@@ -1149,8 +1160,6 @@ struct TimedSelectFrame {
     uint64_t proposal_random_state;
     uint64_t demand_count;
     uint64_t observation_count;
-    TimedSelectFrame *queue_next;
-    bool queued;
 };
 
 static struct timespec monotonic_now(void) {
@@ -1253,26 +1262,134 @@ static double sample_random_unit(uint64_t *state) {
 
 static double log_partition(const Tensor *logits);
 
-/* The sole constructor/codata elimination used by selection.  The covector
- * belongs to the endpoint of the already completed branch x : b(x), not to
- * x's eager prefix row. */
-static double terminal_root_coordinate(
+typedef struct {
+    double coordinate;
+    int position;
+} OrderedCompanyCoordinate;
+
+static int ordered_company_coordinate_compare(
+    const void *left_value,
+    const void *right_value
+) {
+    const OrderedCompanyCoordinate *left = left_value;
+    const OrderedCompanyCoordinate *right = right_value;
+    if (left->coordinate < right->coordinate) return -1;
+    if (left->coordinate > right->coordinate) return 1;
+    if (left->position < right->position) return -1;
+    if (left->position > right->position) return 1;
+    return 0;
+}
+
+/* Retain one model-native opinion for every constructor in a completed
+ * hypothetical company. The covector is the constructor's incoming causal
+ * context. Sorting does not add or average coordinates from different
+ * contexts: it gives one shared leximin order to every local Select. */
+static CompanyOutcome *company_outcome_for_terminal(
     Search *search,
-    int constructor,
     ModelNode *terminal
 ) {
-    if (terminal == NULL || !terminal->ready || terminal->logits == NULL ||
-        constructor < 0 || constructor >= search->model->vocab_size) {
-        escardo_fail("selection received an incomplete terminal outcome");
+    if (terminal == NULL || !terminal->ready) {
+        escardo_fail("selection received an incomplete company outcome");
     }
-    search->payoff_observations++;
-    double coordinate =
-        (double)terminal->logits->values[constructor] -
-        log_partition(terminal->logits);
-    if (!isfinite(coordinate)) {
-        escardo_fail("terminal root coordinate is not finite");
+    if (terminal->company_outcome != NULL) {
+        return terminal->company_outcome;
     }
-    return coordinate;
+
+    int count = terminal->position - search->prompt_count + 1;
+    if (count <= 0 || count > search->horizon) {
+        escardo_fail("terminal company has an invalid completion length");
+    }
+    if (count != search->horizon) {
+        escardo_fail("leximin company outcomes require a fixed completion length");
+    }
+
+    CompanyOutcome *outcome = arena_allocate(
+        &search->model->arena,
+        sizeof(*outcome)
+    );
+    outcome->count = count;
+    outcome->coordinates = arena_allocate(
+        &search->model->arena,
+        (size_t)count * sizeof(*outcome->coordinates)
+    );
+    outcome->leximin_positions = arena_allocate(
+        &search->model->arena,
+        (size_t)count * sizeof(*outcome->leximin_positions)
+    );
+    outcome->leximin_coordinates = arena_allocate(
+        &search->model->arena,
+        (size_t)count * sizeof(*outcome->leximin_coordinates)
+    );
+    OrderedCompanyCoordinate *ordered = escardo_calloc(
+        (size_t)count,
+        sizeof(*ordered)
+    );
+
+    ModelNode *node = terminal;
+    for (int position = count - 1; position >= 0; position--) {
+        ModelNode *context = node->parent;
+        if (context == NULL || !context->ready || context->logits == NULL ||
+            node->token < 0 || node->token >= search->model->vocab_size) {
+            escardo_fail("company constructor lacks its incoming covector");
+        }
+        if (!context->log_partition_ready) {
+            context->log_partition = log_partition(context->logits);
+            context->log_partition_ready = true;
+        }
+        double coordinate =
+            (double)context->logits->values[node->token] -
+            context->log_partition;
+        if (!isfinite(coordinate)) {
+            escardo_fail("company coordinate is not finite");
+        }
+        outcome->coordinates[position] = coordinate;
+        ordered[position] = (OrderedCompanyCoordinate){
+            .coordinate = coordinate,
+            .position = position,
+        };
+        search->payoff_observations++;
+        node = context;
+    }
+    if (node->position != search->prompt_count - 1) {
+        escardo_fail("company outcome did not return to the prompt boundary");
+    }
+
+    qsort(
+        ordered,
+        (size_t)count,
+        sizeof(*ordered),
+        ordered_company_coordinate_compare
+    );
+    for (int rank = 0; rank < count; rank++) {
+        outcome->leximin_positions[rank] = ordered[rank].position;
+        outcome->leximin_coordinates[rank] = ordered[rank].coordinate;
+    }
+    free(ordered);
+    terminal->company_outcome = outcome;
+    return outcome;
+}
+
+static int company_outcome_compare(
+    const CompanyOutcome *left,
+    const CompanyOutcome *right
+) {
+    if (left == NULL || right == NULL || left->count != right->count) {
+        escardo_fail("cannot compare incompatible company outcomes");
+    }
+    for (int rank = 0; rank < left->count; rank++) {
+        if (left->leximin_coordinates[rank] >
+            right->leximin_coordinates[rank]) return 1;
+        if (left->leximin_coordinates[rank] <
+            right->leximin_coordinates[rank]) return -1;
+    }
+    return 0;
+}
+
+static double company_outcome_diagnostic(const CompanyOutcome *outcome) {
+    if (outcome == NULL || outcome->count <= 0) {
+        escardo_fail("company outcome has no coordinate");
+    }
+    return outcome->leximin_coordinates[0];
 }
 
 static void json_string(FILE *stream, const char *text) {
@@ -1376,6 +1493,30 @@ static void trace_decoded_path(
     fputc('"', stream);
 }
 
+static void trace_company_outcome(
+    FILE *stream,
+    const CompanyOutcome *outcome
+) {
+    if (outcome == NULL) escardo_fail("trace received no company outcome");
+    fputs(",\"company_coordinates\":[", stream);
+    for (int position = 0; position < outcome->count; position++) {
+        if (position != 0) fputc(',', stream);
+        fprintf(stream, "%.17g", outcome->coordinates[position]);
+    }
+    fputs("],\"leximin\":[", stream);
+    for (int rank = 0; rank < outcome->count; rank++) {
+        if (rank != 0) fputc(',', stream);
+        fprintf(
+            stream,
+            "{\"rank\":%d,\"position\":%d,\"opinion\":%.17g}",
+            rank,
+            outcome->leximin_positions[rank],
+            outcome->leximin_coordinates[rank]
+        );
+    }
+    fputc(']', stream);
+}
+
 static void trace_candidate(SelectBranch *branch) {
     Search *search = branch->job->search;
     if (search->trace == NULL) return;
@@ -1387,8 +1528,7 @@ static void trace_candidate(SelectBranch *branch) {
         ",\"local_rank\":%d,\"logit\":%.9g"
         ",\"proposal_log_probability\":%.17g"
         ",\"terminal_node\":%" PRIu64
-        ",\"root_coordinate\":%.17g"
-        ",\"text\":",
+        ",\"worst_company_coordinate\":%.17g",
         branch->job->frame_id,
         branch->job->history->position - search->prompt_count + 1,
         branch->job->remaining,
@@ -1399,6 +1539,8 @@ static void trace_candidate(SelectBranch *branch) {
         branch->outcome->terminal->id,
         branch->score
     );
+    trace_company_outcome(stream, branch->outcome->company);
+    fputs(",\"text\":", stream);
     trace_decoded_path(
         search,
         branch->job->history,
@@ -1416,7 +1558,7 @@ static void trace_choice(SelectJob *job, const SelectBranch *branch) {
         "{\"event\":\"select\",\"frame\":%" PRIu64
         ",\"depth\":%d,\"remaining\":%d,\"token\":%d"
         ",\"local_rank\":%d,\"terminal_node\":%" PRIu64
-        ",\"root_coordinate\":%.17g,\"text\":",
+        ",\"worst_company_coordinate\":%.17g",
         job->frame_id,
         job->history->position - search->prompt_count + 1,
         job->remaining,
@@ -1425,6 +1567,8 @@ static void trace_choice(SelectJob *job, const SelectBranch *branch) {
         branch->outcome->terminal->id,
         branch->score
     );
+    trace_company_outcome(search->trace, branch->outcome->company);
+    fputs(",\"text\":", search->trace);
     trace_decoded_path(search, job->history, branch->outcome->path);
     fputs("}\n", search->trace);
     fflush(search->trace);
@@ -1586,33 +1730,10 @@ static int timed_local_rank(
     return rank;
 }
 
-static TimedSelectEdge *timed_find_edge(
-    const TimedSelectFrame *frame,
-    int token
-) {
-    for (TimedSelectEdge *edge = frame->edges; edge != NULL;
-         edge = edge->next) {
-        if (edge->token == token) return edge;
-    }
-    return NULL;
-}
-
-static bool timed_argument_is_eligible(
-    const TimedSelectFrame *frame,
-    int token,
-    bool demand_unseen,
-    uint64_t minimum_demand
-) {
-    TimedSelectEdge *edge = timed_find_edge(frame, token);
-    if (demand_unseen) return edge == NULL;
-    return edge != NULL && edge->demand_count == minimum_demand;
-}
-
-/* Draw a memo cell for one local Select. A cell not yet present in this frame
- * is demanded before an existing cell is repeated. Once the finite proposal
- * support is present, only least-demanded cells are eligible for the next
- * draw. The model logits choose probabilistically among eligible cells; demand
- * counts never enter constructor/codata comparison. */
+/* Draw one argument of a local Select from its fixed proposal covector. The
+ * draw is with replacement: a repeated constructor resumes the same memoized
+ * b(x), and its demand count records the resulting reachability multiplicity.
+ * Multiplicity schedules observer calls; it never enters ev(x, k(x)). */
 static ModelLogit timed_sample_argument(
     Search *search,
     TimedSelectFrame *frame
@@ -1629,53 +1750,16 @@ static ModelLogit timed_sample_argument(
     }
     if (support_count <= 0) escardo_fail("empty timed sampling support");
 
-    int existing_count = 0;
-    uint64_t minimum_demand = UINT64_MAX;
-    if (support != NULL) {
-        for (int index = 0; index < support_count; index++) {
-            TimedSelectEdge *edge = timed_find_edge(frame, support[index]);
-            if (edge == NULL) continue;
-            existing_count++;
-            if (edge->demand_count < minimum_demand) {
-                minimum_demand = edge->demand_count;
-            }
-        }
-    } else {
-        for (int token = 0; token < search->model->vocab_size; token++) {
-            if (!token_is_selectable(search, token)) continue;
-            TimedSelectEdge *edge = timed_find_edge(frame, token);
-            if (edge == NULL) continue;
-            existing_count++;
-            if (edge->demand_count < minimum_demand) {
-                minimum_demand = edge->demand_count;
-            }
-        }
-    }
-    bool demand_unseen = existing_count < support_count;
-    if (!demand_unseen && minimum_demand == UINT64_MAX) {
-        escardo_fail("timed sampling lost its demanded support");
-    }
-
     double maximum = -DBL_MAX;
     if (support != NULL) {
         for (int index = 0; index < support_count; index++) {
             int token = support[index];
-            if (!timed_argument_is_eligible(
-                    frame, token, demand_unseen, minimum_demand
-                )) {
-                continue;
-            }
             double value = logits->values[token];
             if (value > maximum) maximum = value;
         }
     } else {
         for (int token = 0; token < search->model->vocab_size; token++) {
             if (!token_is_selectable(search, token)) continue;
-            if (!timed_argument_is_eligible(
-                    frame, token, demand_unseen, minimum_demand
-                )) {
-                continue;
-            }
             double value = logits->values[token];
             if (value > maximum) maximum = value;
         }
@@ -1685,21 +1769,11 @@ static ModelLogit timed_sample_argument(
     if (support != NULL) {
         for (int index = 0; index < support_count; index++) {
             int token = support[index];
-            if (!timed_argument_is_eligible(
-                    frame, token, demand_unseen, minimum_demand
-                )) {
-                continue;
-            }
             mass += exp((double)logits->values[token] - maximum);
         }
     } else {
         for (int token = 0; token < search->model->vocab_size; token++) {
             if (!token_is_selectable(search, token)) continue;
-            if (!timed_argument_is_eligible(
-                    frame, token, demand_unseen, minimum_demand
-                )) {
-                continue;
-            }
             mass += exp((double)logits->values[token] - maximum);
         }
     }
@@ -1713,11 +1787,6 @@ static ModelLogit timed_sample_argument(
     if (support != NULL) {
         for (int index = 0; index < support_count; index++) {
             int token = support[index];
-            if (!timed_argument_is_eligible(
-                    frame, token, demand_unseen, minimum_demand
-                )) {
-                continue;
-            }
             cumulative += exp((double)logits->values[token] - maximum);
             selected = token;
             if (target < cumulative) break;
@@ -1725,11 +1794,6 @@ static ModelLogit timed_sample_argument(
     } else {
         for (int token = 0; token < search->model->vocab_size; token++) {
             if (!token_is_selectable(search, token)) continue;
-            if (!timed_argument_is_eligible(
-                    frame, token, demand_unseen, minimum_demand
-                )) {
-                continue;
-            }
             cumulative += exp((double)logits->values[token] - maximum);
             selected = token;
             if (target < cumulative) break;
@@ -1746,29 +1810,6 @@ static ModelLogit timed_sample_argument(
         .logit = logits->values[selected],
         .log_probability = (double)logits->values[selected] - partition,
     };
-}
-
-static void timed_enqueue_frame(TimedSelectFrame *frame) {
-    if (frame == NULL || frame->queued) return;
-    Search *search = frame->search;
-    frame->queued = true;
-    frame->queue_next = NULL;
-    if (search->demand_queue_tail == NULL) {
-        search->demand_queue_head = frame;
-    } else {
-        search->demand_queue_tail->queue_next = frame;
-    }
-    search->demand_queue_tail = frame;
-}
-
-static TimedSelectFrame *timed_dequeue_frame(Search *search) {
-    TimedSelectFrame *frame = search->demand_queue_head;
-    if (frame == NULL) return NULL;
-    search->demand_queue_head = frame->queue_next;
-    if (search->demand_queue_head == NULL) search->demand_queue_tail = NULL;
-    frame->queue_next = NULL;
-    frame->queued = false;
-    return frame;
 }
 
 static TimedSelectFrame *timed_frame_for(
@@ -1798,7 +1839,6 @@ static TimedSelectFrame *timed_frame_for(
     );
     history->timed_selection = frame;
     search->strength_nodes++;
-    timed_enqueue_frame(frame);
     return frame;
 }
 
@@ -1857,7 +1897,8 @@ static void select_job_finish_branch(
     SelectionOutcome *suffix
 ) {
     SelectJob *job = branch->job;
-    if (suffix == NULL || suffix->terminal == NULL) {
+    if (suffix == NULL || suffix->terminal == NULL ||
+        suffix->company == NULL) {
         escardo_fail("selection branch returned no terminal outcome");
     }
     SelectionOutcome *outcome = arena_allocate(
@@ -1867,11 +1908,7 @@ static void select_job_finish_branch(
     *outcome = *suffix;
     outcome->path = path_cons(job->search, branch->value, suffix->path);
     branch->outcome = outcome;
-    branch->score = terminal_root_coordinate(
-        job->search,
-        branch->value.token,
-        outcome->terminal
-    );
+    branch->score = company_outcome_diagnostic(outcome->company);
     branch->ready = true;
     job->ready_count++;
     job->search->candidate_observations++;
@@ -1901,6 +1938,7 @@ static void select_branch_history_ready(
         );
         *suffix = (SelectionOutcome){
             .terminal = child,
+            .company = company_outcome_for_terminal(job->search, child),
         };
         select_job_finish_branch(branch, suffix);
         return;
@@ -1983,8 +2021,12 @@ static void select_job_after_branch(SelectJob *job) {
 
     int best = 0;
     for (int index = 1; index < job->branch_count; index++) {
-        if (job->branches[index].score > job->branches[best].score ||
-            (job->branches[index].score == job->branches[best].score &&
+        int order = company_outcome_compare(
+            job->branches[index].outcome->company,
+            job->branches[best].outcome->company
+        );
+        if (order > 0 ||
+            (order == 0 &&
              job->branches[index].value.local_rank <
                 job->branches[best].value.local_rank)) {
             best = index;
@@ -2049,6 +2091,7 @@ static void select_path(
         );
         *outcome = (SelectionOutcome){
             .terminal = history,
+            .company = company_outcome_for_terminal(search, history),
         };
         continuation(continuation_environment, outcome, NAN);
         return;
@@ -2327,7 +2370,8 @@ static void tau_selection_ready(
 ) {
     RootRun *root = environment;
     if (selected == NULL || selected->terminal == NULL ||
-        selected->path == NULL || !isfinite(selection_score)) {
+        selected->path == NULL || selected->company == NULL ||
+        !isfinite(selection_score)) {
         escardo_fail("root received an incomplete selection outcome");
     }
     /* Only the root forgets the structured outcome and emits its witness. */
@@ -2360,7 +2404,6 @@ static RootRun escardo_exact_run(
 
 typedef struct {
     Search *search;
-    TimedSelectFrame *root;
     TimedSelectFrame *frame;
     TimedSelectEdge **edges;
     ModelLogit *values;
@@ -2369,7 +2412,7 @@ typedef struct {
     int count;
     bool done;
     LogitPath *path;
-    double score;
+    ModelNode *terminal;
 } TimedSample;
 
 static void timed_trace_demand(
@@ -2403,27 +2446,34 @@ static bool timed_edge_improves(
     const TimedSelectEdge *selected
 ) {
     if (selected == NULL) return true;
-    if (candidate->selected_rating > selected->selected_rating) return true;
-    if (candidate->selected_rating < selected->selected_rating) return false;
+    int order = company_outcome_compare(
+        candidate->selected_company,
+        selected->selected_company
+    );
+    if (order > 0) return true;
+    if (order < 0) return false;
     if (candidate->local_rank < selected->local_rank) return true;
     if (candidate->local_rank > selected->local_rank) return false;
     return candidate->token < selected->token;
 }
 
-static void timed_trace_observation(TimedSample *sample) {
+static void timed_trace_terminal_observation(TimedSample *sample) {
     Search *search = sample->search;
     if (search->trace == NULL) return;
     fprintf(
         search->trace,
-        "{\"event\":\"strength_observation\",\"sample\":%" PRIu64
+        "{\"event\":\"terminal_observation\",\"sample\":%" PRIu64
         ",\"token_count\":%d,\"terminal_node\":%" PRIu64
-        ",\"root_coordinate\":%.17g,\"text\":",
+        ",\"selection_pending\":true,\"text\":",
         sample->sample_id,
         sample->count,
-        sample->root->selected->selected_terminal->id,
-        sample->score
+        sample->terminal->id
     );
-    trace_decoded_path(search, sample->root->history, sample->path);
+    trace_decoded_path(
+        search,
+        sample->edges[0]->owner->history,
+        sample->path
+    );
     fputs("}\n", search->trace);
     fflush(search->trace);
 }
@@ -2438,7 +2488,7 @@ static void timed_trace_candidate(TimedSelectEdge *edge) {
         ",\"local_rank\":%d,\"multiplicity\":%" PRIu64
         ",\"terminal_node\":%" PRIu64
         ",\"frame_observations\":%" PRIu64
-        ",\"root_coordinate\":%.17g,\"text\":",
+        ",\"worst_company_coordinate\":%.17g",
         edge->owner->history->id,
         edge->owner->history->position - search->prompt_count + 1,
         edge->owner->remaining,
@@ -2449,6 +2499,8 @@ static void timed_trace_candidate(TimedSelectEdge *edge) {
         edge->owner->observation_count,
         edge->selected_rating
     );
+    trace_company_outcome(search->trace, edge->selected_company);
+    fputs(",\"text\":", search->trace);
     trace_decoded_path(search, edge->owner->history, edge->selected_path);
     fputs("}\n", search->trace);
     fflush(search->trace);
@@ -2491,10 +2543,12 @@ static bool timed_strength_force(TimedSelectFrame *frame) {
                 timed_edge_value(edge),
                 tail
             );
-            edge->selected_rating = terminal_root_coordinate(
+            edge->selected_company = company_outcome_for_terminal(
                 frame->search,
-                edge->token,
                 terminal
+            );
+            edge->selected_rating = company_outcome_diagnostic(
+                edge->selected_company
             );
             edge->observed = true;
             edge->observation_count++;
@@ -2509,14 +2563,17 @@ static bool timed_strength_force(TimedSelectFrame *frame) {
 }
 
 static void timed_sample_finish(TimedSample *sample) {
-    if (!timed_strength_force(sample->root) ||
-        sample->root->selected->selected_path == NULL ||
-        sample->root->selected->selected_terminal == NULL) {
-        escardo_fail("sampled strength has no completed outcome");
+    if (sample->count <= 0 || sample->edges[sample->count - 1] == NULL ||
+        sample->edges[sample->count - 1]->terminal == NULL) {
+        escardo_fail("sampled observer returned no terminal outcome");
     }
-    sample->path = sample->root->selected->selected_path;
-    sample->score = sample->root->selected->selected_rating;
-    timed_trace_observation(sample);
+    LogitPath *path = NULL;
+    for (int index = sample->count - 1; index >= 0; index--) {
+        path = path_cons(sample->search, sample->values[index], path);
+    }
+    sample->path = path;
+    sample->terminal = sample->edges[sample->count - 1]->terminal;
+    timed_trace_terminal_observation(sample);
     sample->search->completed_samples++;
     sample->done = true;
 }
@@ -2593,7 +2650,7 @@ static void timed_trace_selected(Search *search, TimedSelectFrame *root) {
             ",\"depth\":%d,\"token\":%d,\"local_rank\":%d"
             ",\"alternatives\":%d,\"multiplicity\":%" PRIu64
             ",\"terminal_node\":%" PRIu64
-            ",\"root_coordinate\":%.17g}\n",
+            ",\"worst_company_coordinate\":%.17g",
             frame->history->id,
             depth,
             edge->token,
@@ -2603,6 +2660,8 @@ static void timed_trace_selected(Search *search, TimedSelectFrame *root) {
             edge->selected_terminal->id,
             edge->selected_rating
         );
+        trace_company_outcome(search->trace, edge->selected_company);
+        fputs("}\n", search->trace);
         fflush(search->trace);
         frame = edge->suffix;
         depth++;
@@ -2632,34 +2691,27 @@ static RootRun escardo_timed_run(
     while (first || !deadline_reached(search)) {
         first = false;
         uint64_t first_sample_id = search->completed_samples;
-        int active_count = 0;
-        while (active_count < search->batch_size) {
-            TimedSelectFrame *frame = timed_dequeue_frame(search);
-            if (frame == NULL) break;
-            TimedSample *sample = &samples[active_count];
+        int active_count = search->batch_size;
+        for (int index = 0; index < active_count; index++) {
+            TimedSample *sample = &samples[index];
             *sample = (TimedSample){
                 .search = search,
-                .root = root_frame,
-                .frame = frame,
-                .sample_id = first_sample_id + (uint64_t)active_count,
+                .frame = root_frame,
+                .sample_id = first_sample_id + (uint64_t)index,
             };
             sample->edges = escardo_calloc(
-                (size_t)frame->remaining,
+                (size_t)root_frame->remaining,
                 sizeof(*sample->edges)
             );
             sample->values = escardo_calloc(
-                (size_t)frame->remaining,
+                (size_t)root_frame->remaining,
                 sizeof(*sample->values)
             );
-            active_count++;
-        }
-        if (active_count == 0) {
-            escardo_fail("selection demand queue became empty");
         }
 
-        /* Each invocation begins at a different fairly scheduled local
-         * Select.  Its demanded argument is passed to the still-composed
-         * suffix continuation before another argument can be compared. */
+        /* Each root observer application follows x into its memoized b(x).
+         * Repeated draws resume that same function-tree branch. No selection
+         * is returned while the timed demand set is still open. */
         for (int index = 0; index < active_count; index++) {
             timed_sample_step(&samples[index]);
         }
@@ -2677,16 +2729,16 @@ static RootRun escardo_timed_run(
             }
         }
         for (int index = 0; index < active_count; index++) {
-            for (int depth = 0; depth < samples[index].count; depth++) {
-                timed_enqueue_frame(samples[index].edges[depth]->owner);
-            }
             free(samples[index].values);
             free(samples[index].edges);
         }
     }
     free(samples);
 
-    if (root_frame->selected == NULL ||
+    /* Close the sampled argument set exactly once. This recursively returns
+     * every suspended b(x) before its enclosing epsilon compares x. */
+    if (!timed_strength_force(root_frame) ||
+        root_frame->selected == NULL ||
         root_frame->selected->selected_path == NULL ||
         root_frame->selected->selected_terminal == NULL) {
         escardo_fail("timed selection produced no complete observation");
@@ -2882,6 +2934,11 @@ static void print_model_summary(ModelTerm *model) {
 
 int main(int argc, char **argv) {
     Options options = parse_options(argc, argv);
+    if (!options.exact) {
+        escardo_fail(
+            "timed sampled-trie mode is quarantined; direct selection-product replacement is not yet installed"
+        );
+    }
     AtkeyRuntime *runtime = atkey_runtime_new(
         options.checkpoint,
         options.tokenizer
@@ -2963,8 +3020,8 @@ int main(int argc, char **argv) {
     puts("completion:");
     print_selected(&search, result.selected);
     printf(
-        "selected_root_coordinate=%.17g\n"
-        "score_kind=terminal_root_covector_coordinate\n"
+        "selected_worst_company_coordinate=%.17g\n"
+        "score_kind=leximin_complete_company_outcome\n"
         "proposal_kind=candidate_independent_hidden_feedback_tape\n"
         "selection_carrier=ModelLogit_with_terminal_SelectionOutcome\n"
         "root_terminalizations=1\n"
@@ -3001,7 +3058,7 @@ int main(int argc, char **argv) {
     if (trace != NULL) {
         fprintf(
             trace,
-            "{\"event\":\"run_end\",\"selected_root_coordinate\":%.17g"
+            "{\"event\":\"run_end\",\"selected_worst_company_coordinate\":%.17g"
             ",\"strength_nodes\":%" PRIu64
             ",\"candidate_observations\":%" PRIu64
             ",\"completed_samples\":%" PRIu64 "}\n",
