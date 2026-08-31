@@ -112,6 +112,12 @@ companyprobe: company_probe.c candidate_probe.c run.c
 		-Wno-sign-compare -Wno-unused-variable -Wno-unused-function \
 		company_probe.c -lm -o company_probe
 
+.PHONY: semanticfixedpoints
+semanticfixedpoints: semantic_fixed_points.c run.c
+	$(CC) -std=c11 -O3 -Wall -Wextra -Werror \
+		-Wno-sign-compare -Wno-unused-variable -Wno-unused-function \
+		semantic_fixed_points.c -lm -o semantic_fixed_points
+
 .PHONY: longcontextprofiles
 longcontextprofiles: companyprobe
 	python3 gather_company_traces.py
@@ -210,6 +216,7 @@ clean:
 	rm -f candidate_dump
 	rm -f forced_phrase_probe
 	rm -f company_probe
+	rm -f semantic_fixed_points
 	rm -f exhaustive_scale_probe
 	rm -f scale_reward_audit
 	rm -f atkey_term.o

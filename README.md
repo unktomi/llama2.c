@@ -147,6 +147,14 @@ per-token and per-layer observations through the Stories260K model's full
 probe is a measurement tool around the numerical reference path, not the
 Atkey evaluator itself.
 
+`semantic_fixed_points.c` traces a two-edit grammatical square through every
+reference-layer boundary. It keeps finite four-corner coupling separate from
+an analytic two-direction JVP through RMSNorm, attention (including tangent
+K/V caches and softmax), and SwiGLU. The resulting JSONL distinguishes finite
+`secant_transition` records from actual `tangent_transition` records; neither
+is used as a completion reward. See
+[doc/semantic-fixed-points.md](doc/semantic-fixed-points.md).
+
 ### Quarantined failed approaches
 
 Rejected inference shortcuts are retained only in
