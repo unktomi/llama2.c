@@ -38,37 +38,50 @@ struct StructuredOutcomeRef {
     VocabularyCovectorRef proposal;
 };
 
-struct ProductNode;
-
 /*
- * The constructor, its continuation term, and its structured outcome remain
- * one object. BindingId is the stable row identity through llama.cpp/Metal
+ * A constructor and the state obtained by forcing that constructor remain one
+ * object. BindingId is the stable row identity through llama.cpp/Metal
  * batches; a backend must not split these into unkeyed parallel arrays.
+ *
+ * A terminal binding deliberately has child_materialized == false.  The unit
+ * observer at the last position is the history proposal covector, so decoding
+ * the candidate merely to manufacture an unused child state would be eager
+ * work with no denotational role.
  */
 struct BoundContinuation {
     BindingId binding_id = 0;
     Token token = 0;
     std::int32_t local_rank = 0;
     std::size_t position = 0;
+    float proposal_logit = 0.0f;
+    double proposal_log_probability = 0.0;
+    bool child_materialized = false;
     StructuredOutcomeRef outcome;
-    const ProductNode * continuation = nullptr;
+};
+
+/* Stable, owning path data that survives release of a forced model frontier. */
+struct BoundValue {
+    BindingId binding_id = 0;
+    Token token = 0;
+    std::int32_t local_rank = 0;
+    std::size_t position = 0;
+    float proposal_logit = 0.0f;
+    double proposal_log_probability = 0.0;
 };
 
 /*
- * A node is a local selection function at one position. `history` is the
- * common causal boundary before its candidate x. `proposal` is the unit-law
- * observer for an empty suffix. final_hidden remains part of the structured
- * outcome, but is never fed through the model a second time by this runtime.
+ * One dynamically forced local selection frontier. It is not a persistent
+ * syntax tree: the backend may own K live child KV states only until release()
+ * is called. The product copies just BoundValue identities into its result.
  */
 struct ProductNode {
     NodeId node_id = 0;
     std::size_t position = 0;
-    StructuredOutcomeRef history;
     std::vector<BoundContinuation> alternatives;
 };
 
 struct BoundPath {
-    std::vector<const BoundContinuation *> positions;
+    std::vector<BoundValue> positions;
 
     std::vector<Token> tokens() const;
 };
@@ -112,7 +125,7 @@ struct ObservationTuple {
  */
 struct ObservationDemand {
     DemandId demand_id = 0;
-    const BoundContinuation * candidate = nullptr;
+    BoundValue candidate;
     StructuredOutcomeRef history_before_candidate;
     BoundPath selected_suffix;
     std::vector<Token> common_support;
@@ -179,18 +192,56 @@ public:
     ) = 0;
 };
 
+/*
+ * The model transition part of the term, separate from its one RootObserver.
+ * demand() exposes one finite local support without running a candidate.
+ * force() then materializes the K child histories in one backend batch.  The
+ * split lets the product publish every continuation demand before any of those
+ * continuations begins execution. force() is never called at the terminal
+ * position.
+ *
+ * release() is called exactly once for every successfully returned node, once
+ * all recursively selected suffixes have been copied into owning BoundPaths.
+ * It must release every child state owned by that node, retain the binding
+ * identity/token/rank metadata until the call returns, and must not throw.
+ * Thus the runtime retains O(K * horizon) live frontier states, never K^N.
+ */
+class SelectionTerm {
+public:
+    virtual ~SelectionTerm() = default;
+
+    virtual ProductNode demand(
+        const StructuredOutcomeRef & history,
+        std::size_t position
+    ) = 0;
+
+    virtual void force(
+        const StructuredOutcomeRef & history,
+        ProductNode & node
+    ) = 0;
+
+    virtual void release(ProductNode & node) noexcept = 0;
+};
+
 struct ObservedAlternative {
-    const BoundContinuation * binding = nullptr;
+    const BoundValue * binding = nullptr;
     const BoundPath * selected_suffix = nullptr;
     const BoundPath * complete_path = nullptr;
     const PositionCovector * current_covector = nullptr;
     const ObservationTuple * observation_tuple = nullptr;
+    double own_company_log_probability = 0.0;
     bool attains = false;
 };
 
 class ProductEventSink {
 public:
     virtual ~ProductEventSink() = default;
+
+    virtual void continuation_demanded(
+        SelectionId /* selection_id */,
+        std::size_t /* ordinal */,
+        const BoundContinuation & /* binding */
+    ) { }
 
     virtual void observation_batch_requested(
         const ObservationBatch & /* batch */
@@ -211,6 +262,9 @@ struct ProductCounters {
     std::uint64_t selection_nodes = 0;
     std::uint64_t observer_batches = 0;
     std::uint64_t observer_demands = 0;
+    std::uint64_t attaining_alternatives = 0;
+    std::uint64_t ambiguous_selection_nodes = 0;
+    std::uint64_t zero_attaining_selection_nodes = 0;
 };
 
 struct ProductResult {
@@ -225,37 +279,43 @@ struct ProductResult {
  *   a      = epsilon(x -> p(x : b(x)))
  *   result = a : b(a)
  *
- * For this finite-search epsilon, x attains its own observer result exactly
- * when x is an argmax coordinate of that result's support covector. The first
- * attaining x is selected; if none attains, the last support element is the
- * total fallback. Values from two different observer frames are never
- * compared. The selected current covector is prepended to b(a)'s retained
- * position-indexed tuple.
+ * For this finite-search epsilon, ev evaluates each x in its own p(x) frame:
+ *
+ *   ev(x, p(x)) = p(x)[x] - logsumexp(p(x)[support]).
+ *
+ * The subtraction fixes the additive gauge before values from distinct frames
+ * are ordered. The maximum normalized own-company log probability is selected
+ * (local rank breaks exact ties). Whether x is also the argmax coordinate of
+ * its own frame is retained only as a fixed-point/ambiguity diagnostic. The
+ * selected current covector is prepended to b(a)'s position-indexed tuple.
  */
 class ExactProduct {
 public:
     ExactProduct(
         std::size_t horizon,
+        SelectionTerm & selection_term,
         RootObserver & root_observer,
         ProductEventSink * events = nullptr
     );
 
-    ProductResult run(const ProductNode & root);
+    ProductResult run(const StructuredOutcomeRef & root_history);
     const ProductCounters & counters() const;
 
 private:
     ProductResult evaluate(
-        const ProductNode & node,
-        std::vector<const ProductNode *> & active
+        const StructuredOutcomeRef & history,
+        std::size_t position
     );
 
     std::vector<PositionCovector> observe_restrictions(
         SelectionId selection_id,
+        const StructuredOutcomeRef & history,
         const ProductNode & node,
         const std::vector<BoundPath> & selected_suffixes
     );
 
     std::size_t horizon_ = 0;
+    SelectionTerm & selection_term_;
     RootObserver & root_observer_;
     ProductEventSink * events_ = nullptr;
     ProductCounters counters_;

@@ -16,10 +16,12 @@
  * obtain b(x) by recursively applying the suffix selection.  Then apply the
  * same observer to (prefix, b(x)).  A branch attains when x is the maximum
  * coordinate of its own observer covector over the common finite support.
- * The local searchable-set selection returns the first attaining branch, or
- * the final branch when none attains.  Values from distinct covector frames
- * are never compared or added.  The selected outcome retains the complete
- * position-indexed covector family, and only the root emits its token tuple.
+ * This fixed-point property is retained as an ambiguity diagnostic. Selection
+ * itself is typed evaluation: normalize every p(x) within its own additive
+ * gauge and maximize p(x)[x] - logsumexp(p(x)). Raw coordinates from distinct
+ * frames are never compared or added. The selected outcome retains the
+ * complete position-indexed covector family, and only the root emits its token
+ * tuple.
  *
  * This deliberately contains no path-likelihood sum, scalar backup, UCB
  * bonus, or sampled AR rollout.  Model applications at a causal frontier and
@@ -29,6 +31,7 @@
 
 #include "llama.h"
 #include "chat.h"
+#include "escardo_product_runtime.h"
 #include "ggml-backend.h"
 
 #include <algorithm>
@@ -43,12 +46,14 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
 namespace {
 
 using Clock = std::chrono::steady_clock;
+namespace product = escardo_product;
 
 [[noreturn]] void fail(const std::string & message) {
     throw std::runtime_error(message);
@@ -173,7 +178,44 @@ std::string format_chat_prompt(
 
 void json_string(FILE * stream, const std::string & text) {
     std::fputc('"', stream);
-    for (unsigned char byte : text) {
+    for (size_t index = 0; index < text.size();) {
+        const unsigned char byte = static_cast<unsigned char>(text[index]);
+        size_t utf8_length = 0;
+        if (byte >= 0xc2 && byte <= 0xdf && index + 1 < text.size()) {
+            const unsigned char b1 = static_cast<unsigned char>(text[index + 1]);
+            if (b1 >= 0x80 && b1 <= 0xbf) utf8_length = 2;
+        } else if (byte >= 0xe0 && byte <= 0xef &&
+                   index + 2 < text.size()) {
+            const unsigned char b1 = static_cast<unsigned char>(text[index + 1]);
+            const unsigned char b2 = static_cast<unsigned char>(text[index + 2]);
+            const bool first_valid =
+                (byte == 0xe0 && b1 >= 0xa0 && b1 <= 0xbf) ||
+                (byte == 0xed && b1 >= 0x80 && b1 <= 0x9f) ||
+                ((byte >= 0xe1 && byte <= 0xec) &&
+                 b1 >= 0x80 && b1 <= 0xbf) ||
+                ((byte >= 0xee && byte <= 0xef) &&
+                 b1 >= 0x80 && b1 <= 0xbf);
+            if (first_valid && b2 >= 0x80 && b2 <= 0xbf) utf8_length = 3;
+        } else if (byte >= 0xf0 && byte <= 0xf4 &&
+                   index + 3 < text.size()) {
+            const unsigned char b1 = static_cast<unsigned char>(text[index + 1]);
+            const unsigned char b2 = static_cast<unsigned char>(text[index + 2]);
+            const unsigned char b3 = static_cast<unsigned char>(text[index + 3]);
+            const bool first_valid =
+                (byte == 0xf0 && b1 >= 0x90 && b1 <= 0xbf) ||
+                (byte == 0xf4 && b1 >= 0x80 && b1 <= 0x8f) ||
+                ((byte >= 0xf1 && byte <= 0xf3) &&
+                 b1 >= 0x80 && b1 <= 0xbf);
+            if (first_valid && b2 >= 0x80 && b2 <= 0xbf &&
+                b3 >= 0x80 && b3 <= 0xbf) {
+                utf8_length = 4;
+            }
+        }
+        if (utf8_length != 0) {
+            std::fwrite(text.data() + index, 1, utf8_length, stream);
+            index += utf8_length;
+            continue;
+        }
         switch (byte) {
             case '"': std::fputs("\\\"", stream); break;
             case '\\': std::fputs("\\\\", stream); break;
@@ -184,8 +226,10 @@ void json_string(FILE * stream, const std::string & text) {
             case '\t': std::fputs("\\t", stream); break;
             default:
                 if (byte < 0x20) std::fprintf(stream, "\\u%04x", byte);
-                else std::fputc(byte, stream);
+                else if (byte < 0x80) std::fputc(byte, stream);
+                else std::fprintf(stream, "\\u00%02x", byte);
         }
+        index++;
     }
     std::fputc('"', stream);
 }
@@ -268,39 +312,17 @@ struct Counters {
     uint64_t model_decoded_terms = 0;
     uint64_t observer_decode_calls = 0;
     uint64_t sequence_copies = 0;
-};
-
-struct Value {
-    llama_token token = LLAMA_TOKEN_NULL;
-    int local_rank = 0;
-    float proposal_logit = 0.0f;
-    double proposal_log_probability = 0.0;
+    uint64_t attaining_alternatives = 0;
+    uint64_t ambiguous_selection_nodes = 0;
+    uint64_t zero_attaining_selection_nodes = 0;
 };
 
 struct NodeState {
+    uint64_t id = 0;
     int sequence = -1;
     int position = -1;
     std::vector<float> logits;
     std::vector<float> hidden;
-};
-
-struct CovectorFrame {
-    uint64_t id = 0;
-    std::vector<llama_token> support;
-    std::vector<double> coordinates;
-    int maximum_rank = -1;
-};
-
-struct Outcome {
-    std::vector<Value> path;
-    std::vector<CovectorFrame> observations;
-};
-
-struct Branch {
-    Value value;
-    Outcome outcome;
-    CovectorFrame observation;
-    bool attains = false;
 };
 
 class BatchOwner {
@@ -327,6 +349,7 @@ private:
 class SequencePool {
 public:
     SequencePool(llama_memory_t memory, int count) : memory_(memory) {
+        available_.reserve(static_cast<size_t>(std::max(0, count - 1)));
         for (int sequence = count - 1; sequence >= 1; --sequence) {
             available_.push_back(sequence);
         }
@@ -355,7 +378,18 @@ private:
     std::vector<int> available_;
 };
 
-class ExactSelection {
+int posterior_batch_capacity(const Options & options) {
+    const size_t k = static_cast<size_t>(options.top_k);
+    if (k > static_cast<size_t>(std::numeric_limits<int>::max()) / k) {
+        fail("top-k squared exceeds batch capacity");
+    }
+    return static_cast<int>(k * k);
+}
+
+class ExactSelection :
+    public product::SelectionTerm,
+    public product::RootObserver,
+    public product::ProductEventSink {
 public:
     ExactSelection(
         llama_model * model,
@@ -372,19 +406,14 @@ public:
         trace_(trace),
         counters_(counters),
         vocab_size_(llama_vocab_n_tokens(vocab)),
-        embedding_in_(llama_model_n_embd_inp(model)),
         embedding_out_(llama_model_n_embd_out(model)),
-        token_batch_(options.top_k, 0),
-        observer_batch_(options.top_k, llama_model_n_embd_inp(model)) {
-        if (embedding_in_ != embedding_out_) {
-            fail("structured hidden feedback requires equal input/output widths");
-        }
+        token_batch_(posterior_batch_capacity(options), 0) {
         if (options_.top_k > vocab_size_) {
             fail("top-k exceeds model vocabulary");
         }
 
-        const size_t sequence_bound =
-            static_cast<size_t>(options_.top_k) * options_.length + 3;
+        const size_t k = static_cast<size_t>(options_.top_k);
+        const size_t sequence_bound = k * options_.length + k * k + 3;
         if (sequence_bound > llama_max_parallel_sequences()) {
             fail("top-k and length exceed llama.cpp's sequence-id capacity");
         }
@@ -403,9 +432,9 @@ public:
 
         llama_context_params params = llama_context_default_params();
         params.n_ctx = static_cast<uint32_t>(context_size);
-        params.n_batch = static_cast<uint32_t>(std::max<size_t>(
-            512, prompt_tokens_.size()
-        ));
+        params.n_batch = static_cast<uint32_t>(std::max<size_t>({
+            512, prompt_tokens_.size(), k * k
+        }));
         params.n_ubatch = std::min<uint32_t>(params.n_batch, 512);
         params.n_seq_max = sequence_count;
         params.n_threads = options_.threads;
@@ -424,9 +453,39 @@ public:
         );
     }
 
-    Outcome run() {
+    product::ProductResult run() {
         NodeState prompt = decode_prompt();
-        return select(prompt, options_.length, 0);
+        register_state(prompt);
+        product::ExactProduct composed(
+            static_cast<size_t>(options_.length), *this, *this, this
+        );
+        try {
+            product::ProductResult result = composed.run(state_ref(prompt));
+            ensure_cleanup_ok();
+            if (!active_frontiers_.empty() || states_.size() != 1 ||
+                states_.find(prompt.id) == states_.end()) {
+                fail("dynamic product leaked a model frontier");
+            }
+            counters_.strength_nodes = composed.counters().selection_nodes;
+            counters_.candidate_observations =
+                composed.counters().observer_demands;
+            counters_.continuation_demands =
+                composed.counters().observer_demands;
+            counters_.attaining_alternatives =
+                composed.counters().attaining_alternatives;
+            counters_.ambiguous_selection_nodes =
+                composed.counters().ambiguous_selection_nodes;
+            counters_.zero_attaining_selection_nodes =
+                composed.counters().zero_attaining_selection_nodes;
+            unregister_state(prompt);
+            return result;
+        } catch (...) {
+            auto found = states_.find(prompt.id);
+            if (found != states_.end() && found->second == &prompt) {
+                states_.erase(found);
+            }
+            throw;
+        }
     }
 
 private:
@@ -435,6 +494,16 @@ private:
             if (context != nullptr) llama_free(context);
         }
     };
+
+    struct ActiveFrontier {
+        std::vector<int> sequences;
+        std::vector<NodeState> children;
+        size_t registered_count = 0;
+    };
+
+    void ensure_cleanup_ok() const {
+        if (cleanup_failed_) fail("could not release a model frontier");
+    }
 
     void add_token(
         llama_batch & batch,
@@ -451,27 +520,6 @@ private:
         batch.logits[index] = output ? 1 : 0;
     }
 
-    void add_observer_embedding(
-        llama_batch & batch,
-        const std::vector<float> & embedding,
-        llama_pos position,
-        llama_seq_id observer_sequence
-    ) const {
-        if (embedding.size() != static_cast<size_t>(embedding_in_)) {
-            fail("observer received hidden state of wrong width");
-        }
-        int32_t index = batch.n_tokens++;
-        std::memcpy(
-            batch.embd + static_cast<size_t>(index) * embedding_in_,
-            embedding.data(),
-            embedding.size() * sizeof(float)
-        );
-        batch.pos[index] = position;
-        batch.n_seq_id[index] = 1;
-        batch.seq_id[index][0] = observer_sequence;
-        batch.logits[index] = 1;
-    }
-
     NodeState copy_output(int output_index, int sequence, int position) {
         float * logits = llama_get_logits_ith(context_.get(), output_index);
         float * hidden = llama_get_embeddings_ith(
@@ -481,6 +529,7 @@ private:
             fail("decoder did not expose logits and final hidden state");
         }
         NodeState state;
+        state.id = next_state_id_++;
         state.sequence = sequence;
         state.position = position;
         state.logits.assign(logits, logits + vocab_size_);
@@ -514,18 +563,18 @@ private:
     }
 
     std::vector<NodeState> decode_sibling_tokens(
-        const std::vector<Value> & support,
+        const std::vector<llama_token> & tokens,
         int position,
         const std::vector<int> & sequences
     ) {
-        if (support.size() != sequences.size()) {
+        if (tokens.size() != sequences.size()) {
             fail("sibling support and sequence counts differ");
         }
         llama_batch & batch = token_batch_.reset();
-        for (size_t index = 0; index < support.size(); ++index) {
+        for (size_t index = 0; index < tokens.size(); ++index) {
             add_token(
                 batch,
-                support[index].token,
+                tokens[index],
                 position,
                 sequences[index],
                 true
@@ -539,11 +588,11 @@ private:
             );
         }
         counters_.model_decode_calls++;
-        counters_.model_decoded_terms += support.size();
+        counters_.model_decoded_terms += tokens.size();
 
         std::vector<NodeState> states;
-        states.reserve(support.size());
-        for (size_t index = 0; index < support.size(); ++index) {
+        states.reserve(tokens.size());
+        for (size_t index = 0; index < tokens.size(); ++index) {
             states.push_back(copy_output(
                 static_cast<int>(index), sequences[index], position
             ));
@@ -551,115 +600,210 @@ private:
         return states;
     }
 
-    std::vector<CovectorFrame> observe_bound_continuations(
-        const NodeState & history,
-        const std::vector<Branch> & branches,
-        int remaining
-    ) {
-        if (branches.empty()) fail("observer received no bound continuations");
-        const int suffix_length = remaining - 1;
-        std::vector<Value> support;
-        support.reserve(branches.size());
-        for (const Branch & branch : branches) {
-            if (static_cast<int>(branch.outcome.path.size()) != remaining) {
-                fail("bound continuation has the wrong horizon");
+    product::StructuredOutcomeRef state_ref(NodeState & state) const {
+        if (state.id == 0 || state.sequence < 0 || state.position < 0 ||
+            state.logits.size() != static_cast<size_t>(vocab_size_) ||
+            state.hidden.size() != static_cast<size_t>(embedding_out_)) {
+            fail("cannot bind an incomplete model state");
+        }
+        product::StructuredOutcomeRef result;
+        result.kv_summary.handle = state.id;
+        result.kv_summary.position = state.position;
+        result.final_hidden.handle = state.id;
+        result.final_hidden.data = state.hidden.data();
+        result.final_hidden.width = state.hidden.size();
+        result.proposal.handle = state.id;
+        result.proposal.data = state.logits.data();
+        result.proposal.width = state.logits.size();
+        return result;
+    }
+
+    void register_state(NodeState & state) {
+        if (state.id == 0 || !states_.emplace(state.id, &state).second) {
+            fail("model state id is zero or already registered");
+        }
+    }
+
+    void unregister_state(NodeState & state) {
+        auto found = states_.find(state.id);
+        if (found == states_.end() || found->second != &state) {
+            fail("attempted to release an unregistered model state");
+        }
+        states_.erase(found);
+    }
+
+    NodeState & state_from_ref(
+        const product::StructuredOutcomeRef & reference
+    ) const {
+        const uint64_t id = reference.kv_summary.handle;
+        if (id == 0 || reference.final_hidden.handle != id ||
+            reference.proposal.handle != id) {
+            fail("structured model-state handles disagree");
+        }
+        auto found = states_.find(id);
+        if (found == states_.end()) fail("model state is no longer live");
+        NodeState & state = *found->second;
+        if (reference.kv_summary.position != state.position ||
+            reference.final_hidden.data != state.hidden.data() ||
+            reference.final_hidden.width != state.hidden.size() ||
+            reference.proposal.data != state.logits.data() ||
+            reference.proposal.width != state.logits.size()) {
+            fail("structured model-state reference is stale");
+        }
+        return state;
+    }
+
+    product::ObserverId observer_id() const override {
+        return 1;
+    }
+
+    product::ObservationBatchResult observe(
+        const product::ObservationBatch & batch
+    ) override {
+        product::CausalPosteriorSchedule schedule =
+            product::make_causal_posterior_schedule(batch);
+        product::ObservationBatchResult result;
+        result.selection_id = batch.selection_id;
+        result.observations.reserve(batch.demands.size());
+
+        std::unordered_map<product::DemandId, size_t> demand_rows;
+        demand_rows.reserve(batch.demands.size());
+        for (const product::ObservationDemand & demand : batch.demands) {
+            NodeState & history = state_from_ref(
+                demand.history_before_candidate
+            );
+            const double partition = log_partition(history.logits);
+            product::DemandObservation observation;
+            observation.demand_id = demand.demand_id;
+            observation.covector.position = batch.selecting_position;
+            observation.covector.frame = product::ObservationFrame{
+                observer_id(), next_observer_frame_++
+            };
+            observation.covector.coordinates.reserve(
+                demand.common_support.size()
+            );
+            for (product::Token token : demand.common_support) {
+                product::FramedCoordinate coordinate;
+                coordinate.token = token;
+                coordinate.frame = observation.covector.frame;
+                coordinate.value = static_cast<double>(history.logits[
+                    static_cast<size_t>(token)
+                ]) - partition;
+                observation.covector.coordinates.push_back(coordinate);
             }
-            support.push_back(branch.value);
+            if (!demand_rows.emplace(
+                    demand.demand_id, result.observations.size()
+                ).second) {
+                fail("observer received duplicate demand ids");
+            }
+            result.observations.push_back(std::move(observation));
         }
 
-        std::vector<CovectorFrame> observations;
-        observations.reserve(branches.size());
-        for (const Branch & demanded : branches) {
-            CovectorFrame frame;
-            frame.id = next_observer_frame_++;
-            frame.maximum_rank = 0;
-            for (const Value & alternative : support) {
-                frame.support.push_back(alternative.token);
-                frame.coordinates.push_back(
-                    alternative.proposal_log_probability
+        if (schedule.lanes.empty()) fail("observer schedule has no lanes");
+        const bool proposal_only = schedule.lanes.front().proposal_only;
+        for (const product::CausalPosteriorLane & lane : schedule.lanes) {
+            if (lane.proposal_only != proposal_only) {
+                fail("observer schedule mixes terminal and nonterminal lanes");
+            }
+        }
+        if (proposal_only) return result;
+
+        const size_t lane_count = schedule.lanes.size();
+        const size_t path_length =
+            schedule.lanes.front().candidate_then_suffix.size();
+        if (path_length < 2) fail("posterior lane lost its fixed suffix");
+
+        std::vector<int> sequences;
+        std::vector<llama_token> tokens;
+        std::vector<double> coordinates;
+        sequences.reserve(lane_count);
+        tokens.reserve(lane_count);
+        coordinates.reserve(lane_count);
+        int model_position = -1;
+        try {
+            for (const product::CausalPosteriorLane & lane : schedule.lanes) {
+                if (lane.candidate_then_suffix.size() != path_length) {
+                    fail("posterior lanes disagree on suffix horizon");
+                }
+                NodeState & history = state_from_ref(
+                    lane.history_before_candidate
                 );
+                if (model_position < 0) model_position = history.position + 1;
+                if (model_position != history.position + 1) {
+                    fail("posterior lanes disagree on causal position");
+                }
+                int sequence = sequence_pool_->acquire();
+                sequences.push_back(sequence);
+                copy_sequence(history.sequence, sequence);
+                tokens.push_back(lane.candidate_token);
+
+                const size_t row = demand_rows.at(lane.demand_id);
+                const product::PositionCovector & frame =
+                    result.observations[row].covector;
+                auto found = std::find_if(
+                    frame.coordinates.begin(), frame.coordinates.end(),
+                    [&](const product::FramedCoordinate & coordinate) {
+                        return coordinate.token == lane.candidate_token;
+                    }
+                );
+                if (found == frame.coordinates.end()) {
+                    fail("posterior lane token is outside its common support");
+                }
+                coordinates.push_back(found->value);
             }
 
-            if (suffix_length > 0) {
-                std::vector<int> sequences;
-                sequences.reserve(support.size());
-                for (size_t alternative = 0;
-                     alternative < support.size(); ++alternative) {
-                    int sequence = sequence_pool_->acquire();
-                    copy_sequence(history.sequence, sequence);
-                    sequences.push_back(sequence);
+            std::vector<NodeState> states = decode_sibling_tokens(
+                tokens, model_position, sequences
+            );
+            counters_.observer_decode_calls++;
+            for (size_t offset = 1; offset < path_length; ++offset) {
+                for (size_t lane_index = 0;
+                     lane_index < lane_count; ++lane_index) {
+                    const llama_token suffix_token = schedule.lanes[
+                        lane_index
+                    ].candidate_then_suffix[offset];
+                    coordinates[lane_index] += static_cast<double>(
+                        states[lane_index].logits[
+                            static_cast<size_t>(suffix_token)
+                        ]
+                    ) - log_partition(states[lane_index].logits);
+                    tokens[lane_index] = suffix_token;
                 }
-                std::vector<NodeState> states = decode_sibling_tokens(
-                    support,
-                    history.position + 1,
+                if (offset + 1 == path_length) break;
+                states = decode_sibling_tokens(
+                    tokens,
+                    model_position + static_cast<int>(offset),
                     sequences
                 );
                 counters_.observer_decode_calls++;
-
-                for (int offset = 0; offset < suffix_length; ++offset) {
-                    const llama_token suffix_token = demanded.outcome.path[
-                        static_cast<size_t>(offset + 1)
-                    ].token;
-                    for (size_t alternative = 0;
-                         alternative < support.size(); ++alternative) {
-                        const NodeState & state = states[alternative];
-                        frame.coordinates[alternative] +=
-                            static_cast<double>(state.logits[
-                                static_cast<size_t>(suffix_token)
-                            ]) - log_partition(state.logits);
-                    }
-                    if (offset + 1 == suffix_length) break;
-
-                    llama_batch & batch = token_batch_.reset();
-                    for (size_t alternative = 0;
-                         alternative < support.size(); ++alternative) {
-                        add_token(
-                            batch,
-                            suffix_token,
-                            history.position + 2 + offset,
-                            sequences[alternative],
-                            true
-                        );
-                    }
-                    int result = llama_decode(context_.get(), batch);
-                    if (result != 0) {
-                        fail(
-                            "posterior suffix decode failed with code " +
-                            std::to_string(result)
-                        );
-                    }
-                    counters_.model_decode_calls++;
-                    counters_.model_decoded_terms += support.size();
-                    counters_.observer_decode_calls++;
-                    states.clear();
-                    states.reserve(support.size());
-                    for (size_t alternative = 0;
-                         alternative < support.size(); ++alternative) {
-                        states.push_back(copy_output(
-                            static_cast<int>(alternative),
-                            sequences[alternative],
-                            history.position + 2 + offset
-                        ));
-                    }
-                }
-                for (int sequence : sequences) {
-                    sequence_pool_->release(sequence);
-                }
             }
 
-            for (size_t coordinate = 1;
-                 coordinate < frame.coordinates.size(); ++coordinate) {
-                const size_t incumbent = static_cast<size_t>(
-                    frame.maximum_rank
+            for (size_t lane_index = 0;
+                 lane_index < lane_count; ++lane_index) {
+                const product::CausalPosteriorLane & lane =
+                    schedule.lanes[lane_index];
+                const size_t row = demand_rows.at(lane.demand_id);
+                product::PositionCovector & frame =
+                    result.observations[row].covector;
+                auto found = std::find_if(
+                    frame.coordinates.begin(), frame.coordinates.end(),
+                    [&](const product::FramedCoordinate & coordinate) {
+                        return coordinate.token == lane.candidate_token;
+                    }
                 );
-                if (frame.coordinates[coordinate] >
-                        frame.coordinates[incumbent]) {
-                    frame.maximum_rank = static_cast<int>(coordinate);
+                if (found == frame.coordinates.end()) {
+                    fail("posterior result lost its support coordinate");
                 }
+                found->value = coordinates[lane_index];
             }
-            observations.push_back(std::move(frame));
+        } catch (...) {
+            for (int sequence : sequences) {
+                sequence_pool_->release(sequence);
+            }
+            throw;
         }
-        return observations;
+        for (int sequence : sequences) sequence_pool_->release(sequence);
+        return result;
     }
 
     void copy_sequence(
@@ -672,7 +816,10 @@ private:
         counters_.sequence_copies++;
     }
 
-    std::vector<Value> local_support(const NodeState & history) const {
+    std::vector<product::BoundContinuation> local_support(
+        const NodeState & history,
+        size_t position
+    ) {
         std::vector<llama_token> tokens;
         tokens.reserve(static_cast<size_t>(vocab_size_));
         for (int token = 0; token < vocab_size_; ++token) {
@@ -695,51 +842,214 @@ private:
         );
         tokens.resize(static_cast<size_t>(options_.top_k));
         double partition = log_partition(history.logits);
-        std::vector<Value> values;
+        std::vector<product::BoundContinuation> values;
         values.reserve(tokens.size());
         for (size_t index = 0; index < tokens.size(); ++index) {
             llama_token token = tokens[index];
             float logit = history.logits[static_cast<size_t>(token)];
-            values.push_back(Value{
-                token,
-                static_cast<int>(index + 1),
-                logit,
-                static_cast<double>(logit) - partition,
-            });
+            product::BoundContinuation binding;
+            binding.binding_id = next_binding_id_++;
+            binding.token = token;
+            binding.local_rank = static_cast<int32_t>(index + 1);
+            binding.position = position;
+            binding.proposal_logit = logit;
+            binding.proposal_log_probability =
+                static_cast<double>(logit) - partition;
+            values.push_back(binding);
         }
         return values;
     }
 
-    std::vector<llama_token> path_tokens(const Outcome & outcome) const {
+    product::ProductNode demand(
+        const product::StructuredOutcomeRef & history_reference,
+        size_t position
+    ) override {
+        ensure_cleanup_ok();
+        NodeState & history = state_from_ref(history_reference);
+        product::ProductNode node;
+        node.node_id = next_node_id_++;
+        node.position = position;
+        node.alternatives = local_support(history, position);
+        if (!active_frontiers_.emplace(
+                node.node_id, ActiveFrontier{}
+            ).second) {
+            fail("dynamic product repeated a node id");
+        }
+        return node;
+    }
+
+    void force(
+        const product::StructuredOutcomeRef & history_reference,
+        product::ProductNode & node
+    ) override {
+        ensure_cleanup_ok();
+        NodeState & history = state_from_ref(history_reference);
+        auto found = active_frontiers_.find(node.node_id);
+        if (found == active_frontiers_.end()) {
+            fail("cannot force an inactive selection frontier");
+        }
+        ActiveFrontier & frontier = found->second;
+        if (!frontier.sequences.empty() || !frontier.children.empty()) {
+            fail("selection frontier was forced twice");
+        }
+
         std::vector<llama_token> tokens;
-        tokens.reserve(outcome.path.size());
-        for (const Value & value : outcome.path) tokens.push_back(value.token);
+        tokens.reserve(node.alternatives.size());
+        frontier.sequences.reserve(node.alternatives.size());
+        for (const product::BoundContinuation & binding : node.alternatives) {
+            int sequence = sequence_pool_->acquire();
+            frontier.sequences.push_back(sequence);
+            copy_sequence(history.sequence, sequence);
+            tokens.push_back(binding.token);
+        }
+        frontier.children = decode_sibling_tokens(
+            tokens, history.position + 1, frontier.sequences
+        );
+        if (frontier.children.size() != node.alternatives.size()) {
+            fail("forced frontier returned the wrong child count");
+        }
+        for (NodeState & child : frontier.children) {
+            register_state(child);
+            frontier.registered_count++;
+        }
+        for (size_t index = 0; index < node.alternatives.size(); ++index) {
+            node.alternatives[index].child_materialized = true;
+            node.alternatives[index].outcome = state_ref(
+                frontier.children[index]
+            );
+        }
+    }
+
+    void release(product::ProductNode & node) noexcept override {
+        auto found = active_frontiers_.find(node.node_id);
+        if (found == active_frontiers_.end()) {
+            cleanup_failed_ = true;
+            return;
+        }
+        ActiveFrontier & frontier = found->second;
+        try {
+            for (size_t index = 0;
+                 index < frontier.registered_count; ++index) {
+                unregister_state(frontier.children[index]);
+            }
+            for (int sequence : frontier.sequences) {
+                sequence_pool_->release(sequence);
+            }
+        } catch (...) {
+            cleanup_failed_ = true;
+        }
+        active_frontiers_.erase(found);
+    }
+
+    std::vector<llama_token> path_tokens(
+        const product::BoundPath & path
+    ) const {
+        std::vector<llama_token> tokens;
+        tokens.reserve(path.positions.size());
+        for (const product::BoundValue & value : path.positions) {
+            tokens.push_back(value.token);
+        }
         return tokens;
     }
 
-    std::string path_text(const Outcome & outcome) const {
-        std::string completion = decode_tokens(vocab_, path_tokens(outcome));
+    std::string path_text(const product::BoundPath & path) const {
+        std::string completion = decode_tokens(vocab_, path_tokens(path));
         if (options_.use_chat_template) return completion;
         return options_.prompt + completion;
     }
 
-    void trace_demand(
-        uint64_t frame,
-        int depth,
-        int remaining,
-        int ordinal,
-        const Value & value
-    ) {
+    size_t maximum_rank(const product::PositionCovector & covector) const {
+        if (covector.coordinates.empty()) fail("trace received empty covector");
+        size_t best = 0;
+        for (size_t index = 1; index < covector.coordinates.size(); ++index) {
+            if (covector.coordinates[index].frame != covector.frame) {
+                fail("trace received a coordinate from another frame");
+            }
+            if (covector.coordinates[index].value >
+                    covector.coordinates[best].value) {
+                best = index;
+            }
+        }
+        return best;
+    }
+
+    const product::FramedCoordinate & coordinate_for(
+        const product::PositionCovector & covector,
+        product::Token token
+    ) const {
+        for (const product::FramedCoordinate & coordinate :
+             covector.coordinates) {
+            if (coordinate.token == token) return coordinate;
+        }
+        fail("trace covector omitted the selected token");
+    }
+
+    double normalized_coordinate(
+        const product::PositionCovector & covector,
+        product::Token token
+    ) const {
+        if (covector.coordinates.empty()) fail("trace received empty covector");
+        double maximum = covector.coordinates.front().value;
+        for (const product::FramedCoordinate & coordinate :
+             covector.coordinates) {
+            if (coordinate.frame != covector.frame) {
+                fail("trace received a coordinate from another frame");
+            }
+            maximum = std::max(maximum, coordinate.value);
+        }
+        double total = 0.0;
+        for (const product::FramedCoordinate & coordinate :
+             covector.coordinates) {
+            total += std::exp(coordinate.value - maximum);
+        }
+        if (!(total > 0.0) || !std::isfinite(total)) {
+            fail("trace cannot normalize a non-finite covector");
+        }
+        return coordinate_for(covector, token).value -
+            (maximum + std::log(total));
+    }
+
+    size_t coordinate_rank(
+        const product::PositionCovector & covector,
+        product::Token token
+    ) const {
+        size_t token_index = covector.coordinates.size();
+        for (size_t index = 0; index < covector.coordinates.size(); ++index) {
+            if (covector.coordinates[index].token == token) {
+                token_index = index;
+                break;
+            }
+        }
+        if (token_index == covector.coordinates.size()) {
+            fail("trace covector omitted a path token");
+        }
+        const double value = covector.coordinates[token_index].value;
+        size_t rank = 1;
+        for (size_t index = 0; index < covector.coordinates.size(); ++index) {
+            if (covector.coordinates[index].value > value ||
+                (covector.coordinates[index].value == value &&
+                 index < token_index)) {
+                rank++;
+            }
+        }
+        return rank;
+    }
+
+    void continuation_demanded(
+        product::SelectionId selection_id,
+        size_t ordinal,
+        const product::BoundContinuation & value
+    ) override {
         if (trace_.stream == nullptr) return;
         std::fprintf(
             trace_.stream,
             "{\"event\":\"continuation_demand\",\"frame\":%llu"
             ",\"depth\":%d,\"remaining\":%d,\"ordinal\":%d"
             ",\"token\":%d,\"local_rank\":%d,\"piece\":",
-            static_cast<unsigned long long>(frame),
-            depth,
-            remaining,
-            ordinal,
+            static_cast<unsigned long long>(selection_id - 1),
+            static_cast<int>(value.position),
+            options_.length - static_cast<int>(value.position),
+            static_cast<int>(ordinal),
             value.token,
             value.local_rank
         );
@@ -748,13 +1058,24 @@ private:
         trace_.flush();
     }
 
-    void trace_candidate(
-        uint64_t frame,
-        int depth,
-        int remaining,
-        const Branch & branch
-    ) {
+    void candidate_observed(
+        product::SelectionId selection_id,
+        const product::ObservedAlternative & alternative
+    ) override {
+        if (alternative.binding == nullptr ||
+            alternative.complete_path == nullptr ||
+            alternative.current_covector == nullptr ||
+            alternative.observation_tuple == nullptr) {
+            fail("trace received an incomplete observed alternative");
+        }
         if (trace_.stream == nullptr) return;
+        const product::BoundValue & value = *alternative.binding;
+        const product::PositionCovector & covector =
+            *alternative.current_covector;
+        const size_t best = maximum_rank(covector);
+        const product::FramedCoordinate & candidate = coordinate_for(
+            covector, value.token
+        );
         std::fprintf(
             trace_.stream,
             "{\"event\":\"candidate\",\"frame\":%llu"
@@ -763,156 +1084,115 @@ private:
             ",\"proposal_log_probability\":%.17g"
             ",\"observer_frame\":%llu,\"attains\":%s"
             ",\"observer_max_rank\":%d,\"observer_max_token\":%d"
-            ",\"candidate_covector_logit\":%.9g,\"text\":",
-            static_cast<unsigned long long>(frame),
-            depth,
-            remaining,
-            branch.value.token,
-            branch.value.local_rank,
-            branch.value.proposal_logit,
-            branch.value.proposal_log_probability,
-            static_cast<unsigned long long>(branch.observation.id),
-            branch.attains ? "true" : "false",
-            branch.observation.maximum_rank + 1,
-            branch.observation.support[static_cast<size_t>(
-                branch.observation.maximum_rank
-            )],
-            branch.observation.coordinates[static_cast<size_t>(
-                branch.value.local_rank - 1
-            )]
+            ",\"candidate_covector_logit\":%.9g"
+            ",\"own_company_log_probability\":%.17g,\"text\":",
+            static_cast<unsigned long long>(selection_id - 1),
+            static_cast<int>(value.position),
+            options_.length - static_cast<int>(value.position),
+            value.token,
+            value.local_rank,
+            value.proposal_logit,
+            value.proposal_log_probability,
+            static_cast<unsigned long long>(covector.frame.frame_id - 1),
+            alternative.attains ? "true" : "false",
+            static_cast<int>(best + 1),
+            covector.coordinates[best].token,
+            candidate.value,
+            alternative.own_company_log_probability
         );
-        json_string(trace_.stream, path_text(branch.outcome));
+        json_string(trace_.stream, path_text(*alternative.complete_path));
         std::fputs(",\"observer_support\":[", trace_.stream);
-        for (size_t index = 0;
-             index < branch.observation.support.size(); ++index) {
+        for (size_t index = 0; index < covector.coordinates.size(); ++index) {
             if (index != 0) std::fputc(',', trace_.stream);
+            const product::FramedCoordinate & coordinate =
+                covector.coordinates[index];
             std::fprintf(
                 trace_.stream,
                 "{\"rank\":%zu,\"token\":%d,\"piece\":",
                 index + 1,
-                branch.observation.support[index]
+                coordinate.token
             );
             json_string(
                 trace_.stream,
-                token_piece(vocab_, branch.observation.support[index])
+                token_piece(vocab_, coordinate.token)
             );
             std::fprintf(
                 trace_.stream,
                 ",\"logit\":%.9g}",
-                branch.observation.coordinates[index]
+                coordinate.value
+            );
+        }
+        std::fputs("],\"outcome_profile\":[", trace_.stream);
+        const product::BoundPath & path = *alternative.complete_path;
+        const product::ObservationTuple & tuple =
+            *alternative.observation_tuple;
+        if (path.positions.size() != tuple.positions.size()) {
+            fail("trace path and covector tuple have different lengths");
+        }
+        for (size_t index = 0; index < path.positions.size(); ++index) {
+            if (index != 0) std::fputc(',', trace_.stream);
+            const product::BoundValue & position = path.positions[index];
+            const product::PositionCovector & position_covector =
+                tuple.positions[index];
+            if (position.position != position_covector.position) {
+                fail("trace path and covector tuple are position-misaligned");
+            }
+            std::fprintf(
+                trace_.stream,
+                "{\"position\":%zu,\"token\":%d,\"piece\":",
+                position.position,
+                position.token
+            );
+            json_string(trace_.stream, token_piece(vocab_, position.token));
+            std::fprintf(
+                trace_.stream,
+                ",\"proposal_local_rank\":%d"
+                ",\"covector_rank\":%zu"
+                ",\"own_company_log_probability\":%.17g}",
+                position.local_rank,
+                coordinate_rank(position_covector, position.token),
+                normalized_coordinate(position_covector, position.token)
             );
         }
         std::fputs("]}\n", trace_.stream);
         trace_.flush();
     }
 
-    void trace_select(
-        uint64_t frame,
-        int depth,
-        int remaining,
-        const Branch & branch
-    ) {
+    void continuation_selected(
+        product::SelectionId selection_id,
+        const product::ObservedAlternative & alternative
+    ) override {
+        if (alternative.binding == nullptr ||
+            alternative.complete_path == nullptr ||
+            alternative.current_covector == nullptr) {
+            fail("trace received an incomplete selected continuation");
+        }
         if (trace_.stream == nullptr) return;
+        const product::BoundValue & value = *alternative.binding;
+        const product::PositionCovector & covector =
+            *alternative.current_covector;
         std::fprintf(
             trace_.stream,
             "{\"event\":\"select\",\"frame\":%llu"
             ",\"depth\":%d,\"remaining\":%d,\"token\":%d"
             ",\"local_rank\":%d,\"observer_frame\":%llu"
             ",\"attains\":%s"
-            ",\"selection_rule\":\"first_attaining_else_last\""
+            ",\"own_company_log_probability\":%.17g"
+            ",\"selection_rule\":\"max_gauge_normalized_ev\""
             ",\"propagated\":\"complete_covector_family\""
             ",\"text\":",
-            static_cast<unsigned long long>(frame),
-            depth,
-            remaining,
-            branch.value.token,
-            branch.value.local_rank,
-            static_cast<unsigned long long>(branch.observation.id),
-            branch.attains ? "true" : "false"
+            static_cast<unsigned long long>(selection_id - 1),
+            static_cast<int>(value.position),
+            options_.length - static_cast<int>(value.position),
+            value.token,
+            value.local_rank,
+            static_cast<unsigned long long>(covector.frame.frame_id - 1),
+            alternative.attains ? "true" : "false",
+            alternative.own_company_log_probability
         );
-        json_string(trace_.stream, path_text(branch.outcome));
+        json_string(trace_.stream, path_text(*alternative.complete_path));
         std::fputs("}\n", trace_.stream);
         trace_.flush();
-    }
-
-    Outcome select(
-        const NodeState & history,
-        int remaining,
-        int depth
-    ) {
-        if (remaining <= 0) fail("selection received empty horizon");
-        const uint64_t frame = next_frame_++;
-        counters_.strength_nodes++;
-        std::vector<Value> support = local_support(history);
-        std::vector<Branch> branches;
-        branches.reserve(support.size());
-
-        for (size_t index = 0; index < support.size(); ++index) {
-            trace_demand(
-                frame,
-                depth,
-                remaining,
-                static_cast<int>(index),
-                support[index]
-            );
-            counters_.continuation_demands++;
-        }
-
-        std::vector<int> child_sequences;
-        child_sequences.reserve(support.size());
-        for (size_t index = 0; index < support.size(); ++index) {
-            int child_sequence = sequence_pool_->acquire();
-            copy_sequence(history.sequence, child_sequence);
-            child_sequences.push_back(child_sequence);
-        }
-        std::vector<NodeState> children = decode_sibling_tokens(
-            support, history.position + 1, child_sequences
-        );
-
-        for (size_t index = 0; index < support.size(); ++index) {
-            const Value value = support[index];
-            NodeState & child = children[index];
-            Outcome outcome;
-            if (remaining > 1) {
-                outcome = select(child, remaining - 1, depth + 1);
-            }
-            if (child.sequence >= 0) {
-                sequence_pool_->release(child.sequence);
-                child.sequence = -1;
-            }
-            outcome.path.insert(outcome.path.begin(), value);
-            Branch branch;
-            branch.value = value;
-            branch.outcome = std::move(outcome);
-            branches.push_back(std::move(branch));
-        }
-
-        std::vector<CovectorFrame> observations = observe_bound_continuations(
-            history,
-            branches,
-            remaining
-        );
-
-        size_t best = branches.size() - 1;
-        bool found_attaining = false;
-        for (size_t index = 0; index < branches.size(); ++index) {
-            Branch & branch = branches[index];
-            branch.observation = std::move(observations[index]);
-            branch.attains = branch.observation.maximum_rank ==
-                branch.value.local_rank - 1;
-            branch.outcome.observations.insert(
-                branch.outcome.observations.begin(),
-                branch.observation
-            );
-            counters_.candidate_observations++;
-            trace_candidate(frame, depth, remaining, branch);
-            if (!found_attaining && branch.attains) {
-                best = index;
-                found_attaining = true;
-            }
-        }
-        trace_select(frame, depth, remaining, branches[best]);
-        return std::move(branches[best].outcome);
     }
 
     llama_model * model_ = nullptr;
@@ -922,15 +1202,18 @@ private:
     Trace & trace_;
     Counters & counters_;
     int vocab_size_ = 0;
-    int embedding_in_ = 0;
     int embedding_out_ = 0;
     BatchOwner token_batch_;
-    BatchOwner observer_batch_;
     std::unique_ptr<llama_context, ContextDeleter> context_;
     llama_memory_t memory_ = nullptr;
     std::unique_ptr<SequencePool> sequence_pool_;
-    uint64_t next_frame_ = 0;
-    uint64_t next_observer_frame_ = 0;
+    std::unordered_map<uint64_t, NodeState *> states_;
+    std::unordered_map<product::NodeId, ActiveFrontier> active_frontiers_;
+    bool cleanup_failed_ = false;
+    uint64_t next_state_id_ = 1;
+    product::NodeId next_node_id_ = 1;
+    product::BindingId next_binding_id_ = 1;
+    uint64_t next_observer_frame_ = 1;
 };
 
 void quiet_log(enum ggml_log_level level, const char * text, void *) {
@@ -989,7 +1272,7 @@ int main(int argc, char ** argv) {
                 ",\"mode\":\"exact_select_product_masked_company\""
                 ",\"observer_attention\":"
                 "\"causal_posterior_over_fixed_bound_suffix\""
-                ",\"selection_rule\":\"first_attaining_else_last\"}\n",
+                ",\"selection_rule\":\"max_gauge_normalized_ev\"}\n",
                 options.use_chat_template ? "true" : "false",
                 options.enable_thinking ? "true" : "false",
                 options.length,
@@ -1008,15 +1291,15 @@ int main(int argc, char ** argv) {
             trace,
             counters
         );
-        Outcome selected = term.run();
+        product::ProductResult selected = term.run();
         auto stopped = Clock::now();
         double seconds = std::chrono::duration<double>(
             stopped - started
         ).count();
 
         std::vector<llama_token> selected_tokens;
-        selected_tokens.reserve(selected.path.size());
-        for (const Value & value : selected.path) {
+        selected_tokens.reserve(selected.path.positions.size());
+        for (const product::BoundValue & value : selected.path.positions) {
             selected_tokens.push_back(value.token);
         }
         std::string completion = decode_tokens(vocab, selected_tokens);
@@ -1027,9 +1310,10 @@ int main(int argc, char ** argv) {
         std::puts("completion:");
         std::puts(displayed.c_str());
         std::printf(
-            "score_kind=bound_continuation_covector_attainment\n"
+            "score_kind=gauge_normalized_ev_of_bound_covectors\n"
             "selection_carrier=token_path_with_covector_family\n"
             "selection_observer=causal_posterior_root_callback\n"
+            "selection_rule=max_gauge_normalized_ev\n"
             "observer_attention="
             "causal_posterior_over_fixed_bound_suffix\n"
             "aggregate_path_score=none\n"
@@ -1041,6 +1325,9 @@ int main(int argc, char ** argv) {
             "model_decoded_terms=%llu\n"
             "observer_decode_calls=%llu\n"
             "sequence_copies=%llu\n"
+            "attaining_alternatives=%llu\n"
+            "ambiguous_selection_nodes=%llu\n"
+            "zero_attaining_selection_nodes=%llu\n"
             "numerical_backend=llama.cpp/ggml\n"
             "chat_template=%s\n"
             "enable_thinking=%s\n"
@@ -1052,6 +1339,15 @@ int main(int argc, char ** argv) {
             static_cast<unsigned long long>(counters.model_decoded_terms),
             static_cast<unsigned long long>(counters.observer_decode_calls),
             static_cast<unsigned long long>(counters.sequence_copies),
+            static_cast<unsigned long long>(
+                counters.attaining_alternatives
+            ),
+            static_cast<unsigned long long>(
+                counters.ambiguous_selection_nodes
+            ),
+            static_cast<unsigned long long>(
+                counters.zero_attaining_selection_nodes
+            ),
             options.use_chat_template ? "embedded_jinja" : "raw",
             options.enable_thinking ? "true" : "false",
             seconds
@@ -1066,10 +1362,22 @@ int main(int argc, char ** argv) {
             std::fprintf(
                 trace.stream,
                 ",\"strength_nodes\":%llu"
-                ",\"candidate_observations\":%llu}\n",
+                ",\"candidate_observations\":%llu"
+                ",\"attaining_alternatives\":%llu"
+                ",\"ambiguous_selection_nodes\":%llu"
+                ",\"zero_attaining_selection_nodes\":%llu}\n",
                 static_cast<unsigned long long>(counters.strength_nodes),
                 static_cast<unsigned long long>(
                     counters.candidate_observations
+                ),
+                static_cast<unsigned long long>(
+                    counters.attaining_alternatives
+                ),
+                static_cast<unsigned long long>(
+                    counters.ambiguous_selection_nodes
+                ),
+                static_cast<unsigned long long>(
+                    counters.zero_attaining_selection_nodes
                 )
             );
             trace.flush();

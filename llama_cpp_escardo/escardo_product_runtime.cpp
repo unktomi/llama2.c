@@ -45,17 +45,50 @@ void validate_suffix(
         invalid("selected suffix has the wrong length");
     }
     for (std::size_t index = 0; index < suffix.positions.size(); ++index) {
-        const BoundContinuation * binding = suffix.positions[index];
-        if (binding == nullptr) invalid("selected suffix has a null binding");
-        if (binding->position != begin + index) {
+        const BoundValue & binding = suffix.positions[index];
+        if (binding.binding_id == 0) {
+            invalid("selected suffix has an invalid binding id");
+        }
+        if (binding.position != begin + index) {
             invalid("selected suffix is not position indexed");
         }
-        validate_outcome(
-            binding->outcome,
-            "binding " + std::to_string(binding->binding_id)
-        );
     }
 }
+
+BoundValue copy_binding(const BoundContinuation & binding) {
+    BoundValue value;
+    value.binding_id = binding.binding_id;
+    value.token = binding.token;
+    value.local_rank = binding.local_rank;
+    value.position = binding.position;
+    value.proposal_logit = binding.proposal_logit;
+    value.proposal_log_probability = binding.proposal_log_probability;
+    return value;
+}
+
+class ForcedNodeGuard {
+public:
+    ForcedNodeGuard(SelectionTerm & term, ProductNode & node) :
+        term_(term), node_(node) { }
+
+    ~ForcedNodeGuard() {
+        release();
+    }
+
+    ForcedNodeGuard(const ForcedNodeGuard &) = delete;
+    ForcedNodeGuard & operator=(const ForcedNodeGuard &) = delete;
+
+    void release() noexcept {
+        if (!active_) return;
+        term_.release(node_);
+        active_ = false;
+    }
+
+private:
+    SelectionTerm & term_;
+    ProductNode & node_;
+    bool active_ = true;
+};
 
 const FramedCoordinate & coordinate_for(
     const PositionCovector & covector,
@@ -95,14 +128,41 @@ Token argmax_token(
     return best->token;
 }
 
+double normalized_coordinate(
+    const PositionCovector & covector,
+    Token token
+) {
+    if (covector.coordinates.empty()) {
+        invalid("cannot normalize an empty covector");
+    }
+    double maximum = covector.coordinates.front().value;
+    for (const FramedCoordinate & coordinate : covector.coordinates) {
+        if (coordinate.frame != covector.frame) {
+            invalid("cannot normalize coordinates from different frames");
+        }
+        if (coordinate.value > maximum) maximum = coordinate.value;
+    }
+    double total = 0.0;
+    for (const FramedCoordinate & coordinate : covector.coordinates) {
+        total += std::exp(coordinate.value - maximum);
+    }
+    if (!(total > 0.0) || !std::isfinite(total)) {
+        invalid("cannot normalize a non-finite covector");
+    }
+    return coordinate_for(covector, token).value -
+        (maximum + std::log(total));
+}
+
 } // namespace
 
 std::vector<Token> BoundPath::tokens() const {
     std::vector<Token> result;
     result.reserve(positions.size());
-    for (const BoundContinuation * binding : positions) {
-        if (binding == nullptr) invalid("cannot decode a null path binding");
-        result.push_back(binding->token);
+    for (const BoundValue & binding : positions) {
+        if (binding.binding_id == 0) {
+            invalid("cannot decode a path with an invalid binding id");
+        }
+        result.push_back(binding.token);
     }
     return result;
 }
@@ -126,7 +186,7 @@ CausalPosteriorSchedule make_causal_posterior_schedule(
     schedule.position = batch.selecting_position;
     PosteriorLaneId next_lane_id = 1;
     for (const ObservationDemand & demand : batch.demands) {
-        if (demand.demand_id == 0 || demand.candidate == nullptr) {
+        if (demand.demand_id == 0 || demand.candidate.binding_id == 0) {
             invalid("schedule contains an unbound observer demand");
         }
         validate_outcome(
@@ -156,10 +216,12 @@ CausalPosteriorSchedule make_causal_posterior_schedule(
 
 ExactProduct::ExactProduct(
     std::size_t horizon,
+    SelectionTerm & selection_term,
     RootObserver & root_observer,
     ProductEventSink * events
 ) :
     horizon_(horizon),
+    selection_term_(selection_term),
     root_observer_(root_observer),
     events_(events) {
     if (horizon_ == 0) invalid("horizon must be positive");
@@ -168,14 +230,12 @@ ExactProduct::ExactProduct(
     }
 }
 
-ProductResult ExactProduct::run(const ProductNode & root) {
-    if (root.position != 0) invalid("root node must be at position zero");
+ProductResult ExactProduct::run(const StructuredOutcomeRef & root_history) {
+    validate_outcome(root_history, "root history");
     counters_ = ProductCounters{};
     next_selection_id_ = 1;
     next_demand_id_ = 1;
-    std::vector<const ProductNode *> active;
-    active.reserve(horizon_);
-    return evaluate(root, active);
+    return evaluate(root_history, 0);
 }
 
 const ProductCounters & ExactProduct::counters() const {
@@ -184,13 +244,14 @@ const ProductCounters & ExactProduct::counters() const {
 
 std::vector<PositionCovector> ExactProduct::observe_restrictions(
     SelectionId selection_id,
+    const StructuredOutcomeRef & history,
     const ProductNode & node,
     const std::vector<BoundPath> & selected_suffixes
 ) {
     if (selected_suffixes.size() != node.alternatives.size()) {
         invalid("Select lost a constructor/continuation binding");
     }
-    validate_outcome(node.history, "selection history");
+    validate_outcome(history, "selection history");
 
     std::vector<Token> support;
     support.reserve(node.alternatives.size());
@@ -208,8 +269,8 @@ std::vector<PositionCovector> ExactProduct::observe_restrictions(
         );
         ObservationDemand demand;
         demand.demand_id = next_demand_id_++;
-        demand.candidate = &node.alternatives[index];
-        demand.history_before_candidate = node.history;
+        demand.candidate = copy_binding(node.alternatives[index]);
+        demand.history_before_candidate = history;
         demand.selected_suffix = selected_suffixes[index];
         demand.common_support = support;
         batch.demands.push_back(std::move(demand));
@@ -271,19 +332,22 @@ std::vector<PositionCovector> ExactProduct::observe_restrictions(
 }
 
 ProductResult ExactProduct::evaluate(
-    const ProductNode & node,
-    std::vector<const ProductNode *> & active
+    const StructuredOutcomeRef & history,
+    std::size_t position
 ) {
-    if (node.node_id == 0) invalid("node id zero is reserved");
-    if (node.position >= horizon_) invalid("node lies beyond the horizon");
-    if (node.alternatives.empty()) invalid("selection node has empty support");
-    validate_outcome(node.history, "node history");
-    if (std::find(active.begin(), active.end(), &node) != active.end()) {
-        invalid("selection-function tree contains a cycle");
-    }
-    active.push_back(&node);
-    counters_.selection_nodes++;
+    validate_outcome(history, "node history");
+    if (position >= horizon_) invalid("node lies beyond the horizon");
+    const bool terminal = position + 1 == horizon_;
     const SelectionId selection_id = next_selection_id_++;
+    ProductNode node = selection_term_.demand(history, position);
+    ForcedNodeGuard node_guard(selection_term_, node);
+
+    if (node.node_id == 0) invalid("node id zero is reserved");
+    if (node.position != position) {
+        invalid("forced selection is attached to the wrong position");
+    }
+    if (node.alternatives.empty()) invalid("selection node has empty support");
+    counters_.selection_nodes++;
 
     std::unordered_set<BindingId> local_ids;
     std::unordered_set<Token> local_tokens;
@@ -308,25 +372,33 @@ ProductResult ExactProduct::evaluate(
         if (binding.position != node.position) {
             invalid("candidate binding is attached to the wrong position");
         }
-        validate_outcome(
-            binding.outcome,
-            "binding " + std::to_string(binding.binding_id)
-        );
+        if (binding.child_materialized) {
+            invalid("demand eagerly materialized a child history");
+        }
+        if (events_ != nullptr) {
+            events_->continuation_demanded(selection_id, index, binding);
+        }
+    }
 
-        if (node.position + 1 == horizon_) {
-            if (binding.continuation != nullptr) {
-                invalid("last-position binding has a continuation");
+    if (!terminal) selection_term_.force(history, node);
+
+    for (std::size_t index = 0; index < node.alternatives.size(); ++index) {
+        const BoundContinuation & binding = node.alternatives[index];
+        if (terminal) {
+            if (binding.child_materialized) {
+                invalid("terminal binding eagerly materialized a child");
             }
             suffixes.emplace_back();
             suffix_observations.emplace_back();
         } else {
-            if (binding.continuation == nullptr) {
-                invalid("nonterminal binding has no continuation");
+            if (!binding.child_materialized) {
+                invalid("nonterminal binding has no forced child history");
             }
-            if (binding.continuation->position != node.position + 1) {
-                invalid("continuation does not advance exactly one position");
-            }
-            ProductResult suffix = evaluate(*binding.continuation, active);
+            validate_outcome(
+                binding.outcome,
+                "binding " + std::to_string(binding.binding_id)
+            );
+            ProductResult suffix = evaluate(binding.outcome, position + 1);
             validate_suffix(suffix.path, node.position + 1, horizon_);
             if (suffix.observation.positions.size() !=
                     horizon_ - node.position - 1) {
@@ -337,8 +409,13 @@ ProductResult ExactProduct::evaluate(
         }
     }
 
+    /* No observer demand needs a child KV state: every causal-posterior lane
+     * starts at the common history and teacher-forces x' ++ selected_suffix.
+     * Release the local frontier before invoking the root observer. */
+    node_guard.release();
+
     std::vector<PositionCovector> current = observe_restrictions(
-        selection_id, node, suffixes
+        selection_id, history, node, suffixes
     );
     std::vector<BoundPath> complete_paths;
     std::vector<ObservationTuple> complete_observations;
@@ -352,11 +429,13 @@ ProductResult ExactProduct::evaluate(
     for (const BoundContinuation & binding : node.alternatives) {
         support.push_back(binding.token);
     }
-    std::size_t first_attaining = node.alternatives.size();
+    std::size_t selected_index = 0;
+    double selected_value = 0.0;
+    std::size_t attaining_count = 0;
     for (std::size_t index = 0; index < node.alternatives.size(); ++index) {
         BoundPath path;
         path.positions.reserve(1 + suffixes[index].positions.size());
-        path.positions.push_back(&node.alternatives[index]);
+        path.positions.push_back(copy_binding(node.alternatives[index]));
         path.positions.insert(
             path.positions.end(),
             suffixes[index].positions.begin(), suffixes[index].positions.end()
@@ -383,17 +462,27 @@ ProductResult ExactProduct::evaluate(
             complete_observations.back().positions.front(), support
         );
         const bool satisfies = attained == node.alternatives[index].token;
-        if (satisfies && first_attaining == node.alternatives.size()) {
-            first_attaining = index;
+        if (satisfies) attaining_count++;
+        const double own_company = normalized_coordinate(
+            complete_observations.back().positions.front(),
+            node.alternatives[index].token
+        );
+        if (index == 0 || own_company > selected_value ||
+            (own_company == selected_value &&
+             node.alternatives[index].local_rank <
+                 node.alternatives[selected_index].local_rank)) {
+            selected_index = index;
+            selected_value = own_company;
         }
 
         ObservedAlternative alternative;
-        alternative.binding = &node.alternatives[index];
+        alternative.binding = &complete_paths[index].positions.front();
         alternative.selected_suffix = &suffixes[index];
         alternative.complete_path = &complete_paths[index];
         alternative.current_covector =
             &complete_observations[index].positions.front();
         alternative.observation_tuple = &complete_observations[index];
+        alternative.own_company_log_probability = own_company;
         alternative.attains = satisfies;
         alternatives.push_back(alternative);
         if (events_ != nullptr) {
@@ -401,10 +490,9 @@ ProductResult ExactProduct::evaluate(
         }
     }
 
-    const std::size_t selected_index =
-        first_attaining != node.alternatives.size()
-            ? first_attaining
-            : node.alternatives.size() - 1;
+    counters_.attaining_alternatives += attaining_count;
+    if (attaining_count == 0) counters_.zero_attaining_selection_nodes++;
+    if (attaining_count > 1) counters_.ambiguous_selection_nodes++;
     if (events_ != nullptr) {
         events_->continuation_selected(
             selection_id, alternatives[selected_index]
@@ -414,7 +502,6 @@ ProductResult ExactProduct::evaluate(
     ProductResult selected;
     selected.path = std::move(complete_paths[selected_index]);
     selected.observation = std::move(complete_observations[selected_index]);
-    active.pop_back();
     return selected;
 }
 
