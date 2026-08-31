@@ -54,10 +54,12 @@ scalar weight read.
 
 ## Finite support
 
-`-k` bounds the local proposal carrier and `-b` bounds complete demanded
-leaves. They are distinct. For example, a three-token completion with `-k 4
--b 64` contains the complete `4 x 4 x 4` product: 4 ratings at the first
-position, 16 at the second, and 64 at the third.
+`-k` is the number of token-indexed memo cells demanded at each sampled
+prefix; `-b` bounds complete demanded leaves. They are distinct. Candidate
+cells are sampled without replacement from the full position covector using a
+prefix-dependent seed. For example, a three-token completion with `-k 4 -b
+64` contains the complete sampled `4 x 4 x 4` function tree: 4 ratings at the
+first position, 16 at the second, and 64 at the third.
 
 ```sh
 ./run_hidden_feedback_select test/stories260K.bin \

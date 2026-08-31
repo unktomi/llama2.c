@@ -991,6 +991,7 @@ typedef struct {
     float *candidate_previous;
     double target_norm;
     ProjectionObserverKind observer_kind;
+    int local_support;
     unsigned long long leaf_budget;
     unsigned long long sample_seed;
     unsigned long long next_frame_id;
@@ -1650,6 +1651,9 @@ static double projection_product_select(
 
     ProjectionSelectFrame *frame = &product->frames[position];
     int demand_count = frame->candidate_count;
+    if (demand_count > product->local_support) {
+        demand_count = product->local_support;
+    }
     if (budget != ULLONG_MAX && budget < (unsigned long long)demand_count) {
         demand_count = (int)budget;
     }
@@ -1850,6 +1854,9 @@ static void projection_term_build(
     }
     ProjectionSelectFrame *frame = &product->frames[position];
     int demand_count = frame->candidate_count;
+    if (demand_count > product->local_support) {
+        demand_count = product->local_support;
+    }
     if (budget != ULLONG_MAX && budget < (unsigned long long)demand_count) {
         demand_count = (int)budget;
     }
@@ -2702,15 +2709,16 @@ void generate_hidden_feedback_select(
             trace,
             ",\"steps\":%d,\"prefill_unit_count\":%d,"
             "\"output_count\":%d,\"selection_frame_count\":%d,"
-            "\"local_carrier_size\":%d,\"leaf_budget\":%llu,"
+            "\"proposal_vocabulary_size\":%d,"
+            "\"local_demand_width\":%d,\"leaf_budget\":%llu,"
             "\"feedback_boundary\":\"%s\","
             "\"observer\":\"%s\"}\n",
             steps,
             num_prompt_tokens,
             output_count,
             frame_count,
-            observer_kind == PROJECTION_OBSERVER_COMPANY_STRENGTH
-                ? local_support : config->vocab_size,
+            config->vocab_size,
+            local_support,
             leaf_budget,
             feedback_boundary_name(feedback_boundary),
             projection_observer_name(observer_kind)
@@ -2792,8 +2800,7 @@ void generate_hidden_feedback_select(
             .position = position,
             .candidate_count = position < num_prompt_tokens
                 ? 1
-                : (observer_kind == PROJECTION_OBSERVER_COMPANY_STRENGTH
-                    ? local_support : config->vocab_size),
+                : config->vocab_size,
             .candidates = projection_candidates +
                 (size_t)position * config->vocab_size,
             .selected_index = -1,
@@ -2896,6 +2903,7 @@ void generate_hidden_feedback_select(
         .candidate_previous = candidate_previous,
         .target_norm = target_displacement_norm,
         .observer_kind = observer_kind,
+        .local_support = local_support,
         .leaf_budget = leaf_budget,
         .sample_seed = sample_seed,
         .counters = &strength,
@@ -2972,7 +2980,8 @@ void generate_hidden_feedback_select(
         "prefill_unit_selections: %d\n"
         "feedback_positions: %d\n"
         "deferred_projections: %d\n"
-        "projection_carrier_size: %d\n"
+        "proposal_vocabulary_size: %d\n"
+        "local_demand_width: %d\n"
         "decoded_tokens: %d\n"
         "selection_carrier: ProjectionTermOutcome\n"
         "outcome_kind: %s\n"
@@ -2999,8 +3008,8 @@ void generate_hidden_feedback_select(
         num_prompt_tokens,
         output_count,
         output_count,
-        observer_kind == PROJECTION_OBSERVER_COMPANY_STRENGTH
-            ? local_support : config->vocab_size,
+        config->vocab_size,
+        local_support,
         decoded_count,
         projection_observer_name(observer_kind),
         projection_score_role(observer_kind),
@@ -3188,7 +3197,7 @@ void error_usage() {
     fprintf(stderr, "  -n <int>    number of steps to run for, default 256. 0 = max_seq_len\n");
     fprintf(stderr, "  -g <string> feedback boundary: identity (default) or affine\n");
     fprintf(stderr, "  -r <string> observer: company (default) or logits\n");
-    fprintf(stderr, "  -k <int>    local company carrier size, default 4\n");
+    fprintf(stderr, "  -k <int>    token memo cells demanded per prefix, default 4\n");
     fprintf(stderr, "  -b <int>    sampled leaf support for company observer, default 64\n");
     fprintf(stderr, "  -s <int>    support sampling seed, default 42\n");
     fprintf(stderr, "  -i <string> input prompt\n");
