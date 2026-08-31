@@ -17,6 +17,12 @@
  * but none of their deeper frozen states.  The executable reports the active
  * coefficient count for each mode; equal allocation must not be mistaken for
  * equal effective input dimension.
+ *
+ * Evaluation is support-wide even though the current training loss is not:
+ * every retained complete-word alternative is instantiated, run through its
+ * own frozen continuation, ranked under every readout, decoded, and flushed to
+ * JSONL.  This deliberately exposes orderings that a one-negative accuracy
+ * can hide.
  */
 
 #define TESTING
@@ -32,6 +38,9 @@ typedef struct {
     int target;
     int positive_token;
     int negative_token;
+    int candidate_count;
+    int *candidate_tokens;
+    float *candidate_ar_logits;
     int *positive_tokens;
     int *negative_tokens;
     float *positive_features;
@@ -88,6 +97,29 @@ typedef struct {
     double mean_margin;
     double ar_accuracy;
 } Metrics;
+
+typedef struct {
+    int support_index;
+    int token;
+    int observed;
+    int selected_negative;
+    double ar_score;
+    double reverse_score;
+    double embedding_score;
+    double left_score;
+    int ar_rank;
+    int reverse_rank;
+    int embedding_rank;
+    int left_rank;
+    char *text;
+} CandidateObservation;
+
+typedef enum {
+    CANDIDATE_AR = 0,
+    CANDIDATE_REVERSE = 1,
+    CANDIDATE_EMBEDDING = 2,
+    CANDIDATE_LEFT = 3,
+} CandidateCoordinate;
 
 typedef enum {
     READOUT_LEFT_ONLY = 0,
@@ -627,6 +659,8 @@ static unsigned char *build_word_lexicon(
 }
 
 static void free_pair(CompanyPair *pair) {
+    free(pair->candidate_tokens);
+    free(pair->candidate_ar_logits);
     free(pair->positive_tokens);
     free(pair->negative_tokens);
     free(pair->positive_features);
@@ -724,6 +758,42 @@ static CompanyPair *make_dataset(
             continue;
         }
         pair->positive_token = pair->positive_tokens[pair->target];
+        const float *target_logits = logits +
+            (size_t)(pair->target - 1) * config->vocab_size;
+        int *candidate_tokens = checked_calloc(
+            (size_t)top_k,
+            sizeof(*candidate_tokens)
+        );
+        int replacement_count = collect_word_replacements(
+            tokenizer,
+            word_lexicon,
+            target_logits,
+            pair->positive_token,
+            top_k,
+            candidate_tokens
+        );
+        pair->candidate_count = replacement_count + 1;
+        pair->candidate_tokens = checked_calloc(
+            (size_t)pair->candidate_count,
+            sizeof(*pair->candidate_tokens)
+        );
+        pair->candidate_ar_logits = checked_calloc(
+            (size_t)pair->candidate_count,
+            sizeof(*pair->candidate_ar_logits)
+        );
+        pair->candidate_tokens[0] = pair->positive_token;
+        pair->candidate_ar_logits[0] = target_logits[pair->positive_token];
+        int retained_negative = 0;
+        for (int index = 0; index < replacement_count; index++) {
+            pair->candidate_tokens[index + 1] = candidate_tokens[index];
+            pair->candidate_ar_logits[index + 1] =
+                target_logits[candidate_tokens[index]];
+            if (candidate_tokens[index] == pair->negative_token) {
+                retained_negative = 1;
+            }
+        }
+        free(candidate_tokens);
+        if (!retained_negative) fail("selected negative missing from support");
         pair->negative_tokens[pair->target] = pair->negative_token;
 
         capture_sequence(
@@ -1350,11 +1420,261 @@ static char *decode_tokens(
     return text;
 }
 
+static double candidate_coordinate(
+    const CandidateObservation *candidate,
+    CandidateCoordinate coordinate
+) {
+    if (coordinate == CANDIDATE_AR) return candidate->ar_score;
+    if (coordinate == CANDIDATE_REVERSE) return candidate->reverse_score;
+    if (coordinate == CANDIDATE_EMBEDDING) {
+        return candidate->embedding_score;
+    }
+    return candidate->left_score;
+}
+
+static int candidate_rank(
+    const CandidateObservation *candidates,
+    int candidate_count,
+    int candidate_index,
+    CandidateCoordinate coordinate
+) {
+    const CandidateObservation *candidate = &candidates[candidate_index];
+    double score = candidate_coordinate(candidate, coordinate);
+    int rank = 1;
+    for (int index = 0; index < candidate_count; index++) {
+        if (index == candidate_index) continue;
+        double other = candidate_coordinate(&candidates[index], coordinate);
+        if (other > score ||
+            (other == score && candidates[index].token < candidate->token)) {
+            rank++;
+        }
+    }
+    return rank;
+}
+
+static void report_candidate_support(
+    const ReverseHead *full,
+    const ReverseHead *embedding,
+    const ReverseHead *left,
+    Transformer *transformer,
+    Tokenizer *tokenizer,
+    const CompanyPair *pair,
+    int pair_index,
+    int display,
+    ScoreCache *full_cache,
+    ScoreCache *embedding_cache,
+    ScoreCache *left_cache,
+    int *scratch_tokens,
+    float *scratch_features,
+    FILE *trace
+) {
+    int candidate_count = pair->candidate_count;
+    CandidateObservation *candidates = checked_calloc(
+        (size_t)candidate_count,
+        sizeof(*candidates)
+    );
+
+    for (int index = 0; index < candidate_count; index++) {
+        CandidateObservation *candidate = &candidates[index];
+        candidate->support_index = index;
+        candidate->token = pair->candidate_tokens[index];
+        candidate->observed = candidate->token == pair->positive_token;
+        candidate->selected_negative = candidate->token == pair->negative_token;
+        candidate->ar_score = pair->candidate_ar_logits[index];
+
+        const int *tokens = NULL;
+        const float *features = NULL;
+        if (candidate->observed) {
+            tokens = pair->positive_tokens;
+            features = pair->positive_features;
+        } else if (candidate->selected_negative) {
+            tokens = pair->negative_tokens;
+            features = pair->negative_features;
+        } else {
+            memcpy(
+                scratch_tokens,
+                pair->positive_tokens,
+                (size_t)pair->token_count * sizeof(*scratch_tokens)
+            );
+            scratch_tokens[pair->target] = candidate->token;
+            capture_sequence(
+                transformer,
+                scratch_tokens,
+                pair->token_count,
+                scratch_features,
+                NULL
+            );
+            tokens = scratch_tokens;
+            features = scratch_features;
+        }
+
+        candidate->reverse_score = score_company(
+            full,
+            transformer,
+            features,
+            tokens,
+            pair->token_count,
+            pair->target,
+            READOUT_ALL_LAYERS_SUFFIX,
+            full_cache
+        );
+        candidate->embedding_score = score_company(
+            embedding,
+            transformer,
+            features,
+            tokens,
+            pair->token_count,
+            pair->target,
+            READOUT_EMBEDDING_SUFFIX,
+            embedding_cache
+        );
+        candidate->left_score = score_company(
+            left,
+            transformer,
+            features,
+            tokens,
+            pair->token_count,
+            pair->target,
+            READOUT_LEFT_ONLY,
+            left_cache
+        );
+        candidate->text = decode_tokens(
+            tokenizer,
+            tokens,
+            pair->token_count
+        );
+    }
+
+    for (int index = 0; index < candidate_count; index++) {
+        candidates[index].ar_rank = candidate_rank(
+            candidates,
+            candidate_count,
+            index,
+            CANDIDATE_AR
+        );
+        candidates[index].reverse_rank = candidate_rank(
+            candidates,
+            candidate_count,
+            index,
+            CANDIDATE_REVERSE
+        );
+        candidates[index].embedding_rank = candidate_rank(
+            candidates,
+            candidate_count,
+            index,
+            CANDIDATE_EMBEDDING
+        );
+        candidates[index].left_rank = candidate_rank(
+            candidates,
+            candidate_count,
+            index,
+            CANDIDATE_LEFT
+        );
+    }
+
+    const CandidateObservation *observed = &candidates[0];
+    if (display) {
+        printf(
+            "  candidate_support=%d observed_ranks="
+            "reverse:%d embedding:%d left:%d ar:%d\n",
+            candidate_count,
+            observed->reverse_rank,
+            observed->embedding_rank,
+            observed->left_rank,
+            observed->ar_rank
+        );
+        for (int rank = 1; rank <= candidate_count; rank++) {
+            for (int index = 0; index < candidate_count; index++) {
+                const CandidateObservation *candidate = &candidates[index];
+                if (candidate->reverse_rank != rank) continue;
+                const char *piece = tokenizer->vocab[candidate->token];
+                printf(
+                    "    reverse_rank=%d piece=\"%s\" token=%d "
+                    "reverse=%.9f delta=%.9f embedding=%.9f "
+                    "left=%.9f ar=%.9f ranks[e:%d l:%d ar:%d]%s%s\n",
+                    candidate->reverse_rank,
+                    piece,
+                    candidate->token,
+                    candidate->reverse_score,
+                    candidate->reverse_score - observed->reverse_score,
+                    candidate->embedding_score,
+                    candidate->left_score,
+                    candidate->ar_score,
+                    candidate->embedding_rank,
+                    candidate->left_rank,
+                    candidate->ar_rank,
+                    candidate->observed ? " observed" : "",
+                    candidate->selected_negative ? " selected-negative" : ""
+                );
+                printf("      text: %s\n", candidate->text);
+            }
+        }
+    }
+
+    if (trace != NULL) {
+        for (int rank = 1; rank <= candidate_count; rank++) {
+            for (int index = 0; index < candidate_count; index++) {
+                const CandidateObservation *candidate = &candidates[index];
+                if (candidate->reverse_rank != rank) continue;
+                fprintf(
+                    trace,
+                    "{\"event\":\"company_candidate\",\"pair\":%d,"
+                    "\"support_index\":%d,\"candidate_count\":%d,"
+                    "\"position\":%d,\"token_count\":%d,"
+                    "\"suffix_tokens\":%d,\"token\":%d,\"piece\":",
+                    pair_index,
+                    candidate->support_index,
+                    candidate_count,
+                    pair->target,
+                    pair->token_count,
+                    pair->token_count - pair->target - 1,
+                    candidate->token
+                );
+                json_text(trace, tokenizer->vocab[candidate->token]);
+                fprintf(
+                    trace,
+                    ",\"observed\":%s,\"selected_negative\":%s,"
+                    "\"reverse_rank\":%d,\"reverse_score\":%.17g,"
+                    "\"reverse_delta_from_observed\":%.17g,"
+                    "\"embedding_rank\":%d,\"embedding_score\":%.17g,"
+                    "\"embedding_delta_from_observed\":%.17g,"
+                    "\"left_rank\":%d,\"left_score\":%.17g,"
+                    "\"left_delta_from_observed\":%.17g,"
+                    "\"ar_rank\":%d,\"ar_score\":%.17g,"
+                    "\"ar_delta_from_observed\":%.17g,\"text\":",
+                    candidate->observed ? "true" : "false",
+                    candidate->selected_negative ? "true" : "false",
+                    candidate->reverse_rank,
+                    candidate->reverse_score,
+                    candidate->reverse_score - observed->reverse_score,
+                    candidate->embedding_rank,
+                    candidate->embedding_score,
+                    candidate->embedding_score - observed->embedding_score,
+                    candidate->left_rank,
+                    candidate->left_score,
+                    candidate->left_score - observed->left_score,
+                    candidate->ar_rank,
+                    candidate->ar_score,
+                    candidate->ar_score - observed->ar_score
+                );
+                json_text(trace, candidate->text);
+                fputs("}\n", trace);
+                fflush(trace);
+            }
+        }
+    }
+
+    for (int index = 0; index < candidate_count; index++) {
+        free(candidates[index].text);
+    }
+    free(candidates);
+}
+
 static void report_pairs(
     const ReverseHead *full,
     const ReverseHead *embedding,
     const ReverseHead *left,
-    const Transformer *transformer,
+    Transformer *transformer,
     Tokenizer *tokenizer,
     const CompanyPair *pairs,
     int pair_count,
@@ -1375,6 +1695,14 @@ static void report_pairs(
     ScoreCache left_positive = make_cache(token_capacity, left->hidden_dim);
     ScoreCache left_negative = make_cache(token_capacity, left->hidden_dim);
     int display_count = shown < pair_count ? shown : pair_count;
+    int *scratch_tokens = checked_calloc(
+        (size_t)token_capacity,
+        sizeof(*scratch_tokens)
+    );
+    float *scratch_features = checked_calloc(
+        (size_t)token_capacity * full->feature_dim,
+        sizeof(*scratch_features)
+    );
 
     for (int index = 0; index < pair_count; index++) {
         const CompanyPair *pair = &pairs[index];
@@ -1514,9 +1842,27 @@ static void report_pairs(
             fputs("}\n", trace);
             fflush(trace);
         }
+        report_candidate_support(
+            full,
+            embedding,
+            left,
+            transformer,
+            tokenizer,
+            pair,
+            index,
+            index < display_count,
+            &full_positive,
+            &embedding_positive,
+            &left_positive,
+            scratch_tokens,
+            scratch_features,
+            trace
+        );
         free(negative_text);
         free(positive_text);
     }
+    free(scratch_features);
+    free(scratch_tokens);
     free_cache(&left_negative);
     free_cache(&left_positive);
     free_cache(&embedding_negative);
