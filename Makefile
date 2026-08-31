@@ -63,13 +63,6 @@ runescardogguf:
 runhidden: run_hidden_feedback.c
 	$(CC) -O3 -o run_hidden_feedback run_hidden_feedback.c -lm
 
-.PHONY: runhiddenselect
-runhiddenselect: run_hidden_feedback_select.c llama_company.c llama_company.h atkey_term_c.c atkey_term_c.h run.c
-	$(CC) -std=c11 -O3 -Wall -Wextra -Werror \
-		-Wno-sign-compare -Wno-unused-variable -Wno-unused-function \
-		-o run_hidden_feedback_select run_hidden_feedback_select.c \
-		llama_company.c atkey_term_c.c -lm
-
 .PHONY: testcompany
 testcompany: test_llama_company.c llama_company.c llama_company.h atkey_term_c.c atkey_term_c.h run.c
 	$(CC) -std=c11 -O2 -Wall -Wextra -Werror -DATKEY_REFERENCE_TEST_API \

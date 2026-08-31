@@ -9,6 +9,12 @@
  *     R = (selected suffix, terminal model node, terminal logit covector)
  *     J_R ModelLogit = (ModelLogit -> R) -> ModelLogit
  *
+ * Before selection, the prompt is evaluated once and its final normalized
+ * hidden state is fed back through the unchanged transformer for the requested
+ * horizon without projecting or embedding generated tokens.  The resulting
+ * fixed logit tape proposes constructor arguments at each position.  It never
+ * rates or emits them, and it is independent of every hypothetical branch.
+ *
  * Token positions are composed with Escardo's dependent product.  The code
  * below is a defunctionalized, asynchronous transcription of
  *
@@ -26,11 +32,12 @@
  *     ev(x, root_covector(x : b(x))).
  *
  * No path likelihood is formed.  Exact mode enumerates an explicitly
- * requested finite local support.  Timed mode has no leaf-count bound: until
- * a wall-clock deadline it samples which memo cells are demanded, then
- * re-forces this same product over the retained finite function tree.  A
- * positive --top-k changes the sampling proposal only; the default proposal
- * is the full selectable vocabulary.
+ * requested finite local support from the fixed tape.  Timed mode has no
+ * leaf-count bound: until a wall-clock deadline it samples which memo cells
+ * are demanded, then re-forces this same product over the retained finite
+ * function tree.  A positive --top-k truncates only the fixed proposal tape;
+ * the default proposal is the full selectable vocabulary.  No AR-prefix
+ * covector participates in proposal or selection.
  *
  * The model evaluator below is CPS and batches currently ready kernel calls,
  * but it may evaluate a learned tensor many times while the selection product
@@ -412,6 +419,7 @@ struct ModelNode {
     Tensor **keys;
     Tensor **values;
     Tensor **scales;
+    Tensor *final_hidden;
     Tensor *logits;
     TimedSelectFrame *timed_selection;
     NodeWaiter *waiter_head;
@@ -701,6 +709,7 @@ static void model_step_on_output(void *environment, Tensor *logits) {
 
 static void model_step_on_final_norm(void *environment, Tensor *normalized) {
     ModelStep *step = environment;
+    step->node->final_hidden = normalized;
     scope_request_tensor(
         &step->model->output,
         normalized,
@@ -992,6 +1001,31 @@ static void model_request_node(
     model_add_waiter(model, node, continuation, environment);
 }
 
+/* Hidden-feedback proposal nodes use the preceding final normalized hidden
+ * state as the next residual-stream input.  They are not token branches and
+ * are therefore never inserted into ModelNode.children.  The resulting tape
+ * is constructed once, before Select is run, and can only propose arguments;
+ * completed token branches are still observed through model_request_node. */
+static void model_request_feedback_node(
+    ModelTerm *model,
+    ModelNode *parent,
+    Tensor *input,
+    NodeContinuation continuation,
+    void *environment
+) {
+    if (parent == NULL || !parent->ready || parent->final_hidden == NULL ||
+        input == NULL || input->width != model->dim) {
+        escardo_fail("invalid hidden-feedback proposal request");
+    }
+    ModelNode *node = model_new_node(model, parent, -1);
+    ModelStep *step = arena_allocate(&model->arena, sizeof(*step));
+    memset(step, 0, sizeof(*step));
+    step->model = model;
+    step->node = node;
+    model_add_waiter(model, node, continuation, environment);
+    model_step_on_embedding(step, input);
+}
+
 typedef struct ModelLogit ModelLogit;
 typedef struct LogitPath LogitPath;
 typedef struct SelectionOutcome SelectionOutcome;
@@ -1031,6 +1065,12 @@ struct Search {
     int prompt_count;
     int prompt_last_token;
     int horizon;
+    /* Candidate-independent codata used only to choose which constructor
+     * arguments a local Select demands.  Entry zero is the final prompt
+     * covector; later entries come from hidden-state feedback without any
+     * intervening token projection. */
+    ModelNode **proposal_nodes;
+    Tensor **proposal_logits;
     /* Zero means that timed sampling uses the full selectable vocabulary.
      * A positive value is only a proposal-distribution truncation; it is not
      * a bound on the number of continuations the term may demand. */
@@ -1038,7 +1078,6 @@ struct Search {
     int sample_milliseconds;
     int batch_size;
     uint64_t sample_seed;
-    uint64_t sample_random_state;
     bool sampling_enabled;
     bool deadline_armed;
     struct timespec deadline;
@@ -1050,6 +1089,8 @@ struct Search {
     uint64_t strength_nodes;
     uint64_t sampled_candidate_demands;
     uint64_t completed_samples;
+    TimedSelectFrame *demand_queue_head;
+    TimedSelectFrame *demand_queue_tail;
 };
 
 struct SelectBranch {
@@ -1105,8 +1146,11 @@ struct TimedSelectFrame {
     TimedSelectEdge *edges;
     TimedSelectEdge *selected;
     int remaining;
+    uint64_t proposal_random_state;
     uint64_t demand_count;
     uint64_t observation_count;
+    TimedSelectFrame *queue_next;
+    bool queued;
 };
 
 static struct timespec monotonic_now(void) {
@@ -1139,10 +1183,11 @@ static bool deadline_reached(const Search *search) {
     return now.tv_nsec >= search->deadline.tv_nsec;
 }
 
-/* The sampler chooses which arguments a local selection function is allowed
- * to ask its observer about.  It never constructs a complete path.  State is
- * derived from the causal history so enlarging a budget does not reshuffle
- * already-demanded continuations. */
+/* The sampler chooses which arguments a local selection function asks its
+ * observer about.  Proposal state is indexed only by the fixed prompt and
+ * completion position.  It must not depend on a hypothetical token prefix:
+ * branch-dependent AR logits belong to the continuation being observed, not
+ * to the local selector's proposal tape. */
 static uint64_t sample_random_mix(uint64_t value) {
     value ^= value >> 30;
     value *= UINT64_C(0xbf58476d1ce4e5b9);
@@ -1152,9 +1197,33 @@ static uint64_t sample_random_mix(uint64_t value) {
     return value;
 }
 
-static uint64_t sample_history_state(
+static int selection_depth(
     const Search *search,
     const ModelNode *history
+) {
+    if (history == NULL) escardo_fail("selection has no model history");
+    int depth = history->position - search->prompt_count + 1;
+    if (depth < 0 || depth >= search->horizon) {
+        escardo_fail("selection escaped the hidden-feedback proposal tape");
+    }
+    return depth;
+}
+
+static Tensor *selection_proposal_logits(
+    const Search *search,
+    const ModelNode *history
+) {
+    int depth = selection_depth(search, history);
+    Tensor *logits = search->proposal_logits[depth];
+    if (logits == NULL || logits->width != search->model->vocab_size) {
+        escardo_fail("selection observed an incomplete proposal covector");
+    }
+    return logits;
+}
+
+static uint64_t sample_position_state(
+    const Search *search,
+    int depth
 ) {
     uint64_t hash = search->sample_seed ^ UINT64_C(0xcbf29ce484222325);
     for (const unsigned char *byte =
@@ -1163,11 +1232,7 @@ static uint64_t sample_history_state(
         hash ^= (uint64_t)*byte;
         hash *= UINT64_C(0x100000001b3);
     }
-    for (const ModelNode *node = history; node != NULL; node = node->parent) {
-        hash ^= (uint64_t)(uint32_t)node->token;
-        hash *= UINT64_C(0x100000001b3);
-    }
-    hash ^= (uint64_t)(uint32_t)history->position;
+    hash ^= (uint64_t)(uint32_t)depth;
     hash = sample_random_mix(hash);
     return hash == 0 ? UINT64_C(0x4d595df4d0f33173) : hash;
 }
@@ -1553,7 +1618,7 @@ static ModelLogit timed_sample_argument(
     TimedSelectFrame *frame
 ) {
     ModelNode *history = frame->history;
-    Tensor *logits = history->logits;
+    Tensor *logits = selection_proposal_logits(search, history);
     int *support = NULL;
     int support_count = search->top_k;
     if (support_count > 0) {
@@ -1642,7 +1707,7 @@ static ModelLogit timed_sample_argument(
         escardo_fail("invalid timed sampling mass");
     }
 
-    double target = sample_random_unit(&search->sample_random_state) * mass;
+    double target = sample_random_unit(&frame->proposal_random_state) * mass;
     double cumulative = 0.0;
     int selected = -1;
     if (support != NULL) {
@@ -1683,6 +1748,29 @@ static ModelLogit timed_sample_argument(
     };
 }
 
+static void timed_enqueue_frame(TimedSelectFrame *frame) {
+    if (frame == NULL || frame->queued) return;
+    Search *search = frame->search;
+    frame->queued = true;
+    frame->queue_next = NULL;
+    if (search->demand_queue_tail == NULL) {
+        search->demand_queue_head = frame;
+    } else {
+        search->demand_queue_tail->queue_next = frame;
+    }
+    search->demand_queue_tail = frame;
+}
+
+static TimedSelectFrame *timed_dequeue_frame(Search *search) {
+    TimedSelectFrame *frame = search->demand_queue_head;
+    if (frame == NULL) return NULL;
+    search->demand_queue_head = frame->queue_next;
+    if (search->demand_queue_head == NULL) search->demand_queue_tail = NULL;
+    frame->queue_next = NULL;
+    frame->queued = false;
+    return frame;
+}
+
 static TimedSelectFrame *timed_frame_for(
     Search *search,
     ModelNode *history,
@@ -1704,8 +1792,13 @@ static TimedSelectFrame *timed_frame_for(
     frame->search = search;
     frame->history = history;
     frame->remaining = remaining;
+    frame->proposal_random_state = sample_position_state(
+        search,
+        selection_depth(search, history)
+    );
     history->timed_selection = frame;
     search->strength_nodes++;
+    timed_enqueue_frame(frame);
     return frame;
 }
 
@@ -1963,6 +2056,8 @@ static void select_path(
     if (history == NULL || !history->ready || history->logits == NULL) {
         escardo_fail("selection observed an unavailable model logit");
     }
+    Tensor *proposal_logits = selection_proposal_logits(search, history);
+    int depth = selection_depth(search, history);
     SelectJob *job = arena_allocate(&search->model->arena, sizeof(*job));
     memset(job, 0, sizeof(*job));
     job->search = search;
@@ -1982,20 +2077,20 @@ static void select_path(
     search->strength_nodes++;
 
     int support_count = search->top_k;
-    int *tokens = top_tokens(search, history->logits, support_count);
+    int *tokens = top_tokens(search, proposal_logits, support_count);
     bool *sampled_ranks = escardo_calloc(
         (size_t)support_count,
         sizeof(*sampled_ranks)
     );
-    uint64_t random_state = sample_history_state(search, history);
-    double partition = log_partition(history->logits);
+    uint64_t random_state = sample_position_state(search, depth);
+    double partition = log_partition(proposal_logits);
     for (int index = 0; index < job->branch_count; index++) {
         int candidate_rank = index;
         double support_probability = 0.0;
         double draw = 0.0;
         if (search->sampling_enabled) {
             candidate_rank = sample_next_local_rank(
-                history->logits,
+                proposal_logits,
                 tokens,
                 support_count,
                 sampled_ranks,
@@ -2018,9 +2113,9 @@ static void select_path(
                 .context = history,
                 .token = token,
                 .local_rank = candidate_rank + 1,
-                .logit = history->logits->values[token],
+                .logit = proposal_logits->values[token],
                 .log_probability =
-                    (double)history->logits->values[token] - partition,
+                    (double)proposal_logits->values[token] - partition,
             },
             .child_budget = child_budget,
             .sampled = search->sampling_enabled,
@@ -2096,6 +2191,129 @@ static void prefill_start(
 
 typedef struct {
     Search *search;
+    ModelNode *prompt;
+    int next_index;
+    bool done;
+} ProposalBuild;
+
+static void proposal_feedback_ready(void *environment, ModelNode *node) {
+    ProposalBuild *build = environment;
+    Search *search = build->search;
+    int index = build->next_index;
+    if (index <= 0 || index >= search->horizon || node == NULL ||
+        !node->ready || node->final_hidden == NULL || node->logits == NULL) {
+        escardo_fail("hidden-feedback proposal tape returned an invalid node");
+    }
+    search->proposal_nodes[index] = node;
+    search->proposal_logits[index] = node->logits;
+    build->next_index++;
+    if (build->next_index == search->horizon) {
+        build->done = true;
+        return;
+    }
+    model_request_feedback_node(
+        search->model,
+        node,
+        node->final_hidden,
+        proposal_feedback_ready,
+        build
+    );
+}
+
+static void proposal_prompt_ready(void *environment, ModelNode *prompt) {
+    ProposalBuild *build = environment;
+    Search *search = build->search;
+    if (prompt == NULL || !prompt->ready || prompt->final_hidden == NULL ||
+        prompt->logits == NULL) {
+        escardo_fail("prompt did not produce hidden-feedback codata");
+    }
+    build->prompt = prompt;
+    search->proposal_nodes[0] = prompt;
+    search->proposal_logits[0] = prompt->logits;
+    build->next_index = 1;
+    if (search->horizon == 1) {
+        build->done = true;
+        return;
+    }
+    model_request_feedback_node(
+        search->model,
+        prompt,
+        prompt->final_hidden,
+        proposal_feedback_ready,
+        build
+    );
+}
+
+static void trace_proposal_tape(Search *search) {
+    if (search->trace == NULL) return;
+    for (int index = 0; index < search->horizon; index++) {
+        Tensor *logits = search->proposal_logits[index];
+        int *top = top_tokens(search, logits, 1);
+        int token = top[0];
+        free(top);
+        double partition = log_partition(logits);
+        fprintf(
+            search->trace,
+            "{\"event\":\"proposal_covector\",\"position\":%d,"
+            "\"node\":%" PRIu64 ",\"top_token\":%d,\"top_logit\":%.9g,"
+            "\"top_log_probability\":%.17g,\"piece\":",
+            index,
+            search->proposal_nodes[index]->id,
+            token,
+            logits->values[token],
+            (double)logits->values[token] - partition
+        );
+        json_string(
+            search->trace,
+            atkey_decode(search->model->runtime, 0, token)
+        );
+        fputs("}\n", search->trace);
+        fflush(search->trace);
+    }
+}
+
+static ModelNode *prepare_prompt_and_proposals(
+    Search *search,
+    int *prompt_tokens,
+    int prompt_count
+) {
+    search->proposal_nodes = arena_allocate(
+        &search->model->arena,
+        (size_t)search->horizon * sizeof(*search->proposal_nodes)
+    );
+    search->proposal_logits = arena_allocate(
+        &search->model->arena,
+        (size_t)search->horizon * sizeof(*search->proposal_logits)
+    );
+    memset(
+        search->proposal_nodes,
+        0,
+        (size_t)search->horizon * sizeof(*search->proposal_nodes)
+    );
+    memset(
+        search->proposal_logits,
+        0,
+        (size_t)search->horizon * sizeof(*search->proposal_logits)
+    );
+    ProposalBuild build = {.search = search};
+    prefill_start(
+        search,
+        prompt_tokens,
+        prompt_count,
+        proposal_prompt_ready,
+        &build
+    );
+    while (!build.done) {
+        if (!scheduler_step(&search->model->scheduler)) {
+            escardo_fail("hidden-feedback proposal scheduler deadlocked");
+        }
+    }
+    trace_proposal_tape(search);
+    return build.prompt;
+}
+
+typedef struct {
+    Search *search;
     bool done;
     LogitPath *selected;
     ModelNode *terminal;
@@ -2119,30 +2337,17 @@ static void tau_selection_ready(
     root->done = true;
 }
 
-static void exact_prompt_ready(void *environment, ModelNode *prompt) {
-    RootRun *root = environment;
-    Search *search = root->search;
+static RootRun escardo_exact_run(
+    Search *search,
+    ModelNode *prompt
+) {
+    RootRun root = {.search = search};
     select_path(
         search,
         prompt,
         search->horizon,
         UINT64_MAX,
         tau_selection_ready,
-        root
-    );
-}
-
-static RootRun escardo_exact_run(
-    Search *search,
-    int *prompt_tokens,
-    int prompt_count
-) {
-    RootRun root = {.search = search};
-    prefill_start(
-        search,
-        prompt_tokens,
-        prompt_count,
-        exact_prompt_ready,
         &root
     );
     while (!root.done) {
@@ -2371,17 +2576,6 @@ static void timed_sample_step(TimedSample *sample) {
     );
 }
 
-typedef struct {
-    bool ready;
-    ModelNode *node;
-} TimedPrompt;
-
-static void timed_prompt_ready(void *environment, ModelNode *node) {
-    TimedPrompt *prompt = environment;
-    prompt->node = node;
-    prompt->ready = true;
-}
-
 static void timed_trace_selected(Search *search, TimedSelectFrame *root) {
     if (search->trace == NULL || root == NULL || root->selected == NULL) return;
     TimedSelectFrame *frame = root;
@@ -2417,26 +2611,11 @@ static void timed_trace_selected(Search *search, TimedSelectFrame *root) {
 
 static RootRun escardo_timed_run(
     Search *search,
-    int *prompt_tokens,
-    int prompt_count
+    ModelNode *prompt_node
 ) {
-    TimedPrompt prompt = {0};
-    prefill_start(
-        search,
-        prompt_tokens,
-        prompt_count,
-        timed_prompt_ready,
-        &prompt
-    );
-    while (!prompt.ready) {
-        if (!scheduler_step(&search->model->scheduler)) {
-            escardo_fail("timed prefill scheduler reached a deadlock");
-        }
-    }
-
     TimedSelectFrame *root_frame = timed_frame_for(
         search,
-        prompt.node,
+        prompt_node,
         search->horizon
     );
     search->deadline = add_milliseconds(
@@ -2453,32 +2632,40 @@ static RootRun escardo_timed_run(
     while (first || !deadline_reached(search)) {
         first = false;
         uint64_t first_sample_id = search->completed_samples;
-        for (int index = 0; index < search->batch_size; index++) {
-            samples[index] = (TimedSample){
+        int active_count = 0;
+        while (active_count < search->batch_size) {
+            TimedSelectFrame *frame = timed_dequeue_frame(search);
+            if (frame == NULL) break;
+            TimedSample *sample = &samples[active_count];
+            *sample = (TimedSample){
                 .search = search,
                 .root = root_frame,
-                .frame = root_frame,
-                .sample_id = first_sample_id + (uint64_t)index,
+                .frame = frame,
+                .sample_id = first_sample_id + (uint64_t)active_count,
             };
-            samples[index].edges = escardo_calloc(
-                (size_t)search->horizon,
-                sizeof(*samples[index].edges)
+            sample->edges = escardo_calloc(
+                (size_t)frame->remaining,
+                sizeof(*sample->edges)
             );
-            samples[index].values = escardo_calloc(
-                (size_t)search->horizon,
-                sizeof(*samples[index].values)
+            sample->values = escardo_calloc(
+                (size_t)frame->remaining,
+                sizeof(*sample->values)
             );
+            active_count++;
+        }
+        if (active_count == 0) {
+            escardo_fail("selection demand queue became empty");
         }
 
-        /* All product invocations enter their local Select before the
-         * scheduler is drained.  Consequently equal learned scopes receive
-         * the whole ready family in one numerical application. */
-        for (int index = 0; index < search->batch_size; index++) {
+        /* Each invocation begins at a different fairly scheduled local
+         * Select.  Its demanded argument is passed to the still-composed
+         * suffix continuation before another argument can be compared. */
+        for (int index = 0; index < active_count; index++) {
             timed_sample_step(&samples[index]);
         }
         for (;;) {
             bool all_done = true;
-            for (int index = 0; index < search->batch_size; index++) {
+            for (int index = 0; index < active_count; index++) {
                 if (!samples[index].done) {
                     all_done = false;
                     break;
@@ -2489,7 +2676,10 @@ static RootRun escardo_timed_run(
                 escardo_fail("timed continuation scheduler reached a deadlock");
             }
         }
-        for (int index = 0; index < search->batch_size; index++) {
+        for (int index = 0; index < active_count; index++) {
+            for (int depth = 0; depth < samples[index].count; depth++) {
+                timed_enqueue_frame(samples[index].edges[depth]->owner);
+            }
             free(samples[index].values);
             free(samples[index].edges);
         }
@@ -2736,7 +2926,8 @@ int main(int argc, char **argv) {
         fprintf(
             trace,
             ",\"seed\":%" PRIu64 ",\"batch_size\":%d"
-            ",\"backend\":\"%s\",\"mode\":\"%s\"}\n",
+            ",\"backend\":\"%s\",\"mode\":\"%s\""
+            ",\"proposal\":\"candidate_independent_hidden_feedback\"}\n",
             options.sample_seed,
             options.batch_size,
             atkey_backend_name(runtime),
@@ -2745,10 +2936,6 @@ int main(int argc, char **argv) {
         fflush(trace);
     }
 
-    uint64_t random_state = sample_random_mix(
-        options.sample_seed ^ UINT64_C(0x6a09e667f3bcc909)
-    );
-    if (random_state == 0) random_state = UINT64_C(0x4d595df4d0f33173);
     Search search = {
         .model = &model,
         .prompt_text = options.prompt,
@@ -2760,20 +2947,25 @@ int main(int argc, char **argv) {
             options.sample_milliseconds,
         .batch_size = options.batch_size,
         .sample_seed = options.sample_seed,
-        .sample_random_state = random_state,
         .sampling_enabled = !options.exact,
         .allow_delimiter = options.allow_delimiter,
         .trace = trace,
     };
 
+    ModelNode *prompt_node = prepare_prompt_and_proposals(
+        &search,
+        prompt_tokens,
+        prompt_count
+    );
     RootRun result = options.exact ?
-        escardo_exact_run(&search, prompt_tokens, prompt_count) :
-        escardo_timed_run(&search, prompt_tokens, prompt_count);
+        escardo_exact_run(&search, prompt_node) :
+        escardo_timed_run(&search, prompt_node);
     puts("completion:");
     print_selected(&search, result.selected);
     printf(
         "selected_root_coordinate=%.17g\n"
         "score_kind=terminal_root_covector_coordinate\n"
+        "proposal_kind=candidate_independent_hidden_feedback_tape\n"
         "selection_carrier=ModelLogit_with_terminal_SelectionOutcome\n"
         "root_terminalizations=1\n"
         "strength_nodes=%" PRIu64 "\n"

@@ -1,4 +1,14 @@
 /*
+ * QUARANTINED: this is not Escardo's function-as-tree selection product.
+ *
+ * The runtime first materializes a finite tree with build_frames/resume_wave,
+ * obtains prefix-conditioned AR covectors for those nodes, and only afterward
+ * calls force_select to back up completed leaves.  A Select must instead
+ * receive the already-composed continuation and demand its arguments through
+ * that continuation.  Building the candidate tree first reverses that order;
+ * on the recorded Stories15M and Stories260K controls it selected local rank
+ * one at every generated position and reproduced greedy AR exactly.
+ *
  * History-dependent selection-product interpreter over llama2.c companies.
  *
  * A generated local Select is suspended until its prefix company has returned
