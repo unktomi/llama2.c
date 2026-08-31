@@ -13,6 +13,7 @@ __pycache__/
 /run_hidden_feedback
 /run_hidden_feedback_select
 /reverse_company_readout
+/reverse_company_readout_asan
 /reverse-company-*.jsonl
 /candidate_dump
 /candidate_probe

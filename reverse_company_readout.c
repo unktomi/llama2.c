@@ -2,14 +2,15 @@
  * Reverse-causal company readout for a frozen llama2.c transformer.
  *
  * This is deliberately not a sequence scorer.  A training observation is a
- * pair of complete, equal-length token companies that differ at one position:
- * the dataset filler and a locally plausible replacement proposed by the
- * frozen model.  The learned result is the relative preference between those
- * two fillers at that one hole.  Preferences at different holes are never
- * added, averaged, or treated as an absolute path reward.
+ * support of complete, equal-length token companies that differ at one hole:
+ * the observed dataset filler and locally plausible replacements proposed by
+ * the frozen model.  The default loss is one translation-invariant categorical
+ * comparison inside that support.  Preferences at different holes are never
+ * added or treated as an absolute path reward.  The former one-rival objective
+ * remains available as --objective pairwise for direct diagnosis.
  *
- * The frozen transformer is run on both complete companies while every
- * residual-stream state is retained.  A small reverse-causal scan reads the
+ * The frozen transformer is run on every complete candidate company while
+ * every residual-stream state is retained.  A small reverse-causal scan reads the
  * downstream states that have already incorporated the consequences of the
  * tested filler and carries a message back to its position.  Two controls
  * use the same head width and allocated layout: a left-only head receives no
@@ -18,11 +19,10 @@
  * coefficient count for each mode; equal allocation must not be mistaken for
  * equal effective input dimension.
  *
- * Evaluation is support-wide even though the current training loss is not:
- * every retained complete-word alternative is instantiated, run through its
- * own frozen continuation, ranked under every readout, decoded, and flushed to
- * JSONL.  This deliberately exposes orderings that a one-negative accuracy
- * can hide.
+ * Training and evaluation use the same retained support.  Every complete-word
+ * alternative has its own frozen continuation, is ranked under every readout,
+ * decoded, and flushed to JSONL.  This makes the historical pairwise failure
+ * and the remaining support-wide failures directly observable.
  */
 
 #define TESTING
@@ -41,6 +41,7 @@ typedef struct {
     int candidate_count;
     int *candidate_tokens;
     float *candidate_ar_logits;
+    float *candidate_features;
     int *positive_tokens;
     int *negative_tokens;
     float *positive_features;
@@ -74,6 +75,7 @@ typedef struct {
     int batch_size;
     int head_dim;
     int shown;
+    int support_objective;
     unsigned long long seed;
     double learning_rate;
     const char *trace_path;
@@ -145,6 +147,14 @@ static void *checked_calloc(size_t count, size_t size) {
     return memory;
 }
 
+static size_t sequence_feature_count(int token_count, int feature_dim) {
+    if (token_count <= 0 || feature_dim <= 0 ||
+        (size_t)feature_dim > SIZE_MAX / (size_t)token_count) {
+        fail("sequence feature capacity overflow");
+    }
+    return (size_t)token_count * (size_t)feature_dim;
+}
+
 static int parse_positive(const char *text, const char *name) {
     errno = 0;
     char *end = NULL;
@@ -193,6 +203,7 @@ static void usage(const char *program) {
         "  --rate X        Adam learning rate (default 0.001)\n"
         "  --seed N        deterministic seed (default 42)\n"
         "  --shown N       decoded validation pairs (default 12)\n"
+        "  --objective X   reverse-head loss: support or pairwise (default support)\n"
         "  --trace PATH    flushed JSONL validation trace\n"
         "  --save PATH     save the trained reverse head\n"
         "  --load PATH     load a trained reverse head\n",
@@ -213,6 +224,7 @@ static Options parse_options(int argc, char **argv) {
         .batch_size = 8,
         .head_dim = 32,
         .shown = 12,
+        .support_objective = 1,
         .seed = 42,
         .learning_rate = 0.001,
         .trace_path = NULL,
@@ -245,6 +257,14 @@ static Options parse_options(int argc, char **argv) {
             options.seed = parse_seed(value);
         } else if (strcmp(flag, "--shown") == 0) {
             options.shown = parse_positive(value, "shown count");
+        } else if (strcmp(flag, "--objective") == 0) {
+            if (strcmp(value, "support") == 0) {
+                options.support_objective = 1;
+            } else if (strcmp(value, "pairwise") == 0) {
+                options.support_objective = 0;
+            } else {
+                fail("objective must be support or pairwise");
+            }
         } else if (strcmp(flag, "--trace") == 0) {
             options.trace_path = value;
         } else if (strcmp(flag, "--save") == 0) {
@@ -678,6 +698,7 @@ static unsigned char *build_word_lexicon(
 static void free_pair(CompanyPair *pair) {
     free(pair->candidate_tokens);
     free(pair->candidate_ar_logits);
+    free(pair->candidate_features);
     free(pair->positive_tokens);
     free(pair->negative_tokens);
     free(pair->positive_features);
@@ -703,6 +724,10 @@ static CompanyPair *make_dataset(
     float *logits = checked_calloc(
         (size_t)sequence_tokens * config->vocab_size,
         sizeof(*logits)
+    );
+    int *candidate_sequence = checked_calloc(
+        (size_t)sequence_tokens,
+        sizeof(*candidate_sequence)
     );
 
     int produced = 0;
@@ -799,28 +824,61 @@ static CompanyPair *make_dataset(
             (size_t)pair->candidate_count,
             sizeof(*pair->candidate_ar_logits)
         );
+        size_t feature_count = sequence_feature_count(
+            pair->token_count,
+            feature_dim
+        );
+        if ((size_t)pair->candidate_count > SIZE_MAX / feature_count) {
+            fail("candidate feature capacity overflow");
+        }
+        pair->candidate_features = checked_calloc(
+            (size_t)pair->candidate_count * feature_count,
+            sizeof(*pair->candidate_features)
+        );
         pair->candidate_tokens[0] = pair->positive_token;
         pair->candidate_ar_logits[0] = target_logits[pair->positive_token];
+        memcpy(
+            pair->candidate_features,
+            pair->positive_features,
+            feature_count * sizeof(*pair->candidate_features)
+        );
         int retained_negative = 0;
         for (int index = 0; index < replacement_count; index++) {
-            pair->candidate_tokens[index + 1] = candidate_tokens[index];
+            int support_index = index + 1;
+            pair->candidate_tokens[support_index] = candidate_tokens[index];
             pair->candidate_ar_logits[index + 1] =
                 target_logits[candidate_tokens[index]];
+            memcpy(
+                candidate_sequence,
+                pair->positive_tokens,
+                (size_t)pair->token_count * sizeof(*candidate_sequence)
+            );
+            candidate_sequence[pair->target] = candidate_tokens[index];
+            float *support_features = pair->candidate_features +
+                (size_t)support_index * feature_count;
+            capture_sequence(
+                transformer,
+                candidate_sequence,
+                pair->token_count,
+                support_features,
+                NULL
+            );
             if (candidate_tokens[index] == pair->negative_token) {
                 retained_negative = 1;
+                memcpy(
+                    pair->negative_tokens,
+                    candidate_sequence,
+                    (size_t)pair->token_count * sizeof(*candidate_sequence)
+                );
+                memcpy(
+                    pair->negative_features,
+                    support_features,
+                    feature_count * sizeof(*support_features)
+                );
             }
         }
         free(candidate_tokens);
         if (!retained_negative) fail("selected negative missing from support");
-        pair->negative_tokens[pair->target] = pair->negative_token;
-
-        capture_sequence(
-            transformer,
-            pair->negative_tokens,
-            pair->token_count,
-            pair->negative_features,
-            NULL
-        );
         produced++;
         if (produced % 16 == 0 || produced == pair_count) {
             fprintf(
@@ -849,6 +907,7 @@ static CompanyPair *make_dataset(
         sequence_tokens,
         (size_t)sequence_tokens * (size_t)top_k
     );
+    free(candidate_sequence);
     free(logits);
     return pairs;
 }
@@ -1447,6 +1506,349 @@ static void train_head(
     free(gradient);
 }
 
+static ScoreCache *make_support_caches(
+    int candidate_capacity,
+    int token_capacity,
+    int hidden_dim
+) {
+    ScoreCache *caches = checked_calloc(
+        (size_t)candidate_capacity,
+        sizeof(*caches)
+    );
+    for (int index = 0; index < candidate_capacity; index++) {
+        caches[index] = make_cache(token_capacity, hidden_dim);
+    }
+    return caches;
+}
+
+static void free_support_caches(
+    ScoreCache *caches,
+    int candidate_capacity
+) {
+    for (int index = 0; index < candidate_capacity; index++) {
+        free_cache(&caches[index]);
+    }
+    free(caches);
+}
+
+static void score_support_candidates(
+    const ReverseHead *head,
+    const Transformer *transformer,
+    const CompanyPair *pair,
+    ReadoutMode mode,
+    int candidate_capacity,
+    ScoreCache *caches,
+    int *scratch_tokens,
+    double *scores
+) {
+    if (pair->candidate_count > candidate_capacity) {
+        fail("candidate support exceeds score capacity");
+    }
+    size_t feature_count = sequence_feature_count(
+        pair->token_count,
+        head->feature_dim
+    );
+    for (int candidate = 0; candidate < pair->candidate_count; candidate++) {
+        memcpy(
+            scratch_tokens,
+            pair->positive_tokens,
+            (size_t)pair->token_count * sizeof(*scratch_tokens)
+        );
+        scratch_tokens[pair->target] = pair->candidate_tokens[candidate];
+        const float *features = pair->candidate_features +
+            (size_t)candidate * feature_count;
+        scores[candidate] = score_company(
+            head,
+            transformer,
+            features,
+            scratch_tokens,
+            pair->token_count,
+            pair->target,
+            mode,
+            &caches[candidate]
+        );
+    }
+}
+
+static double categorical_support_loss(
+    const double *scores,
+    int candidate_count,
+    double *score_gradients
+) {
+    double maximum = scores[0];
+    for (int candidate = 1; candidate < candidate_count; candidate++) {
+        if (scores[candidate] > maximum) maximum = scores[candidate];
+    }
+    double normalizer = 0.0;
+    for (int candidate = 0; candidate < candidate_count; candidate++) {
+        normalizer += exp(scores[candidate] - maximum);
+    }
+    if (score_gradients != NULL) {
+        for (int candidate = 0; candidate < candidate_count; candidate++) {
+            score_gradients[candidate] =
+                exp(scores[candidate] - maximum) / normalizer;
+        }
+        score_gradients[0] -= 1.0;
+    }
+    return maximum + log(normalizer) - scores[0];
+}
+
+static Metrics evaluate_support(
+    const ReverseHead *head,
+    const Transformer *transformer,
+    const CompanyPair *pairs,
+    int pair_count,
+    int candidate_capacity,
+    int token_capacity,
+    ReadoutMode mode
+) {
+    Metrics metrics = {0};
+    ScoreCache *caches = make_support_caches(
+        candidate_capacity,
+        token_capacity,
+        head->hidden_dim
+    );
+    int *scratch_tokens = checked_calloc(
+        (size_t)token_capacity,
+        sizeof(*scratch_tokens)
+    );
+    double *scores = checked_calloc(
+        (size_t)candidate_capacity,
+        sizeof(*scores)
+    );
+    for (int index = 0; index < pair_count; index++) {
+        const CompanyPair *pair = &pairs[index];
+        score_support_candidates(
+            head,
+            transformer,
+            pair,
+            mode,
+            candidate_capacity,
+            caches,
+            scratch_tokens,
+            scores
+        );
+        metrics.loss += categorical_support_loss(
+            scores,
+            pair->candidate_count,
+            NULL
+        );
+        int best = 0;
+        int ar_best = 0;
+        double rival_maximum = scores[1];
+        for (int candidate = 1; candidate < pair->candidate_count; candidate++) {
+            if (scores[candidate] > scores[best] ||
+                (scores[candidate] == scores[best] &&
+                 pair->candidate_tokens[candidate] <
+                    pair->candidate_tokens[best])) {
+                best = candidate;
+            }
+            if (pair->candidate_ar_logits[candidate] >
+                    pair->candidate_ar_logits[ar_best] ||
+                (pair->candidate_ar_logits[candidate] ==
+                    pair->candidate_ar_logits[ar_best] &&
+                 pair->candidate_tokens[candidate] <
+                    pair->candidate_tokens[ar_best])) {
+                ar_best = candidate;
+            }
+            if (scores[candidate] > rival_maximum) {
+                rival_maximum = scores[candidate];
+            }
+        }
+        metrics.accuracy += best == 0;
+        metrics.ar_accuracy += ar_best == 0;
+        metrics.mean_margin += scores[0] - rival_maximum;
+    }
+    metrics.loss /= pair_count;
+    metrics.accuracy /= pair_count;
+    metrics.ar_accuracy /= pair_count;
+    metrics.mean_margin /= pair_count;
+    free(scores);
+    free(scratch_tokens);
+    free_support_caches(caches, candidate_capacity);
+    return metrics;
+}
+
+static void train_support_head(
+    ReverseHead *head,
+    const Transformer *transformer,
+    const CompanyPair *training,
+    int training_count,
+    const CompanyPair *validation,
+    int validation_count,
+    int candidate_capacity,
+    int token_capacity,
+    ReadoutMode mode,
+    const Options *options,
+    unsigned long long *rng,
+    const char *name
+) {
+    double *gradient = checked_calloc(
+        head->parameter_count,
+        sizeof(*gradient)
+    );
+    double *first_moment = checked_calloc(
+        head->parameter_count,
+        sizeof(*first_moment)
+    );
+    double *second_moment = checked_calloc(
+        head->parameter_count,
+        sizeof(*second_moment)
+    );
+    double *best = checked_calloc(head->parameter_count, sizeof(*best));
+    int *indices = checked_calloc((size_t)training_count, sizeof(*indices));
+    for (int index = 0; index < training_count; index++) indices[index] = index;
+    ScoreCache *caches = make_support_caches(
+        candidate_capacity,
+        token_capacity,
+        head->hidden_dim
+    );
+    int *scratch_tokens = checked_calloc(
+        (size_t)token_capacity,
+        sizeof(*scratch_tokens)
+    );
+    double *scores = checked_calloc(
+        (size_t)candidate_capacity,
+        sizeof(*scores)
+    );
+    double *score_gradients = checked_calloc(
+        (size_t)candidate_capacity,
+        sizeof(*score_gradients)
+    );
+    double best_loss = DBL_MAX;
+    unsigned long long update = 0;
+
+    for (int epoch = 0; epoch < options->epochs; epoch++) {
+        shuffle_indices(indices, training_count, rng);
+        for (int start = 0; start < training_count; start += options->batch_size) {
+            int end = start + options->batch_size;
+            if (end > training_count) end = training_count;
+            int batch_count = end - start;
+            memset(gradient, 0, head->parameter_count * sizeof(*gradient));
+
+            for (int offset = start; offset < end; offset++) {
+                const CompanyPair *pair = &training[indices[offset]];
+                score_support_candidates(
+                    head,
+                    transformer,
+                    pair,
+                    mode,
+                    candidate_capacity,
+                    caches,
+                    scratch_tokens,
+                    scores
+                );
+                (void)categorical_support_loss(
+                    scores,
+                    pair->candidate_count,
+                    score_gradients
+                );
+                size_t feature_count = sequence_feature_count(
+                    pair->token_count,
+                    head->feature_dim
+                );
+                for (int candidate = 0;
+                     candidate < pair->candidate_count;
+                     candidate++) {
+                    memcpy(
+                        scratch_tokens,
+                        pair->positive_tokens,
+                        (size_t)pair->token_count * sizeof(*scratch_tokens)
+                    );
+                    scratch_tokens[pair->target] =
+                        pair->candidate_tokens[candidate];
+                    const float *features = pair->candidate_features +
+                        (size_t)candidate * feature_count;
+                    backward_company(
+                        head,
+                        transformer,
+                        features,
+                        scratch_tokens,
+                        pair->token_count,
+                        pair->target,
+                        mode,
+                        &caches[candidate],
+                        score_gradients[candidate],
+                        gradient
+                    );
+                }
+            }
+
+            double square_norm = 0.0;
+            for (size_t parameter = 0;
+                 parameter < head->parameter_count;
+                 parameter++) {
+                gradient[parameter] /= batch_count;
+                square_norm += gradient[parameter] * gradient[parameter];
+            }
+            double gradient_scale = square_norm > 25.0 ?
+                5.0 / sqrt(square_norm) : 1.0;
+            update++;
+            double first_correction = 1.0 - pow(0.9, (double)update);
+            double second_correction = 1.0 - pow(0.999, (double)update);
+            for (size_t parameter = 0;
+                 parameter < head->parameter_count;
+                 parameter++) {
+                double value = gradient[parameter] * gradient_scale;
+                first_moment[parameter] =
+                    0.9 * first_moment[parameter] + 0.1 * value;
+                second_moment[parameter] = 0.999 * second_moment[parameter] +
+                    0.001 * value * value;
+                double first_hat = first_moment[parameter] / first_correction;
+                double second_hat = second_moment[parameter] / second_correction;
+                head->parameters[parameter] -= options->learning_rate *
+                    first_hat / (sqrt(second_hat) + 1e-8);
+            }
+        }
+
+        Metrics train = evaluate_support(
+            head,
+            transformer,
+            training,
+            training_count,
+            candidate_capacity,
+            token_capacity,
+            mode
+        );
+        Metrics valid = evaluate_support(
+            head,
+            transformer,
+            validation,
+            validation_count,
+            candidate_capacity,
+            token_capacity,
+            mode
+        );
+        if (valid.loss < best_loss) {
+            best_loss = valid.loss;
+            memcpy(best, head->parameters, head->parameter_count * sizeof(*best));
+        }
+        fprintf(
+            stderr,
+            "%s epoch=%d train_support_loss=%.6f train_top1=%.4f "
+            "validation_support_loss=%.6f validation_top1=%.4f "
+            "validation_top1_margin=%.6f\n",
+            name,
+            epoch + 1,
+            train.loss,
+            train.accuracy,
+            valid.loss,
+            valid.accuracy,
+            valid.mean_margin
+        );
+    }
+    memcpy(head->parameters, best, head->parameter_count * sizeof(*best));
+    free(score_gradients);
+    free(scores);
+    free(scratch_tokens);
+    free_support_caches(caches, candidate_capacity);
+    free(indices);
+    free(best);
+    free(second_moment);
+    free(first_moment);
+    free(gradient);
+}
+
 static void json_text(FILE *file, const char *text) {
     fputc('"', file);
     for (const unsigned char *cursor = (const unsigned char *)text;
@@ -1540,7 +1942,6 @@ static void report_candidate_support(
     ScoreCache *embedding_cache,
     ScoreCache *left_cache,
     int *scratch_tokens,
-    float *scratch_features,
     FILE *trace
 ) {
     int candidate_count = pair->candidate_count;
@@ -1558,13 +1959,10 @@ static void report_candidate_support(
         candidate->ar_score = pair->candidate_ar_logits[index];
 
         const int *tokens = NULL;
-        const float *features = NULL;
         if (candidate->observed) {
             tokens = pair->positive_tokens;
-            features = pair->positive_features;
         } else if (candidate->selected_negative) {
             tokens = pair->negative_tokens;
-            features = pair->negative_features;
         } else {
             memcpy(
                 scratch_tokens,
@@ -1572,16 +1970,14 @@ static void report_candidate_support(
                 (size_t)pair->token_count * sizeof(*scratch_tokens)
             );
             scratch_tokens[pair->target] = candidate->token;
-            capture_sequence(
-                transformer,
-                scratch_tokens,
-                pair->token_count,
-                scratch_features,
-                NULL
-            );
             tokens = scratch_tokens;
-            features = scratch_features;
         }
+        size_t feature_count = sequence_feature_count(
+            pair->token_count,
+            full->feature_dim
+        );
+        const float *features = pair->candidate_features +
+            (size_t)index * feature_count;
 
         candidate->reverse_score = score_company(
             full,
@@ -1810,10 +2206,6 @@ static void report_pairs(
         (size_t)token_capacity,
         sizeof(*scratch_tokens)
     );
-    float *scratch_features = checked_calloc(
-        (size_t)token_capacity * full->feature_dim,
-        sizeof(*scratch_features)
-    );
 
     for (int index = 0; index < pair_count; index++) {
         const CompanyPair *pair = &pairs[index];
@@ -1967,13 +2359,11 @@ static void report_pairs(
             &embedding_positive,
             &left_positive,
             scratch_tokens,
-            scratch_features,
             trace
         );
         free(negative_text);
         free(positive_text);
     }
-    free(scratch_features);
     free(scratch_tokens);
     free_cache(&left_negative);
     free_cache(&left_positive);
@@ -2075,55 +2465,104 @@ int main(int argc, char **argv) {
         stderr,
         "readout allocated_parameters=%zu active_parameters="
         "left:%zu embedding:%zu full:%zu training_pairs=%d "
-        "validation_pairs=%d\n",
+        "validation_pairs=%d objective=%s\n",
         full.parameter_count,
         active_parameter_count(&left, READOUT_LEFT_ONLY),
         active_parameter_count(&embedding, READOUT_EMBEDDING_SUFFIX),
         active_parameter_count(&full, READOUT_ALL_LAYERS_SUFFIX),
         options.train_count,
-        options.validation_count
+        options.validation_count,
+        options.support_objective ? "support" : "pairwise"
     );
 
-    train_head(
-        &left,
-        &transformer,
-        training,
-        options.train_count,
-        validation,
-        options.validation_count,
-        options.sequence_tokens,
-        READOUT_LEFT_ONLY,
-        &options,
-        &left_rng,
-        "left_control"
-    );
-    train_head(
-        &embedding,
-        &transformer,
-        training,
-        options.train_count,
-        validation,
-        options.validation_count,
-        options.sequence_tokens,
-        READOUT_EMBEDDING_SUFFIX,
-        &options,
-        &embedding_rng,
-        "embedding_reverse_control"
-    );
-    if (options.load_path == NULL) {
+    if (options.support_objective) {
+        train_support_head(
+            &left,
+            &transformer,
+            training,
+            options.train_count,
+            validation,
+            options.validation_count,
+            options.top_k + 1,
+            options.sequence_tokens,
+            READOUT_LEFT_ONLY,
+            &options,
+            &left_rng,
+            "left_control_support"
+        );
+        train_support_head(
+            &embedding,
+            &transformer,
+            training,
+            options.train_count,
+            validation,
+            options.validation_count,
+            options.top_k + 1,
+            options.sequence_tokens,
+            READOUT_EMBEDDING_SUFFIX,
+            &options,
+            &embedding_rng,
+            "embedding_control_support"
+        );
+    } else {
         train_head(
-            &full,
+            &left,
             &transformer,
             training,
             options.train_count,
             validation,
             options.validation_count,
             options.sequence_tokens,
-            READOUT_ALL_LAYERS_SUFFIX,
+            READOUT_LEFT_ONLY,
             &options,
-            &full_rng,
-            "reverse_company"
+            &left_rng,
+            "left_control_pairwise"
         );
+        train_head(
+            &embedding,
+            &transformer,
+            training,
+            options.train_count,
+            validation,
+            options.validation_count,
+            options.sequence_tokens,
+            READOUT_EMBEDDING_SUFFIX,
+            &options,
+            &embedding_rng,
+            "embedding_control_pairwise"
+        );
+    }
+    if (options.load_path == NULL) {
+        if (options.support_objective) {
+            train_support_head(
+                &full,
+                &transformer,
+                training,
+                options.train_count,
+                validation,
+                options.validation_count,
+                options.top_k + 1,
+                options.sequence_tokens,
+                READOUT_ALL_LAYERS_SUFFIX,
+                &options,
+                &full_rng,
+                "reverse_company_support"
+            );
+        } else {
+            train_head(
+                &full,
+                &transformer,
+                training,
+                options.train_count,
+                validation,
+                options.validation_count,
+                options.sequence_tokens,
+                READOUT_ALL_LAYERS_SUFFIX,
+                &options,
+                &full_rng,
+                "reverse_company_pairwise"
+            );
+        }
     } else {
         fprintf(stderr, "reverse_company loaded=%s\n", options.load_path);
     }
@@ -2152,14 +2591,47 @@ int main(int argc, char **argv) {
         READOUT_ALL_LAYERS_SUFFIX,
         options.sequence_tokens
     );
+    Metrics full_support_metrics = evaluate_support(
+        &full,
+        &transformer,
+        validation,
+        options.validation_count,
+        options.top_k + 1,
+        options.sequence_tokens,
+        READOUT_ALL_LAYERS_SUFFIX
+    );
+    Metrics left_support_metrics = evaluate_support(
+        &left,
+        &transformer,
+        validation,
+        options.validation_count,
+        options.top_k + 1,
+        options.sequence_tokens,
+        READOUT_LEFT_ONLY
+    );
+    Metrics embedding_support_metrics = evaluate_support(
+        &embedding,
+        &transformer,
+        validation,
+        options.validation_count,
+        options.top_k + 1,
+        options.sequence_tokens,
+        READOUT_EMBEDDING_SUFFIX
+    );
     printf(
-        "validation ar_accuracy=%.4f left_accuracy=%.4f "
-        "embedding_accuracy=%.4f reverse_accuracy=%.4f "
+        "validation ar_pair_accuracy=%.4f ar_top1_accuracy=%.4f "
+        "left_pair_accuracy=%.4f left_top1_accuracy=%.4f "
+        "embedding_pair_accuracy=%.4f embedding_top1_accuracy=%.4f "
+        "reverse_pair_accuracy=%.4f reverse_top1_accuracy=%.4f "
         "left_margin=%.6f embedding_margin=%.6f reverse_margin=%.6f\n",
         full_metrics.ar_accuracy,
+        full_support_metrics.ar_accuracy,
         left_metrics.accuracy,
+        left_support_metrics.accuracy,
         embedding_metrics.accuracy,
+        embedding_support_metrics.accuracy,
         full_metrics.accuracy,
+        full_support_metrics.accuracy,
         left_metrics.mean_margin,
         embedding_metrics.mean_margin,
         full_metrics.mean_margin
