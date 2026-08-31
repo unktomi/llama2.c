@@ -11,9 +11,10 @@
  * demanded hypothetical token occurrence is then assembled into one causal
  * company and each learned filler is applied once to that complete family.
  * The model callback returns the candidate-owned context opinions for every
- * completed branch. The final candidate is the root observer of the complete
- * causal context. Memoized selection strength passes that one callback result
- * unchanged through every local Select; it never substitutes a local score.
+ * completed branch. Memoized selection strength passes that complete outcome
+ * unchanged through every local Select and orders outcomes lexicographically
+ * from their least approving token upward. Only the root projects the retained
+ * outcome to a witness; no path sum or single-token reward is used.
  */
 
 #include <stdio.h>
@@ -875,7 +876,7 @@ static const char *projection_score_role(ProjectionObserverKind kind) {
         case PROJECTION_OBSERVER_LOGIT_STRENGTH:
             return "first_variable_logit_coordinate";
         case PROJECTION_OBSERVER_COMPANY_STRENGTH:
-            return "root_token_context_opinion";
+            return "leximin_complete_company_outcome";
         case PROJECTION_OBSERVER_HIDDEN_DISPLACEMENT:
             return "whole_path_scalar";
     }
@@ -993,7 +994,6 @@ typedef struct {
     double target_norm;
     ProjectionObserverKind observer_kind;
     int local_support;
-    unsigned long long leaf_budget;
     unsigned long long sample_seed;
     unsigned long long next_frame_id;
     double first_variable_selection_rating;
@@ -1100,7 +1100,7 @@ static void projection_trace_whole_path_result(
             PROJECTION_OBSERVER_COMPANY_STRENGTH) {
         fputs(
             ",\"rating_role\":"
-            "\"root_token_context_opinion\"",
+            "\"diagnostic_worst_coordinate_after_leximin_selection\"",
             stream
         );
     } else if (product->observer_kind ==
@@ -1326,6 +1326,8 @@ static void trace_projection_product_candidate(
     const ProjectionCandidate *candidate,
     double observer_rating,
     int observer_leaf_node,
+    unsigned long long observer_reachability,
+    int observer_position,
     int observer_context_node,
     int observer_company_node,
     int observer_company_token,
@@ -1358,15 +1360,20 @@ static void trace_projection_product_candidate(
             stream,
             "\"observer\":\"candidate_owned_context_opinions\","
             "\"observer_leaf_node\":%d,"
+            "\"observer_reachability\":%llu,"
+            "\"observer_worst_position\":%d,"
             "\"observer_context_node\":%d,"
             "\"observer_company_node\":%d,"
             "\"observer_company_token\":%d,"
             "\"observer_direction\":\"%s\","
             "\"observer_logit\":%.17g,"
             "\"observer_log_partition\":%.17g,"
+            "\"observer_order\":\"leximin_all_coordinates\","
             "\"observer_rating_role\":"
-            "\"root_token_context_opinion_backed_through_strength\",",
+            "\"diagnostic_worst_coordinate_of_backed_outcome\",",
             observer_leaf_node,
+            observer_reachability,
+            observer_position,
             observer_context_node,
             observer_company_node,
             observer_company_token,
@@ -1405,6 +1412,8 @@ static void trace_projection_product_select(
     const ProjectionCandidate *candidate,
     double observer_rating,
     int observer_leaf_node,
+    unsigned long long observer_reachability,
+    int observer_position,
     int observer_context_node,
     int observer_company_node,
     int observer_company_token,
@@ -1432,15 +1441,20 @@ static void trace_projection_product_select(
             stream,
             "\"observer\":\"candidate_owned_context_opinions\","
             "\"observer_leaf_node\":%d,"
+            "\"observer_reachability\":%llu,"
+            "\"observer_worst_position\":%d,"
             "\"observer_context_node\":%d,"
             "\"observer_company_node\":%d,"
             "\"observer_company_token\":%d,"
             "\"observer_direction\":\"%s\","
             "\"observer_logit\":%.17g,"
             "\"observer_log_partition\":%.17g,"
+            "\"observer_order\":\"leximin_all_coordinates\","
             "\"observer_rating_role\":"
-            "\"root_token_context_opinion_backed_through_strength\",",
+            "\"diagnostic_worst_coordinate_of_backed_outcome\",",
             observer_leaf_node,
+            observer_reachability,
+            observer_position,
             observer_context_node,
             observer_company_node,
             observer_company_token,
@@ -1581,6 +1595,8 @@ static double projection_logit_product_select(
                 candidate,
                 candidate->backed_observer_rating,
                 -1,
+                0,
+                -1,
                 -1,
                 -1,
                 -1,
@@ -1598,6 +1614,8 @@ static double projection_logit_product_select(
             frame,
             selected,
             selected->backed_observer_rating,
+            -1,
+            0,
             -1,
             -1,
             -1,
@@ -1719,6 +1737,8 @@ static double projection_product_select(
             candidate,
             rating,
             -1,
+            0,
+            -1,
             -1,
             -1,
             -1,
@@ -1754,6 +1774,8 @@ static double projection_product_select(
         &frame->candidates[best_candidate],
         best_rating,
         -1,
+        0,
+        -1,
         -1,
         -1,
         -1,
@@ -1777,6 +1799,8 @@ static double projection_product_select(
 typedef struct {
     int coordinate_count;
     double *coordinates;
+    double *leximin_coordinates;
+    int *leximin_positions;
     int *context_nodes;
     int *company_nodes;
     int *company_tokens;
@@ -1791,8 +1815,8 @@ typedef struct {
     int candidate_index;
     int *children;
     int child_count;
+    unsigned long long reachability;
     double row_log_partition;
-    double backed_rating;
     int selected_child;
     int selected_leaf;
     ProjectionTermOutcome *outcome;
@@ -1800,10 +1824,28 @@ typedef struct {
 } ProjectionTermNode;
 
 typedef struct {
+    double coordinate;
+    int position;
+} ProjectionOrderedOpinion;
+
+static int projection_ordered_opinion_compare(
+    const void *left_value,
+    const void *right_value
+) {
+    const ProjectionOrderedOpinion *left = left_value;
+    const ProjectionOrderedOpinion *right = right_value;
+    if (left->coordinate < right->coordinate) return -1;
+    if (left->coordinate > right->coordinate) return 1;
+    if (left->position < right->position) return -1;
+    if (left->position > right->position) return 1;
+    return 0;
+}
+
+typedef struct {
     ProjectionTermNode *nodes;
     int count;
     int capacity;
-    int leaf_count;
+    unsigned long long leaf_count;
 } ProjectionTerm;
 
 static int projection_term_add_node(
@@ -1846,20 +1888,17 @@ static void projection_term_build(
     ProjectionTerm *term,
     int parent,
     int position,
-    unsigned long long budget,
     int *path
 ) {
     if (position == product->frame_count) {
         term->leaf_count++;
+        term->nodes[parent].reachability = 1;
         return;
     }
     ProjectionSelectFrame *frame = &product->frames[position];
     int demand_count = frame->candidate_count;
     if (demand_count > product->local_support) {
         demand_count = product->local_support;
-    }
-    if (budget != ULLONG_MAX && budget < (unsigned long long)demand_count) {
-        demand_count = (int)budget;
     }
     if (demand_count < 1) demand_count = 1;
     int *demands = malloc((size_t)demand_count * sizeof(*demands));
@@ -1887,27 +1926,45 @@ static void projection_term_build(
             candidate_index
         );
         term->nodes[parent].children[demand] = child;
-
-        unsigned long long child_budget = budget;
-        if (frame->candidate_count > 1 && budget != ULLONG_MAX) {
-            unsigned long long quotient =
-                budget / (unsigned long long)demand_count;
-            unsigned long long remainder =
-                budget % (unsigned long long)demand_count;
-            child_budget = quotient +
-                ((unsigned long long)demand < remainder ? 1ULL : 0ULL);
-            if (child_budget == 0) child_budget = 1;
-        }
         projection_term_build(
             product,
             term,
             child,
             position + 1,
-            child_budget,
             path
         );
+        if (ULLONG_MAX - term->nodes[parent].reachability <
+                term->nodes[child].reachability) {
+            fprintf(stderr, "selection reachability multiplicity overflow\n");
+            exit(EXIT_FAILURE);
+        }
+        term->nodes[parent].reachability += term->nodes[child].reachability;
     }
     free(demands);
+}
+
+/*
+ * The sampled carrier at a prefix is finite, but its selection product is
+ * exact.  A resource limit may reject that term; it must never reshape it by
+ * spending all branching near the root and making later Selects unary.
+ */
+static unsigned long long projection_term_exact_leaf_count(
+    const ProjectionProduct *product
+) {
+    unsigned long long leaves = 1;
+    for (int position = 0; position < product->frame_count; position++) {
+        int demand_count = product->frames[position].candidate_count;
+        if (demand_count > product->local_support) {
+            demand_count = product->local_support;
+        }
+        if (demand_count < 1) demand_count = 1;
+        if (leaves > ULLONG_MAX / (unsigned long long)demand_count) {
+            fprintf(stderr, "exact sampled selection term exceeds leaf count range\n");
+            exit(EXIT_FAILURE);
+        }
+        leaves *= (unsigned long long)demand_count;
+    }
+    return leaves;
 }
 
 static void projection_term_path(
@@ -1972,6 +2029,12 @@ static ProjectionTermOutcome *projection_term_observe_leaf(
     outcome->coordinates = malloc(
         (size_t)frame_count * sizeof(*outcome->coordinates)
     );
+    outcome->leximin_coordinates = malloc(
+        (size_t)frame_count * sizeof(*outcome->leximin_coordinates)
+    );
+    outcome->leximin_positions = malloc(
+        (size_t)frame_count * sizeof(*outcome->leximin_positions)
+    );
     outcome->context_nodes = malloc(
         (size_t)frame_count * sizeof(*outcome->context_nodes)
     );
@@ -1990,7 +2053,10 @@ static ProjectionTermOutcome *projection_term_observe_leaf(
     outcome->log_partitions = malloc(
         (size_t)frame_count * sizeof(*outcome->log_partitions)
     );
-    if (outcome->coordinates == NULL || outcome->context_nodes == NULL ||
+    if (outcome->coordinates == NULL ||
+        outcome->leximin_coordinates == NULL ||
+        outcome->leximin_positions == NULL ||
+        outcome->context_nodes == NULL ||
         outcome->company_nodes == NULL || outcome->company_tokens == NULL ||
         outcome->incoming_boundary == NULL || outcome->logits == NULL ||
         outcome->log_partitions == NULL) {
@@ -2048,20 +2114,62 @@ static ProjectionTermOutcome *projection_term_observe_leaf(
         outcome->logits[position] = logit;
         outcome->log_partitions[position] = context->row_log_partition;
     }
+
+    ProjectionOrderedOpinion *ordered = malloc(
+        (size_t)frame_count * sizeof(*ordered)
+    );
+    if (ordered == NULL) {
+        fprintf(stderr, "could not order structured company opinions\n");
+        exit(EXIT_FAILURE);
+    }
+    for (int position = 0; position < frame_count; position++) {
+        ordered[position] = (ProjectionOrderedOpinion){
+            .coordinate = outcome->coordinates[position],
+            .position = position,
+        };
+    }
+    qsort(
+        ordered,
+        (size_t)frame_count,
+        sizeof(*ordered),
+        projection_ordered_opinion_compare
+    );
+    for (int rank = 0; rank < frame_count; rank++) {
+        outcome->leximin_coordinates[rank] = ordered[rank].coordinate;
+        outcome->leximin_positions[rank] = ordered[rank].position;
+    }
+    free(ordered);
     leaf->outcome = outcome;
     return outcome;
 }
 
 /*
- * The root candidate of a completed causal term is the only terminal
- * observer. Its unembedding row expresses that candidate's opinion of the
- * complete context to its left. Every local Select receives this same callback
- * result; no position substitutes its own scalar coordinate.
+ * Outcomes are ordered by least acceptable company first.  This is the
+ * literal arg-min-of-dislike order: maximize the worst token opinion, then the
+ * second worst, and so on.  No coordinate is added to another and no scalar
+ * reward replaces the complete callback result during strength.
  */
-static double projection_term_root_opinion(
-    const ProjectionProduct *product,
-    const ProjectionTerm *term,
-    int leaf_node,
+static int projection_term_outcome_compare(
+    const ProjectionTermOutcome *left,
+    const ProjectionTermOutcome *right
+) {
+    if (left == NULL || right == NULL ||
+        left->coordinate_count != right->coordinate_count) {
+        fprintf(stderr, "cannot compare incompatible company outcomes\n");
+        exit(EXIT_FAILURE);
+    }
+    for (int rank = 0; rank < left->coordinate_count; rank++) {
+        double left_coordinate = left->leximin_coordinates[rank];
+        double right_coordinate = right->leximin_coordinates[rank];
+        if (left_coordinate > right_coordinate) return 1;
+        if (left_coordinate < right_coordinate) return -1;
+    }
+    return 0;
+}
+
+static double projection_term_worst_opinion(
+    const ProjectionTermOutcome *outcome,
+    int *position,
     int *context_node,
     int *company_node,
     int *company_token,
@@ -2069,25 +2177,24 @@ static double projection_term_root_opinion(
     double *observer_logit,
     double *observer_log_partition
 ) {
-    if (leaf_node <= 0 || leaf_node >= term->count ||
-        term->nodes[leaf_node].outcome == NULL) {
-        fprintf(stderr, "selection lost its structured company outcome\n");
+    if (outcome == NULL || outcome->coordinate_count <= 0) {
+        fprintf(stderr, "selection lost its complete company outcome\n");
         exit(EXIT_FAILURE);
     }
-    const ProjectionTermOutcome *outcome = term->nodes[leaf_node].outcome;
-    int position = outcome->coordinate_count - 1;
-    if (position < 0 || position >= outcome->coordinate_count ||
-        position >= product->frame_count) {
-        fprintf(stderr, "selection requested an invalid root opinion\n");
+    int worst_position = outcome->leximin_positions[0];
+    if (worst_position < 0 ||
+        worst_position >= outcome->coordinate_count) {
+        fprintf(stderr, "selection outcome has no worst company position\n");
         exit(EXIT_FAILURE);
     }
-    *context_node = outcome->context_nodes[position];
-    *company_node = outcome->company_nodes[position];
-    *company_token = outcome->company_tokens[position];
-    *incoming_boundary = outcome->incoming_boundary[position];
-    *observer_logit = outcome->logits[position];
-    *observer_log_partition = outcome->log_partitions[position];
-    return outcome->coordinates[position];
+    *position = worst_position;
+    *context_node = outcome->context_nodes[worst_position];
+    *company_node = outcome->company_nodes[worst_position];
+    *company_token = outcome->company_tokens[worst_position];
+    *incoming_boundary = outcome->incoming_boundary[worst_position];
+    *observer_logit = outcome->logits[worst_position];
+    *observer_log_partition = outcome->log_partitions[worst_position];
+    return outcome->coordinates[worst_position];
 }
 
 /*
@@ -2105,14 +2212,14 @@ static double projection_term_root_opinion(
  * immutable LlamaCompanyResult produced before strength starts. The runtime
  * counter check around it enforces that boundary.
  */
-static double projection_term_select(
+static int projection_term_select(
     ProjectionProduct *product,
     ProjectionTerm *term,
     int node_index
 ) {
     ProjectionTermNode *node = &term->nodes[node_index];
     if (node->selection_state == PROJECTION_SELECTION_FORCED) {
-        return node->backed_rating;
+        return node->selected_leaf;
     }
     if (node->selection_state == PROJECTION_SELECTION_FORCING) {
         fprintf(stderr, "selection term contains a recursive cycle\n");
@@ -2124,23 +2231,17 @@ static double projection_term_select(
             fprintf(stderr, "leaf outcome was not observed before strength\n");
             exit(EXIT_FAILURE);
         }
-        int root_position = node->outcome->coordinate_count - 1;
-        if (root_position < 0 ||
-            !isfinite(node->outcome->coordinates[root_position])) {
-            fprintf(stderr, "leaf has no finite root-token opinion\n");
-            exit(EXIT_FAILURE);
-        }
-        node->backed_rating = node->outcome->coordinates[root_position];
         node->selected_child = -1;
         node->selected_leaf = node_index;
         node->selection_state = PROJECTION_SELECTION_FORCED;
-        return node->backed_rating;
+        return node->selected_leaf;
     }
 
     unsigned long long frame_id = product->next_frame_id++;
     product->counters->strength_nodes++;
     int best_child_ordinal = -1;
-    double best_rating = -INFINITY;
+    ProjectionTermOutcome *best_outcome = NULL;
+    double best_worst_opinion = -INFINITY;
     int *trace_path = malloc(
         (size_t)product->frame_count * sizeof(*trace_path)
     );
@@ -2151,26 +2252,33 @@ static double projection_term_select(
     for (int ordinal = 0; ordinal < node->child_count; ordinal++) {
         int child_index = node->children[ordinal];
         /* This is the single force of the memoized b(x). */
-        double rating = projection_term_select(product, term, child_index);
+        int observer_leaf_node = projection_term_select(
+            product,
+            term,
+            child_index
+        );
         ProjectionTermNode *child = &term->nodes[child_index];
         ProjectionSelectFrame *frame = &product->frames[child->position];
         ProjectionCandidate *candidate =
             &frame->candidates[child->candidate_index];
-        int observer_leaf_node = child->selected_leaf;
-        if (observer_leaf_node <= 0 || observer_leaf_node >= term->count) {
+        if (observer_leaf_node != child->selected_leaf ||
+            observer_leaf_node <= 0 || observer_leaf_node >= term->count ||
+            term->nodes[observer_leaf_node].outcome == NULL) {
             fprintf(stderr, "selection lost its structured leaf outcome\n");
             exit(EXIT_FAILURE);
         }
+        ProjectionTermOutcome *outcome =
+            term->nodes[observer_leaf_node].outcome;
+        int observer_position = -1;
         int observer_context_node = -1;
         int observer_company_node = -1;
         int observer_company_token = -1;
         int observer_incoming_boundary = 0;
         double observer_logit = 0.0;
         double observer_log_partition = 0.0;
-        double observed_rating = projection_term_root_opinion(
-            product,
-            term,
-            observer_leaf_node,
+        double worst_opinion = projection_term_worst_opinion(
+            outcome,
+            &observer_position,
             &observer_context_node,
             &observer_company_node,
             &observer_company_token,
@@ -2178,11 +2286,7 @@ static double projection_term_select(
             &observer_logit,
             &observer_log_partition
         );
-        if (rating != observed_rating) {
-            fprintf(stderr, "backed selection changed the root opinion\n");
-            exit(EXIT_FAILURE);
-        }
-        candidate->backed_observer_rating = rating;
+        candidate->backed_observer_rating = worst_opinion;
         product->counters->candidate_ratings++;
         projection_term_path(
             term,
@@ -2196,8 +2300,10 @@ static double projection_term_select(
             ordinal,
             frame,
             candidate,
-            rating,
+            worst_opinion,
             observer_leaf_node,
+            child->reachability,
+            observer_position,
             observer_context_node,
             observer_company_node,
             observer_company_token,
@@ -2206,8 +2312,11 @@ static double projection_term_select(
             observer_log_partition,
             trace_path
         );
-        if (best_child_ordinal < 0 || rating > best_rating ||
-            (rating == best_rating &&
+        int outcome_order = best_outcome == NULL
+            ? 1
+            : projection_term_outcome_compare(outcome, best_outcome);
+        if (best_child_ordinal < 0 || outcome_order > 0 ||
+            (outcome_order == 0 &&
              candidate->local_rank <
                 product->frames[
                     term->nodes[node->children[best_child_ordinal]].position
@@ -2217,14 +2326,14 @@ static double projection_term_select(
                     ].candidate_index
                 ].local_rank)) {
             best_child_ordinal = ordinal;
-            best_rating = rating;
+            best_outcome = outcome;
+            best_worst_opinion = worst_opinion;
         }
     }
     int best_child_index = node->children[best_child_ordinal];
     ProjectionTermNode *best_child = &term->nodes[best_child_index];
     node->selected_child = best_child_index;
     node->selected_leaf = best_child->selected_leaf;
-    node->backed_rating = best_rating;
     projection_term_path(
         term,
         node->selected_leaf,
@@ -2235,16 +2344,16 @@ static double projection_term_select(
         &product->frames[best_child->position];
     ProjectionCandidate *best_candidate =
         &best_frame->candidates[best_child->candidate_index];
+    int best_observer_position = -1;
     int best_observer_context_node = -1;
     int best_observer_company_node = -1;
     int best_observer_company_token = -1;
     int best_observer_incoming_boundary = 0;
     double best_observer_logit = 0.0;
     double best_observer_log_partition = 0.0;
-    (void)projection_term_root_opinion(
-        product,
-        term,
-        node->selected_leaf,
+    double selected_worst_opinion = projection_term_worst_opinion(
+        best_outcome,
+        &best_observer_position,
         &best_observer_context_node,
         &best_observer_company_node,
         &best_observer_company_token,
@@ -2252,13 +2361,19 @@ static double projection_term_select(
         &best_observer_logit,
         &best_observer_log_partition
     );
+    if (selected_worst_opinion != best_worst_opinion) {
+        fprintf(stderr, "selection changed its retained company outcome\n");
+        exit(EXIT_FAILURE);
+    }
     trace_projection_product_select(
         product,
         frame_id,
         best_frame,
         best_candidate,
-        best_rating,
+        selected_worst_opinion,
         node->selected_leaf,
+        best_child->reachability,
+        best_observer_position,
         best_observer_context_node,
         best_observer_company_node,
         best_observer_company_token,
@@ -2268,12 +2383,12 @@ static double projection_term_select(
         trace_path
     );
     if (best_frame->position == product->first_observed_position) {
-        product->first_variable_selection_rating = best_rating;
+        product->first_variable_selection_rating = selected_worst_opinion;
         product->first_variable_selection_rating_set = 1;
     }
     node->selection_state = PROJECTION_SELECTION_FORCED;
     free(trace_path);
-    return best_rating;
+    return node->selected_leaf;
 }
 
 static void projection_term_free(ProjectionTerm *term) {
@@ -2283,6 +2398,8 @@ static void projection_term_free(ProjectionTerm *term) {
         if (outcome != NULL) {
             free(outcome->log_partitions);
             free(outcome->logits);
+            free(outcome->leximin_positions);
+            free(outcome->leximin_coordinates);
             free(outcome->incoming_boundary);
             free(outcome->company_tokens);
             free(outcome->company_nodes);
@@ -2297,7 +2414,7 @@ static void projection_term_free(ProjectionTerm *term) {
 
 static double projection_company_strength_select(
     ProjectionProduct *product,
-    unsigned long long budget,
+    unsigned long long leaf_limit,
     int *scratch_path,
     int *selected_path
 ) {
@@ -2311,12 +2428,23 @@ static double projection_company_strength_select(
         fprintf(stderr, "selection term lost its synthetic root\n");
         exit(EXIT_FAILURE);
     }
+    unsigned long long exact_leaf_count =
+        projection_term_exact_leaf_count(product);
+    if (leaf_limit != ULLONG_MAX && exact_leaf_count > leaf_limit) {
+        fprintf(
+            stderr,
+            "exact sampled selection term requires %llu leaves; "
+            "-b %llu would change its semantics\n",
+            exact_leaf_count,
+            leaf_limit
+        );
+        exit(EXIT_FAILURE);
+    }
     projection_term_build(
         product,
         &term,
         synthetic_root,
         0,
-        budget,
         scratch_path
     );
     int row_count = term.count - 1;
@@ -2329,9 +2457,11 @@ static double projection_company_strength_select(
         fprintf(
             product->counters->trace,
             "{\"event\":\"selection_term_built\",\"rows\":%d,"
-            "\"leaves\":%d}\n",
+            "\"leaves\":%llu,\"exact\":true,"
+            "\"root_reachability\":%llu}\n",
             row_count,
-            term.leaf_count
+            term.leaf_count,
+            term.nodes[0].reachability
         );
         fflush(product->counters->trace);
     }
@@ -2492,6 +2622,17 @@ static double projection_company_strength_select(
                 if (position != 0) fputc(',', stream);
                 fprintf(stream, "%.17g", outcome->coordinates[position]);
             }
+            fputs("],\"leximin\":[", stream);
+            for (int rank = 0; rank < outcome->coordinate_count; rank++) {
+                if (rank != 0) fputc(',', stream);
+                fprintf(
+                    stream,
+                    "{\"rank\":%d,\"position\":%d,\"opinion\":%.17g}",
+                    rank,
+                    outcome->leximin_positions[rank],
+                    outcome->leximin_coordinates[rank]
+                );
+            }
             fputs("],\"bindings\":[", stream);
             for (int position = 0; position < outcome->coordinate_count;
                  position++) {
@@ -2520,31 +2661,43 @@ static double projection_company_strength_select(
     }
 
     unsigned long long strength_start = projection_monotonic_nanoseconds();
-    (void)projection_term_select(product, &term, 0);
+    int selected_leaf = projection_term_select(product, &term, 0);
     product->counters->strength_nanoseconds =
         projection_monotonic_nanoseconds() - strength_start;
-    if (!product->first_variable_selection_rating_set) {
-        fprintf(stderr, "selection did not rate its first variable frame\n");
-        exit(EXIT_FAILURE);
-    }
-    double rating = term.nodes[0].backed_rating;
-    if (!isfinite(rating) ||
-        rating != product->first_variable_selection_rating) {
-        fprintf(stderr, "root and first variable retained different opinions\n");
+    if (selected_leaf != term.nodes[0].selected_leaf ||
+        selected_leaf <= 0 || selected_leaf >= term.count) {
+        fprintf(stderr, "root selection lost its retained outcome\n");
         exit(EXIT_FAILURE);
     }
     projection_term_path(
         &term,
-        term.nodes[0].selected_leaf,
+        selected_leaf,
         product->frame_count,
         selected_path
     );
     ProjectionTermOutcome *selected_outcome =
-        term.nodes[term.nodes[0].selected_leaf].outcome;
+        term.nodes[selected_leaf].outcome;
     if (selected_outcome == NULL) {
         fprintf(stderr, "root selection lost its complete outcome\n");
         exit(EXIT_FAILURE);
     }
+    int worst_position = -1;
+    int worst_context_node = -1;
+    int worst_company_node = -1;
+    int worst_company_token = -1;
+    int worst_incoming_boundary = 0;
+    double worst_logit = 0.0;
+    double worst_log_partition = 0.0;
+    double rating = projection_term_worst_opinion(
+        selected_outcome,
+        &worst_position,
+        &worst_context_node,
+        &worst_company_node,
+        &worst_company_token,
+        &worst_incoming_boundary,
+        &worst_logit,
+        &worst_log_partition
+    );
     product->counters->root_terminalizations++;
     if (product->counters->trace != NULL) {
         FILE *stream = product->counters->trace;
@@ -2553,10 +2706,26 @@ static double projection_company_strength_select(
             "{\"event\":\"root_terminalized\","
             "\"outcome\":\"candidate_owned_context_opinions\","
             "\"selected_outcome_leaf\":%d,"
-            "\"root_token_context_opinion\":%.17g,"
+            "\"order\":\"leximin_all_coordinates\","
+            "\"worst_company_position\":%d,"
+            "\"worst_company_opinion\":%.17g,"
+            "\"worst_context_node\":%d,"
+            "\"worst_company_node\":%d,"
+            "\"worst_company_token\":%d,"
+            "\"worst_direction\":\"%s\","
+            "\"worst_logit\":%.17g,"
+            "\"worst_log_partition\":%.17g,"
             "\"coordinates\":[",
-            term.nodes[0].selected_leaf,
-            rating
+            selected_leaf,
+            worst_position,
+            rating,
+            worst_context_node,
+            worst_company_node,
+            worst_company_token,
+            worst_incoming_boundary
+                ? "candidate_about_context" : "outgoing",
+            worst_logit,
+            worst_log_partition
         );
         for (int position = 0;
              position < selected_outcome->coordinate_count; position++) {
@@ -2592,7 +2761,7 @@ static double projection_company_strength_select(
         fprintf(
             product->counters->trace,
             "{\"event\":\"strength_run\","
-            "\"algorithm\":\"memoized_escardo_product\","
+            "\"algorithm\":\"memoized_escardo_leximin_product\","
             "\"model_filler_calls\":%llu,"
             "\"model_scalar_reads\":%llu,"
             "\"milliseconds\":%.9g}\n",
@@ -2635,7 +2804,7 @@ void generate_hidden_feedback_select(
     char *prompt,
     int steps,
     int local_support,
-    unsigned long long leaf_budget,
+    unsigned long long leaf_limit,
     unsigned long long sample_seed,
     FeedbackBoundary feedback_boundary,
     ProjectionObserverKind observer_kind,
@@ -2720,7 +2889,7 @@ void generate_hidden_feedback_select(
             ",\"steps\":%d,\"prefill_unit_count\":%d,"
             "\"output_count\":%d,\"selection_frame_count\":%d,"
             "\"proposal_vocabulary_size\":%d,"
-            "\"local_demand_width\":%d,\"leaf_budget\":%llu,"
+            "\"local_demand_width\":%d,\"exact_leaf_limit\":%llu,"
             "\"feedback_boundary\":\"%s\","
             "\"observer\":\"%s\"}\n",
             steps,
@@ -2729,7 +2898,7 @@ void generate_hidden_feedback_select(
             frame_count,
             config->vocab_size,
             local_support,
-            leaf_budget,
+            leaf_limit,
             feedback_boundary_name(feedback_boundary),
             projection_observer_name(observer_kind)
         );
@@ -2914,7 +3083,6 @@ void generate_hidden_feedback_select(
         .target_norm = target_displacement_norm,
         .observer_kind = observer_kind,
         .local_support = local_support,
-        .leaf_budget = leaf_budget,
         .sample_seed = sample_seed,
         .counters = &strength,
     };
@@ -2931,7 +3099,7 @@ void generate_hidden_feedback_select(
     } else if (observer_kind == PROJECTION_OBSERVER_COMPANY_STRENGTH) {
         selection_rating = projection_company_strength_select(
             &product,
-            leaf_budget,
+            leaf_limit,
             partial_path,
             selected_path
         );
@@ -2940,7 +3108,7 @@ void generate_hidden_feedback_select(
         selection_rating = projection_product_select(
             &product,
             0,
-            leaf_budget,
+            leaf_limit,
             partial_path,
             selected_path
         );
@@ -3009,7 +3177,7 @@ void generate_hidden_feedback_select(
         "strength_model_scalar_reads: %llu\n"
         "company_model_ms: %.3f\n"
         "pure_strength_ms: %.3f\n"
-        "selected_root_token_context_opinion: %.17g\n"
+        "selected_terminal_diagnostic: %.17g\n"
         "recurrence_ms: %ld\n"
         "projection_ms: %ld\n"
         "observer_product_ms: %ld\n",
@@ -3045,7 +3213,7 @@ void generate_hidden_feedback_select(
         fprintf(
             trace,
             "{\"event\":\"run_end\","
-            "\"selected_root_token_context_opinion\":%.17g,"
+            "\"selected_terminal_diagnostic\":%.17g,"
             "\"selected_coordinate_role\":\"%s\","
             "\"structured_leaf_outcomes\":%llu,"
             "\"strength_nodes\":%llu,"
@@ -3208,7 +3376,7 @@ void error_usage() {
     fprintf(stderr, "  -g <string> feedback boundary: identity (default) or affine\n");
     fprintf(stderr, "  -r <string> observer: company (default) or logits\n");
     fprintf(stderr, "  -k <int>    token memo cells demanded per prefix, default 4\n");
-    fprintf(stderr, "  -b <int>    sampled leaf support for company observer, default 64\n");
+    fprintf(stderr, "  -b <int>    optional exact-term leaf safety limit; never truncates\n");
     fprintf(stderr, "  -s <int>    support sampling seed, default 42\n");
     fprintf(stderr, "  -i <string> input prompt\n");
     fprintf(stderr, "  -z <string> optional path to custom tokenizer\n");
@@ -3224,7 +3392,7 @@ int main(int argc, char *argv[]) {
     char *tokenizer_path = "tokenizer.bin";
     int steps = 256;            // number of steps to run for
     int local_support = 4;
-    unsigned long long leaf_budget = 64;
+    unsigned long long leaf_limit = ULLONG_MAX;
     unsigned long long sample_seed = 42;
     FeedbackBoundary feedback_boundary = FEEDBACK_IDENTITY;
     ProjectionObserverKind observer_kind =
@@ -3270,7 +3438,7 @@ int main(int argc, char *argv[]) {
                 error_usage();
             }
             if (argv[i][1] == 'b') {
-                leaf_budget = parsed;
+                leaf_limit = parsed;
             } else if (argv[i][1] == 's') {
                 sample_seed = parsed;
             } else {
@@ -3324,7 +3492,7 @@ int main(int argc, char *argv[]) {
             prompt,
             steps,
             local_support,
-            leaf_budget,
+            leaf_limit,
             sample_seed,
             feedback_boundary,
             observer_kind,
