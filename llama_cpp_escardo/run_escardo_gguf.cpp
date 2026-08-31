@@ -13,7 +13,9 @@
  * This deliberately contains no sampled AR path, path likelihood sum,
  * scalar backup, UCB bonus, or wall-clock search loop. The local carrier is
  * an explicit top-k support, and Escardo's product is evaluated exactly over
- * that finite carrier. Performance scheduling is a separate concern.
+ * that finite carrier. Sibling token applications are submitted as one
+ * llama.cpp batch; this changes numerical scheduling, not which continuation
+ * terms are forced or how their structured outcomes are selected.
  *
  * llama.cpp requires a new causal input to follow the maximum cached
  * position. Child summaries therefore share the span endpoint, the observer
@@ -293,6 +295,27 @@ struct Branch {
     float shared_covector_logit = 0.0f;
 };
 
+class BatchOwner {
+public:
+    BatchOwner(int token_capacity, int embedding_width) :
+        batch_(llama_batch_init(token_capacity, embedding_width, 1)) { }
+
+    ~BatchOwner() {
+        llama_batch_free(batch_);
+    }
+
+    BatchOwner(const BatchOwner &) = delete;
+    BatchOwner & operator=(const BatchOwner &) = delete;
+
+    llama_batch & reset() {
+        batch_.n_tokens = 0;
+        return batch_;
+    }
+
+private:
+    llama_batch batch_{};
+};
+
 class SequencePool {
 public:
     SequencePool(llama_memory_t memory, int count) : memory_(memory) {
@@ -342,7 +365,9 @@ public:
         counters_(counters),
         vocab_size_(llama_vocab_n_tokens(vocab)),
         embedding_in_(llama_model_n_embd_inp(model)),
-        embedding_out_(llama_model_n_embd_out(model)) {
+        embedding_out_(llama_model_n_embd_out(model)),
+        token_batch_(options.top_k, 0),
+        observer_batch_(1, llama_model_n_embd_inp(model)) {
         if (embedding_in_ != embedding_out_) {
             fail("structured hidden feedback requires equal input/output widths");
         }
@@ -350,7 +375,12 @@ public:
             fail("top-k exceeds model vocabulary");
         }
 
-        constexpr int sequence_count = 256;
+        const size_t sequence_bound =
+            static_cast<size_t>(options_.top_k) * options_.length + 3;
+        if (sequence_bound > llama_max_parallel_sequences()) {
+            fail("top-k and length exceed llama.cpp's sequence-id capacity");
+        }
+        const int sequence_count = static_cast<int>(sequence_bound);
         int required = static_cast<int>(prompt_tokens_.size()) +
             8 * options_.length + 256;
         int context_size = options_.context_size;
@@ -437,9 +467,11 @@ private:
         batch.logits[index] = 1;
     }
 
-    NodeState copy_last_output(int sequence, int position) {
-        float * logits = llama_get_logits_ith(context_.get(), -1);
-        float * hidden = llama_get_embeddings_ith(context_.get(), -1);
+    NodeState copy_output(int output_index, int sequence, int position) {
+        float * logits = llama_get_logits_ith(context_.get(), output_index);
+        float * hidden = llama_get_embeddings_ith(
+            context_.get(), output_index
+        );
         if (logits == nullptr || hidden == nullptr) {
             fail("decoder did not expose logits and final hidden state");
         }
@@ -471,27 +503,47 @@ private:
         }
         counters_.model_decode_calls++;
         counters_.model_decoded_terms += prompt_tokens_.size();
-        return copy_last_output(
-            0, static_cast<int>(prompt_tokens_.size()) - 1
+        return copy_output(
+            -1, 0, static_cast<int>(prompt_tokens_.size()) - 1
         );
     }
 
-    NodeState decode_token(
-        llama_token token,
+    std::vector<NodeState> decode_sibling_tokens(
+        const std::vector<Value> & support,
         int position,
-        int sequence
+        const std::vector<int> & sequences
     ) {
-        llama_set_causal_attn(context_.get(), true);
-        llama_batch batch = llama_batch_init(1, 0, 1);
-        add_token(batch, token, position, sequence, true);
+        if (support.size() != sequences.size()) {
+            fail("sibling support and sequence counts differ");
+        }
+        llama_batch & batch = token_batch_.reset();
+        for (size_t index = 0; index < support.size(); ++index) {
+            add_token(
+                batch,
+                support[index].token,
+                position,
+                sequences[index],
+                true
+            );
+        }
         int result = llama_decode(context_.get(), batch);
-        llama_batch_free(batch);
         if (result != 0) {
-            fail("branch decode failed with code " + std::to_string(result));
+            fail(
+                "sibling branch decode failed with code " +
+                std::to_string(result)
+            );
         }
         counters_.model_decode_calls++;
-        counters_.model_decoded_terms++;
-        return copy_last_output(sequence, position);
+        counters_.model_decoded_terms += support.size();
+
+        std::vector<NodeState> states;
+        states.reserve(support.size());
+        for (size_t index = 0; index < support.size(); ++index) {
+            states.push_back(copy_output(
+                static_cast<int>(index), sequences[index], position
+            ));
+        }
+        return states;
     }
 
     NodeState decode_observer(
@@ -499,13 +551,11 @@ private:
         int position,
         int observer_sequence
     ) {
-        llama_set_causal_attn(context_.get(), true);
-        llama_batch batch = llama_batch_init(1, embedding_in_, 1);
+        llama_batch & batch = observer_batch_.reset();
         add_observer_embedding(
             batch, hidden, position, observer_sequence
         );
         int result = llama_decode(context_.get(), batch);
-        llama_batch_free(batch);
         if (result != 0) {
             fail("selection observer decode failed with code " +
                 std::to_string(result));
@@ -513,7 +563,7 @@ private:
         counters_.model_decode_calls++;
         counters_.model_decoded_terms++;
         counters_.observer_decode_calls++;
-        return copy_last_output(observer_sequence, position);
+        return copy_output(-1, observer_sequence, position);
     }
 
     void copy_sequence(
@@ -656,18 +706,12 @@ private:
         trace_.flush();
     }
 
-    Outcome leaf_outcome(const NodeState & child) {
-        int summary = sequence_pool_->acquire();
-        copy_sequence(
-            child.sequence,
-            summary,
-            child.position,
-            child.position + 1
-        );
+    Outcome leaf_outcome(NodeState & child) {
         Outcome outcome;
-        outcome.summary_sequence = summary;
+        outcome.summary_sequence = child.sequence;
         outcome.summary_position = child.position;
-        outcome.final_hidden = child.hidden;
+        outcome.final_hidden = std::move(child.hidden);
+        child.sequence = -1;
         return outcome;
     }
 
@@ -684,21 +728,37 @@ private:
         branches.reserve(support.size());
 
         for (size_t index = 0; index < support.size(); ++index) {
-            const Value value = support[index];
             trace_demand(
-                frame, depth, remaining, static_cast<int>(index), value
+                frame,
+                depth,
+                remaining,
+                static_cast<int>(index),
+                support[index]
             );
             counters_.continuation_demands++;
+        }
 
+        std::vector<int> child_sequences;
+        child_sequences.reserve(support.size());
+        for (size_t index = 0; index < support.size(); ++index) {
             int child_sequence = sequence_pool_->acquire();
             copy_sequence(history.sequence, child_sequence);
-            NodeState child = decode_token(
-                value.token, history.position + 1, child_sequence
-            );
+            child_sequences.push_back(child_sequence);
+        }
+        std::vector<NodeState> children = decode_sibling_tokens(
+            support, history.position + 1, child_sequences
+        );
+
+        for (size_t index = 0; index < support.size(); ++index) {
+            const Value value = support[index];
+            NodeState & child = children[index];
             Outcome outcome = remaining == 1
                 ? leaf_outcome(child)
                 : select(child, remaining - 1, depth + 1);
-            sequence_pool_->release(child_sequence);
+            if (child.sequence >= 0) {
+                sequence_pool_->release(child.sequence);
+                child.sequence = -1;
+            }
             outcome.path.insert(outcome.path.begin(), value);
             branches.push_back(Branch{value, std::move(outcome), 0.0f});
         }
@@ -742,25 +802,25 @@ private:
         }
         trace_select(frame, depth, remaining, branches[best]);
 
-        int summary_sequence = sequence_pool_->acquire();
-        copy_sequence(
-            observer_sequence,
-            summary_sequence,
-            query_position,
-            query_position + 1
-        );
+        if (!llama_memory_seq_rm(
+                memory_, observer_sequence, -1, query_position)) {
+            fail("could not remove observer prefix from composed summary");
+        }
+        if (!llama_memory_seq_rm(
+                memory_, observer_sequence, query_position + 1, -1)) {
+            fail("could not trim composed summary after observer query");
+        }
         const int shift = summary_position - query_position;
         if (shift != 0) {
             if (!llama_memory_can_shift(memory_)) {
                 fail("model KV memory cannot move a composed summary to its span");
             }
             llama_memory_seq_add(
-                memory_, summary_sequence,
+                memory_, observer_sequence,
                 query_position, query_position + 1, shift
             );
         }
 
-        sequence_pool_->release(observer_sequence);
         for (Branch & branch : branches) {
             sequence_pool_->release(branch.outcome.summary_sequence);
             branch.outcome.summary_sequence = -1;
@@ -768,7 +828,7 @@ private:
 
         Outcome result;
         result.path = std::move(branches[best].outcome.path);
-        result.summary_sequence = summary_sequence;
+        result.summary_sequence = observer_sequence;
         result.summary_position = summary_position;
         result.final_hidden = std::move(observation.hidden);
         return result;
@@ -783,6 +843,8 @@ private:
     int vocab_size_ = 0;
     int embedding_in_ = 0;
     int embedding_out_ = 0;
+    BatchOwner token_batch_;
+    BatchOwner observer_batch_;
     std::unique_ptr<llama_context, ContextDeleter> context_;
     llama_memory_t memory_ = nullptr;
     std::unique_ptr<SequencePool> sequence_pool_;
