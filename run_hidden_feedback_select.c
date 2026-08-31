@@ -6,10 +6,13 @@
  * final RMS-normalized hidden state crosses the autoregressive boundary
  * without selecting a token. The default crossing is the identity: the output
  * hidden state becomes the next position's input hidden state directly. Every
- * output hidden state is retained, and the output head observes all of them
- * only after the recurrence. Discrete projection then happens through
- * selection-monad strength over that fixed position-indexed logit tape. No
- * selected token is fed back into the model.
+ * output hidden state is retained, and no selected token is fed back into the
+ * recurrence. The retained tape supplies only the sampled carrier. Every
+ * demanded hypothetical token occurrence is then assembled into one causal
+ * company and each learned filler is applied once to that complete family.
+ * The model callback returns a position-indexed covector outcome for every
+ * completed branch. Memoized selection strength retains that whole outcome
+ * while each local Select evaluates only its corresponding company coordinate.
  */
 
 #include <stdio.h>
@@ -19,6 +22,7 @@
 #include <math.h>
 #include <string.h>
 #include <limits.h>
+#include <errno.h>
 #include <fcntl.h>
 #include "llama_company.h"
 #if defined _WIN32
@@ -849,7 +853,7 @@ static unsigned long long projection_monotonic_nanoseconds(void) {
 
 typedef enum {
     PROJECTION_OBSERVER_LOGIT_STRENGTH,
-    PROJECTION_OBSERVER_FIRTHIAN_CONTEXT,
+    PROJECTION_OBSERVER_COMPANY_STRENGTH,
     PROJECTION_OBSERVER_HIDDEN_DISPLACEMENT,
 } ProjectionObserverKind;
 
@@ -857,8 +861,8 @@ static const char *projection_observer_name(ProjectionObserverKind kind) {
     switch (kind) {
         case PROJECTION_OBSERVER_LOGIT_STRENGTH:
             return "escardo_position_logit_vector";
-        case PROJECTION_OBSERVER_FIRTHIAN_CONTEXT:
-            return "company_firthian_context_feedback";
+        case PROJECTION_OBSERVER_COMPANY_STRENGTH:
+            return "completion_indexed_company_covectors";
         case PROJECTION_OBSERVER_HIDDEN_DISPLACEMENT:
             return "ordered_hidden_displacement_cosine";
     }
@@ -869,8 +873,8 @@ static const char *projection_score_role(ProjectionObserverKind kind) {
     switch (kind) {
         case PROJECTION_OBSERVER_LOGIT_STRENGTH:
             return "first_variable_logit_coordinate";
-        case PROJECTION_OBSERVER_FIRTHIAN_CONTEXT:
-            return "first_variable_firthian_context_coordinate";
+        case PROJECTION_OBSERVER_COMPANY_STRENGTH:
+            return "position_coordinate_of_backed_outcome";
         case PROJECTION_OBSERVER_HIDDEN_DISPLACEMENT:
             return "whole_path_scalar";
     }
@@ -986,13 +990,11 @@ typedef struct {
     float *target_displacements;
     float *candidate_previous;
     double target_norm;
-    double terminal_baseline_log_probability;
     ProjectionObserverKind observer_kind;
     unsigned long long leaf_budget;
     unsigned long long sample_seed;
     unsigned long long next_frame_id;
     double first_variable_selection_rating;
-    double selected_path_density_log_ratio_diagnostic;
     int first_variable_selection_rating_set;
     ProjectionStrengthCounters *counters;
 } ProjectionProduct;
@@ -1080,6 +1082,8 @@ static void projection_trace_whole_path_result(
     double independent_log_probability
 ) {
     if (product->counters->trace == NULL) return;
+    (void)company_log_probability;
+    (void)independent_log_probability;
     FILE *stream = product->counters->trace;
     fprintf(
         stream,
@@ -1091,17 +1095,11 @@ static void projection_trace_whole_path_result(
         rating
     );
     if (product->observer_kind ==
-            PROJECTION_OBSERVER_FIRTHIAN_CONTEXT) {
-        fprintf(
-            stream,
+            PROJECTION_OBSERVER_COMPANY_STRENGTH) {
+        fputs(
             ",\"rating_role\":"
-            "\"first_variable_firthian_context_coordinate\""
-            ",\"company_log_probability\":%.17g,"
-            "\"independent_log_probability\":%.17g,"
-            "\"path_density_log_ratio_diagnostic\":%.17g",
-            company_log_probability,
-            independent_log_probability,
-            company_log_probability - independent_log_probability
+            "\"position_coordinate_of_backed_outcome\"",
+            stream
         );
     } else if (product->observer_kind ==
             PROJECTION_OBSERVER_LOGIT_STRENGTH) {
@@ -1147,10 +1145,13 @@ static double projection_observe_whole_path(
     const int *path,
     int root_terminalization
 ) {
+    if (product->observer_kind !=
+            PROJECTION_OBSERVER_HIDDEN_DISPLACEMENT) {
+        fprintf(stderr, "scalar path observer used outside displacement audit\n");
+        exit(EXIT_FAILURE);
+    }
     double dot = 0.0;
     double candidate_squares = 0.0;
-    double company_log_probability = 0.0;
-    double independent_log_probability = 0.0;
     int observed_position = 0;
     for (int position = 0; position < product->frame_count; position++) {
         int candidate_index = path[position];
@@ -1193,35 +1194,6 @@ static double projection_observe_whole_path(
             );
             observed_position++;
         }
-        if (product->observer_kind ==
-                PROJECTION_OBSERVER_FIRTHIAN_CONTEXT &&
-            position + 1 < product->frame_count) {
-            ProjectionSelectFrame *next_frame =
-                &product->frames[position + 1];
-            int next_index = path[position + 1];
-            if (next_index < 0 || next_index >= next_frame->candidate_count) {
-                fprintf(stderr, "company observer received an invalid suffix\n");
-                exit(EXIT_FAILURE);
-            }
-            ProjectionCandidate *next_candidate =
-                &next_frame->candidates[next_index];
-            matmul(
-                product->observer_transformer.state.logits,
-                hidden,
-                product->observer_transformer.weights.wcls,
-                product->dim,
-                product->observer_transformer.config.vocab_size
-            );
-            double partition = projection_log_partition(
-                product->observer_transformer.state.logits,
-                product->observer_transformer.config.vocab_size
-            );
-            company_log_probability +=
-                (double)product->observer_transformer.state.logits[
-                    next_candidate->token
-                ] - partition;
-            independent_log_probability += next_candidate->log_probability;
-        }
     }
     if (product->observer_kind ==
             PROJECTION_OBSERVER_HIDDEN_DISPLACEMENT &&
@@ -1229,45 +1201,16 @@ static double projection_observe_whole_path(
         fprintf(stderr, "whole-path observer position mismatch\n");
         exit(EXIT_FAILURE);
     }
-    double candidate_norm = 0.0;
-    double rating = 0.0;
-    if (product->observer_kind ==
-            PROJECTION_OBSERVER_FIRTHIAN_CONTEXT) {
-        float *final_hidden = product->observer_transformer.state.x;
-        matmul(
-            product->observer_transformer.state.logits,
-            final_hidden,
-            product->observer_transformer.weights.wcls,
-            product->dim,
-            product->observer_transformer.config.vocab_size
+    double candidate_norm = sqrt(candidate_squares);
+    if (!(product->target_norm > 0.0) || !(candidate_norm > 0.0) ||
+        !isfinite(dot) || !isfinite(candidate_norm)) {
+        fprintf(
+            stderr,
+            "invalid ordered hidden-displacement observation\n"
         );
-        double terminal_partition = projection_log_partition(
-            product->observer_transformer.state.logits,
-            product->observer_transformer.config.vocab_size
-        );
-        company_log_probability +=
-            (double)product->observer_transformer.state.logits[1] -
-            terminal_partition;
-        independent_log_probability +=
-            product->terminal_baseline_log_probability;
-        rating = company_log_probability - independent_log_probability;
-        if (!isfinite(company_log_probability) ||
-            !isfinite(independent_log_probability) || !isfinite(rating)) {
-            fprintf(stderr, "invalid company density-ratio observation\n");
-            exit(EXIT_FAILURE);
-        }
-    } else {
-        candidate_norm = sqrt(candidate_squares);
-        if (!(product->target_norm > 0.0) || !(candidate_norm > 0.0) ||
-            !isfinite(dot) || !isfinite(candidate_norm)) {
-            fprintf(
-                stderr,
-                "invalid ordered hidden-displacement observation\n"
-            );
-            exit(EXIT_FAILURE);
-        }
-        rating = dot / (product->target_norm * candidate_norm);
+        exit(EXIT_FAILURE);
     }
+    double rating = dot / (product->target_norm * candidate_norm);
     if (root_terminalization) {
         product->counters->root_terminalizations++;
     } else {
@@ -1279,8 +1222,8 @@ static double projection_observe_whole_path(
         root_terminalization,
         rating,
         candidate_norm,
-        company_log_probability,
-        independent_log_probability
+        0.0,
+        0.0
     );
     return rating;
 }
@@ -1411,7 +1354,7 @@ static void trace_projection_product_candidate(
     if (observer_leaf_node >= 0) {
         fprintf(
             stream,
-            "\"observer\":\"company_firthian_context_feedback\","
+            "\"observer\":\"completion_indexed_company_covectors\","
             "\"observer_leaf_node\":%d,"
             "\"observer_context_node\":%d,"
             "\"observer_company_node\":%d,"
@@ -1419,17 +1362,16 @@ static void trace_projection_product_candidate(
             "\"observer_direction\":\"%s\","
             "\"observer_logit\":%.17g,"
             "\"observer_log_partition\":%.17g,"
-            "\"observer_rating_role\":\"%s\",",
+            "\"observer_rating_role\":"
+            "\"position_coordinate_of_backed_outcome\",",
             observer_leaf_node,
             observer_context_node,
             observer_company_node,
             observer_company_token,
-            observer_incoming_boundary ? "incoming_boundary" : "outgoing",
-            observer_logit,
-            observer_log_partition,
             observer_incoming_boundary
-                ? "incoming_boundary_log_probability"
-                : "selected_successor_log_probability"
+                ? "incoming_boundary" : "outgoing",
+            observer_logit,
+            observer_log_partition
         );
     } else if (product->observer_kind ==
             PROJECTION_OBSERVER_LOGIT_STRENGTH) {
@@ -1486,7 +1428,7 @@ static void trace_projection_product_select(
     if (observer_leaf_node >= 0) {
         fprintf(
             stream,
-            "\"observer\":\"company_firthian_context_feedback\","
+            "\"observer\":\"completion_indexed_company_covectors\","
             "\"observer_leaf_node\":%d,"
             "\"observer_context_node\":%d,"
             "\"observer_company_node\":%d,"
@@ -1494,17 +1436,16 @@ static void trace_projection_product_select(
             "\"observer_direction\":\"%s\","
             "\"observer_logit\":%.17g,"
             "\"observer_log_partition\":%.17g,"
-            "\"observer_rating_role\":\"%s\",",
+            "\"observer_rating_role\":"
+            "\"position_coordinate_of_backed_outcome\",",
             observer_leaf_node,
             observer_context_node,
             observer_company_node,
             observer_company_token,
-            observer_incoming_boundary ? "incoming_boundary" : "outgoing",
-            observer_logit,
-            observer_log_partition,
             observer_incoming_boundary
-                ? "incoming_boundary_log_probability"
-                : "selected_successor_log_probability"
+                ? "incoming_boundary" : "outgoing",
+            observer_logit,
+            observer_log_partition
         );
     } else if (product->observer_kind ==
             PROJECTION_OBSERVER_LOGIT_STRENGTH) {
@@ -1829,18 +1770,27 @@ static double projection_product_select(
  * before any learned observation is run.
  */
 typedef struct {
+    int coordinate_count;
+    double *coordinates;
+    int *context_nodes;
+    int *company_nodes;
+    int *company_tokens;
+    unsigned char *incoming_boundary;
+    double *logits;
+    double *log_partitions;
+} ProjectionTermOutcome;
+
+typedef struct {
     int parent;
     int position;
     int candidate_index;
     int *children;
     int child_count;
-    double path_company_log_probability;
-    double path_independent_log_probability;
-    double path_density_log_ratio_diagnostic;
     double row_log_partition;
     double backed_rating;
     int selected_child;
     int selected_leaf;
+    ProjectionTermOutcome *outcome;
     ProjectionSelectionState selection_state;
 } ProjectionTermNode;
 
@@ -1977,18 +1927,132 @@ static void projection_term_path(
     }
 }
 
+static ProjectionTermOutcome *projection_term_observe_leaf(
+    const ProjectionProduct *product,
+    ProjectionTerm *term,
+    const LlamaCompanyResult *result,
+    int leaf_node,
+    int *path_nodes
+) {
+    if (leaf_node <= 0 || leaf_node >= term->count ||
+        term->nodes[leaf_node].child_count != 0) {
+        fprintf(stderr, "invalid structured outcome leaf\n");
+        exit(EXIT_FAILURE);
+    }
+    ProjectionTermNode *leaf = &term->nodes[leaf_node];
+    if (leaf->outcome != NULL) return leaf->outcome;
+
+    int frame_count = product->frame_count;
+    for (int position = 0; position < frame_count; position++) {
+        path_nodes[position] = -1;
+    }
+    for (int node = leaf_node; node != 0; node = term->nodes[node].parent) {
+        int position = term->nodes[node].position;
+        if (position < 0 || position >= frame_count) {
+            fprintf(stderr, "structured outcome contains an invalid position\n");
+            exit(EXIT_FAILURE);
+        }
+        path_nodes[position] = node;
+    }
+
+    ProjectionTermOutcome *outcome = calloc(1, sizeof(*outcome));
+    if (outcome == NULL) {
+        fprintf(stderr, "could not allocate structured outcome\n");
+        exit(EXIT_FAILURE);
+    }
+    outcome->coordinate_count = frame_count;
+    outcome->coordinates = malloc(
+        (size_t)frame_count * sizeof(*outcome->coordinates)
+    );
+    outcome->context_nodes = malloc(
+        (size_t)frame_count * sizeof(*outcome->context_nodes)
+    );
+    outcome->company_nodes = malloc(
+        (size_t)frame_count * sizeof(*outcome->company_nodes)
+    );
+    outcome->company_tokens = malloc(
+        (size_t)frame_count * sizeof(*outcome->company_tokens)
+    );
+    outcome->incoming_boundary = malloc(
+        (size_t)frame_count * sizeof(*outcome->incoming_boundary)
+    );
+    outcome->logits = malloc(
+        (size_t)frame_count * sizeof(*outcome->logits)
+    );
+    outcome->log_partitions = malloc(
+        (size_t)frame_count * sizeof(*outcome->log_partitions)
+    );
+    if (outcome->coordinates == NULL || outcome->context_nodes == NULL ||
+        outcome->company_nodes == NULL || outcome->company_tokens == NULL ||
+        outcome->incoming_boundary == NULL || outcome->logits == NULL ||
+        outcome->log_partitions == NULL) {
+        fprintf(stderr, "could not allocate structured outcome coordinates\n");
+        exit(EXIT_FAILURE);
+    }
+
+    for (int position = 0; position < frame_count; position++) {
+        int occurrence = path_nodes[position];
+        if (occurrence <= 0) {
+            fprintf(stderr, "structured outcome lost a token occurrence\n");
+            exit(EXIT_FAILURE);
+        }
+        int context_node;
+        int company_node;
+        int company_token;
+        int incoming_boundary;
+        if (position + 1 < frame_count) {
+            context_node = occurrence;
+            company_node = path_nodes[position + 1];
+            incoming_boundary = 0;
+        } else {
+            context_node = term->nodes[occurrence].parent;
+            company_node = occurrence;
+            incoming_boundary = 1;
+        }
+        if (context_node <= 0 || context_node >= term->count ||
+            company_node <= 0 || company_node >= term->count) {
+            fprintf(stderr, "structured outcome has no contextual boundary\n");
+            exit(EXIT_FAILURE);
+        }
+        ProjectionTermNode *company = &term->nodes[company_node];
+        ProjectionSelectFrame *frame = &product->frames[company->position];
+        company_token = frame->candidates[company->candidate_index].token;
+        ProjectionTermNode *context = &term->nodes[context_node];
+        if (company_token < 0 || company_token >= result->vocab_size ||
+            !isfinite(context->row_log_partition)) {
+            fprintf(stderr, "invalid company outcome coordinate\n");
+            exit(EXIT_FAILURE);
+        }
+        const float *context_logits = result->logits +
+            (size_t)(context_node - 1) * result->vocab_size;
+        double logit = context_logits[company_token];
+        double coordinate = logit - context->row_log_partition;
+        if (!isfinite(coordinate)) {
+            fprintf(stderr, "non-finite company outcome coordinate\n");
+            exit(EXIT_FAILURE);
+        }
+        outcome->coordinates[position] = coordinate;
+        outcome->context_nodes[position] = context_node;
+        outcome->company_nodes[position] = company_node;
+        outcome->company_tokens[position] = company_token;
+        outcome->incoming_boundary[position] =
+            (unsigned char)incoming_boundary;
+        outcome->logits[position] = logit;
+        outcome->log_partitions[position] = context->row_log_partition;
+    }
+    leaf->outcome = outcome;
+    return outcome;
+}
+
 /*
- * A token occurrence is a context for its selected successor. Its contextual
- * hidden state has already been composed by the transformer; the output head
- * presents the possible successor fillers as a token-indexed vector. At the
- * finite right boundary there is no invented EOS: the last filler is paired
- * with the incoming context that actually reaches it. No edge scores are
- * accumulated here.
+ * q(x : b(x)) is the complete position-indexed company outcome stored at the
+ * selected leaf of b(x). A local Select at position i reads coordinate i and
+ * otherwise propagates that exact outcome unchanged. There is no terminal-row
+ * substitution and no fold over the coordinates.
  */
-static double projection_term_context_coordinate(
+static double projection_term_outcome_coordinate(
     const ProjectionProduct *product,
     const ProjectionTerm *term,
-    const LlamaCompanyResult *result,
     int candidate_node,
     int *context_node,
     int *company_node,
@@ -1998,55 +2062,30 @@ static double projection_term_context_coordinate(
     double *observer_log_partition
 ) {
     if (candidate_node <= 0 || candidate_node >= term->count) {
-        fprintf(stderr, "invalid Firthian candidate occurrence\n");
+        fprintf(stderr, "invalid company-strength candidate occurrence\n");
         exit(EXIT_FAILURE);
     }
     const ProjectionTermNode *candidate = &term->nodes[candidate_node];
-    *company_node = candidate->selected_child;
-    if (*company_node < 0) {
-        if (candidate->child_count != 0) {
-            fprintf(stderr, "selection forgot its successor company\n");
-            exit(EXIT_FAILURE);
-        }
-        *context_node = candidate->parent;
-        *company_node = candidate_node;
-        *incoming_boundary = 1;
-        if (*context_node <= 0 || *context_node >= term->count) {
-            fprintf(stderr, "finite selection has no incoming boundary\n");
-            exit(EXIT_FAILURE);
-        }
-        const ProjectionSelectFrame *frame =
-            &product->frames[candidate->position];
-        *company_token = frame->candidates[candidate->candidate_index].token;
-    } else {
-        if (*company_node <= 0 || *company_node >= term->count ||
-            term->nodes[*company_node].parent != candidate_node) {
-            fprintf(stderr, "selection retained a non-successor company\n");
-            exit(EXIT_FAILURE);
-        }
-        *context_node = candidate_node;
-        *incoming_boundary = 0;
-        const ProjectionTermNode *company = &term->nodes[*company_node];
-        const ProjectionSelectFrame *frame =
-            &product->frames[company->position];
-        *company_token = frame->candidates[company->candidate_index].token;
-    }
-    const ProjectionTermNode *context = &term->nodes[*context_node];
-    if (*company_token < 0 || *company_token >= result->vocab_size ||
-        !isfinite(context->row_log_partition)) {
-        fprintf(stderr, "invalid Firthian company coordinate\n");
+    int leaf_node = candidate->selected_leaf;
+    if (leaf_node <= 0 || leaf_node >= term->count ||
+        term->nodes[leaf_node].outcome == NULL) {
+        fprintf(stderr, "selection lost its structured company outcome\n");
         exit(EXIT_FAILURE);
     }
-    const float *context_logits = result->logits +
-        (size_t)(*context_node - 1) * result->vocab_size;
-    *observer_logit = context_logits[*company_token];
-    *observer_log_partition = context->row_log_partition;
-    double rating = *observer_logit - *observer_log_partition;
-    if (!isfinite(rating)) {
-        fprintf(stderr, "non-finite Firthian company coordinate\n");
+    const ProjectionTermOutcome *outcome = term->nodes[leaf_node].outcome;
+    int position = candidate->position;
+    if (position < 0 || position >= outcome->coordinate_count ||
+        position >= product->frame_count) {
+        fprintf(stderr, "selection requested an invalid outcome coordinate\n");
         exit(EXIT_FAILURE);
     }
-    return rating;
+    *context_node = outcome->context_nodes[position];
+    *company_node = outcome->company_nodes[position];
+    *company_token = outcome->company_tokens[position];
+    *incoming_boundary = outcome->incoming_boundary[position];
+    *observer_logit = outcome->logits[position];
+    *observer_log_partition = outcome->log_partitions[position];
+    return outcome->coordinates[position];
 }
 
 /*
@@ -2057,16 +2096,16 @@ static double projection_term_context_coordinate(
  *   a      = Select(x -> score(x, b(x)))
  *   result = a : b(a)
  *
- * `selection_state` is the where-bound memo for b(x).  The selected child's
- * stored suffix is the result; it is not recomputed after a is chosen.  This
- * The function contains no model operation: its only learned input is the
+ * `selection_state` is the where-bound memo for b(x). The selected child's
+ * stored suffix and complete outcome are the result; neither is recomputed
+ * after a is chosen. The function contains no model operation: its only
+ * learned input is the
  * immutable LlamaCompanyResult produced before strength starts. The runtime
  * counter check around it enforces that boundary.
  */
 static double projection_term_select(
     ProjectionProduct *product,
     ProjectionTerm *term,
-    const LlamaCompanyResult *result,
     int node_index
 ) {
     ProjectionTermNode *node = &term->nodes[node_index];
@@ -2079,6 +2118,10 @@ static double projection_term_select(
     }
     node->selection_state = PROJECTION_SELECTION_FORCING;
     if (node->child_count == 0) {
+        if (node->outcome == NULL) {
+            fprintf(stderr, "leaf outcome was not observed before strength\n");
+            exit(EXIT_FAILURE);
+        }
         node->backed_rating = NAN;
         node->selected_child = -1;
         node->selected_leaf = node_index;
@@ -2100,7 +2143,7 @@ static double projection_term_select(
     for (int ordinal = 0; ordinal < node->child_count; ordinal++) {
         int child_index = node->children[ordinal];
         /* This is the single force of the memoized b(x). */
-        (void)projection_term_select(product, term, result, child_index);
+        (void)projection_term_select(product, term, child_index);
         ProjectionTermNode *child = &term->nodes[child_index];
         ProjectionSelectFrame *frame = &product->frames[child->position];
         ProjectionCandidate *candidate =
@@ -2116,10 +2159,9 @@ static double projection_term_select(
         int observer_incoming_boundary = 0;
         double observer_logit = 0.0;
         double observer_log_partition = 0.0;
-        double rating = projection_term_context_coordinate(
+        double rating = projection_term_outcome_coordinate(
             product,
             term,
-            result,
             child_index,
             &observer_context_node,
             &observer_company_node,
@@ -2187,10 +2229,9 @@ static double projection_term_select(
     int best_observer_incoming_boundary = 0;
     double best_observer_logit = 0.0;
     double best_observer_log_partition = 0.0;
-    (void)projection_term_context_coordinate(
+    (void)projection_term_outcome_coordinate(
         product,
         term,
-        result,
         best_child_index,
         &best_observer_context_node,
         &best_observer_company_node,
@@ -2226,12 +2267,23 @@ static double projection_term_select(
 static void projection_term_free(ProjectionTerm *term) {
     for (int index = 0; index < term->count; index++) {
         free(term->nodes[index].children);
+        ProjectionTermOutcome *outcome = term->nodes[index].outcome;
+        if (outcome != NULL) {
+            free(outcome->log_partitions);
+            free(outcome->logits);
+            free(outcome->incoming_boundary);
+            free(outcome->company_tokens);
+            free(outcome->company_nodes);
+            free(outcome->context_nodes);
+            free(outcome->coordinates);
+            free(outcome);
+        }
     }
     free(term->nodes);
     memset(term, 0, sizeof(*term));
 }
 
-static double projection_company_product_select(
+static double projection_company_strength_select(
     ProjectionProduct *product,
     unsigned long long budget,
     int *scratch_path,
@@ -2377,18 +2429,18 @@ static double projection_company_product_select(
         );
     }
 
-    term.nodes[0].path_company_log_probability = 0.0;
-    term.nodes[0].path_independent_log_probability = 0.0;
     int *leaf_path = malloc(
         (size_t)product->frame_count * sizeof(*leaf_path)
     );
-    if (leaf_path == NULL) {
+    int *leaf_path_nodes = malloc(
+        (size_t)product->frame_count * sizeof(*leaf_path_nodes)
+    );
+    if (leaf_path == NULL || leaf_path_nodes == NULL) {
         fprintf(stderr, "could not allocate family-observed path\n");
         exit(EXIT_FAILURE);
     }
     for (int index = 1; index < term.count; index++) {
         ProjectionTermNode *node = &term.nodes[index];
-        ProjectionTermNode *parent = &term.nodes[node->parent];
         int row = index - 1;
         float *row_logits = result.logits +
             (size_t)row * result.vocab_size;
@@ -2396,104 +2448,67 @@ static double projection_company_product_select(
             row_logits,
             result.vocab_size
         );
-        ProjectionCandidate *candidate =
-            &product->frames[node->position].candidates[
-                node->candidate_index
-            ];
-        double company_edge = 0.0;
-        double independent_edge = 0.0;
-        if (node->parent != 0) {
-            int parent_row = node->parent - 1;
-            float *parent_logits = result.logits +
-                (size_t)parent_row * result.vocab_size;
-            company_edge = (double)parent_logits[candidate->token] -
-                parent->row_log_partition;
-            independent_edge = candidate->log_probability;
-        }
-        node->path_company_log_probability =
-            parent->path_company_log_probability + company_edge;
-        node->path_independent_log_probability =
-            parent->path_independent_log_probability + independent_edge;
+    }
+    for (int index = 1; index < term.count; index++) {
+        ProjectionTermNode *node = &term.nodes[index];
+        if (node->child_count != 0) continue;
+        ProjectionTermOutcome *outcome = projection_term_observe_leaf(
+            product,
+            &term,
+            &result,
+            index,
+            leaf_path_nodes
+        );
+        product->counters->structured_leaf_outcomes++;
+        projection_term_path(
+            &term,
+            index,
+            product->frame_count,
+            leaf_path
+        );
         if (product->counters->trace != NULL) {
             FILE *stream = product->counters->trace;
             fprintf(
                 stream,
-                "{\"event\":\"company_edge\",\"node\":%d,"
-                "\"parent\":%d,\"position\":%d,\"observed\":%s,"
-                "\"token\":%d,\"company_log_probability\":%.17g,"
-                "\"independent_log_probability\":%.17g,"
-                "\"density_log_ratio\":%.17g,\"piece\":",
-                index,
-                node->parent,
-                node->position,
-                node->parent == 0 ? "false" : "true",
-                candidate->token,
-                company_edge,
-                independent_edge,
-                company_edge - independent_edge
+                "{\"event\":\"company_outcome\",\"leaf_node\":%d,"
+                "\"outcome\":\"position_indexed_covectors\","
+                "\"coordinates\":[",
+                index
             );
-            projection_json_piece(
-                stream,
-                product->counters->tokenizer,
-                candidate->token
-            );
-            fputs("}\n", stream);
-            fflush(stream);
-        }
-        if (node->child_count == 0) {
-            float *terminal_logits = result.logits +
-                (size_t)row * result.vocab_size;
-            double terminal_partition = node->row_log_partition;
-            double terminal_company =
-                (double)terminal_logits[1] - terminal_partition;
-            double terminal_independent =
-                product->terminal_baseline_log_probability;
-            double company = node->path_company_log_probability +
-                terminal_company;
-            double independent = node->path_independent_log_probability +
-                terminal_independent;
-            node->path_density_log_ratio_diagnostic = company - independent;
-            product->counters->structured_leaf_outcomes++;
-            projection_term_path(
-                &term,
-                index,
-                product->frame_count,
-                leaf_path
-            );
-            if (product->counters->trace != NULL) {
-                FILE *stream = product->counters->trace;
+            for (int position = 0; position < outcome->coordinate_count;
+                 position++) {
+                if (position != 0) fputc(',', stream);
+                fprintf(stream, "%.17g", outcome->coordinates[position]);
+            }
+            fputs("],\"bindings\":[", stream);
+            for (int position = 0; position < outcome->coordinate_count;
+                 position++) {
+                if (position != 0) fputc(',', stream);
                 fprintf(
                     stream,
-                    "{\"event\":\"company_terminal\",\"leaf_node\":%d,"
-                    "\"position\":%d,"
-                    "\"outcome\":\"token_indexed_logits\","
-                    "\"selection_used_terminal_token\":false,"
-                    "\"row_log_partition\":%.17g,"
-                    "\"company_log_probability\":%.17g,"
-                    "\"independent_log_probability\":%.17g,"
-                    "\"density_log_ratio\":%.17g,"
-                    "\"path_company_log_probability\":%.17g,"
-                    "\"path_independent_log_probability\":%.17g,"
-                    "\"path_density_log_ratio\":%.17g,\"text\":",
-                    index,
-                    node->position + 1,
-                    terminal_partition,
-                    terminal_company,
-                    terminal_independent,
-                    terminal_company - terminal_independent,
-                    company,
-                    independent,
-                    node->path_density_log_ratio_diagnostic
+                    "{\"position\":%d,\"context_node\":%d,"
+                    "\"company_node\":%d,\"company_token\":%d,"
+                    "\"direction\":\"%s\",\"logit\":%.17g,"
+                    "\"log_partition\":%.17g}",
+                    position,
+                    outcome->context_nodes[position],
+                    outcome->company_nodes[position],
+                    outcome->company_tokens[position],
+                    outcome->incoming_boundary[position]
+                        ? "incoming_boundary" : "outgoing",
+                    outcome->logits[position],
+                    outcome->log_partitions[position]
                 );
-                projection_trace_path(stream, product, leaf_path);
-                fputs("}\n", stream);
-                fflush(stream);
             }
+            fputs("],\"text\":", stream);
+            projection_trace_path(stream, product, leaf_path);
+            fputs("}\n", stream);
+            fflush(stream);
         }
     }
 
     unsigned long long strength_start = projection_monotonic_nanoseconds();
-    (void)projection_term_select(product, &term, &result, 0);
+    (void)projection_term_select(product, &term, 0);
     product->counters->strength_nanoseconds =
         projection_monotonic_nanoseconds() - strength_start;
     if (!product->first_variable_selection_rating_set) {
@@ -2507,33 +2522,35 @@ static double projection_company_product_select(
         product->frame_count,
         selected_path
     );
-    ProjectionTermNode *selected_leaf =
-        &term.nodes[term.nodes[0].selected_leaf];
-    int selected_row = term.nodes[0].selected_leaf - 1;
-    float *selected_terminal_logits = result.logits +
-        (size_t)selected_row * result.vocab_size;
-    double selected_terminal_partition = projection_log_partition(
-        selected_terminal_logits,
-        result.vocab_size
-    );
-    double selected_company =
-        selected_leaf->path_company_log_probability +
-        (double)selected_terminal_logits[1] - selected_terminal_partition;
-    double selected_independent =
-        selected_leaf->path_independent_log_probability +
-        product->terminal_baseline_log_probability;
-    product->selected_path_density_log_ratio_diagnostic =
-        selected_company - selected_independent;
+    ProjectionTermOutcome *selected_outcome =
+        term.nodes[term.nodes[0].selected_leaf].outcome;
+    if (selected_outcome == NULL) {
+        fprintf(stderr, "root selection lost its complete outcome\n");
+        exit(EXIT_FAILURE);
+    }
     product->counters->root_terminalizations++;
-    projection_trace_whole_path_result(
-        product,
-        selected_path,
-        1,
-        rating,
-        0.0,
-        selected_company,
-        selected_independent
-    );
+    if (product->counters->trace != NULL) {
+        FILE *stream = product->counters->trace;
+        fprintf(
+            stream,
+            "{\"event\":\"root_terminalized\","
+            "\"outcome\":\"position_indexed_covectors\","
+            "\"selected_outcome_leaf\":%d,"
+            "\"first_variable_coordinate\":%.17g,"
+            "\"coordinates\":[",
+            term.nodes[0].selected_leaf,
+            rating
+        );
+        for (int position = 0;
+             position < selected_outcome->coordinate_count; position++) {
+            if (position != 0) fputc(',', stream);
+            fprintf(stream, "%.17g", selected_outcome->coordinates[position]);
+        }
+        fputs("],\"text\":", stream);
+        projection_trace_path(stream, product, selected_path);
+        fputs("}\n", stream);
+        fflush(stream);
+    }
 
     for (int filler = 0; filler < filler_count; filler++) {
         size_t calls = atkey_filler_calls(
@@ -2569,6 +2586,7 @@ static double projection_company_product_select(
         fflush(product->counters->trace);
     }
 
+    free(leaf_path_nodes);
     free(leaf_path);
     free(reads_before);
     free(calls_before);
@@ -2836,20 +2854,6 @@ void generate_hidden_feedback_select(
         }
     }
 
-    matmul(
-        transformer->state.logits,
-        hidden_sequence + (size_t)output_count * config->dim,
-        transformer->weights.wcls,
-        config->dim,
-        config->vocab_size
-    );
-    double terminal_baseline_partition = projection_log_partition(
-        transformer->state.logits,
-        config->vocab_size
-    );
-    double terminal_baseline_log_probability =
-        (double)transformer->state.logits[1] - terminal_baseline_partition;
-
     long projection_end = time_in_ms();
 
     ProjectionStrengthCounters strength = {
@@ -2883,12 +2887,9 @@ void generate_hidden_feedback_select(
         .target_displacements = target_displacements,
         .candidate_previous = candidate_previous,
         .target_norm = target_displacement_norm,
-        .terminal_baseline_log_probability =
-            terminal_baseline_log_probability,
         .observer_kind = observer_kind,
         .leaf_budget = leaf_budget,
         .sample_seed = sample_seed,
-        .selected_path_density_log_ratio_diagnostic = NAN,
         .counters = &strength,
     };
 
@@ -2901,8 +2902,8 @@ void generate_hidden_feedback_select(
             selected_path
         );
         terminal_rating = selection_rating;
-    } else if (observer_kind == PROJECTION_OBSERVER_FIRTHIAN_CONTEXT) {
-        selection_rating = projection_company_product_select(
+    } else if (observer_kind == PROJECTION_OBSERVER_COMPANY_STRENGTH) {
+        selection_rating = projection_company_strength_select(
             &product,
             leaf_budget,
             partial_path,
@@ -3012,14 +3013,6 @@ void generate_hidden_feedback_select(
         projection_end - recurrence_end,
         selection_end - observer_start
     );
-    if (observer_kind == PROJECTION_OBSERVER_FIRTHIAN_CONTEXT) {
-        fprintf(
-            stderr,
-            "selected_path_density_log_ratio_diagnostic: %.17g\n",
-            product.selected_path_density_log_ratio_diagnostic
-        );
-    }
-
     if (trace != NULL) {
         fprintf(
             trace,
@@ -3054,18 +3047,6 @@ void generate_hidden_feedback_select(
             (double)strength.company_model_nanoseconds / 1000000.0,
             (double)strength.strength_nanoseconds / 1000000.0
         );
-        if (observer_kind == PROJECTION_OBSERVER_FIRTHIAN_CONTEXT) {
-            fprintf(
-                trace,
-                ",\"selected_path_density_log_ratio_diagnostic\":%.17g",
-                product.selected_path_density_log_ratio_diagnostic
-            );
-        } else {
-            fputs(
-                ",\"selected_path_density_log_ratio_diagnostic\":null",
-                trace
-            );
-        }
         fputs("}\n", trace);
         fflush(trace);
     }
@@ -3196,7 +3177,9 @@ void error_usage() {
     fprintf(stderr, "Options:\n");
     fprintf(stderr, "  -n <int>    number of steps to run for, default 256. 0 = max_seq_len\n");
     fprintf(stderr, "  -g <string> feedback boundary: identity (default) or affine\n");
-    fprintf(stderr, "  -r <string> observer: logits (the only active path)\n");
+    fprintf(stderr, "  -r <string> observer: company (default) or logits\n");
+    fprintf(stderr, "  -b <int>    sampled leaf support for company observer, default 64\n");
+    fprintf(stderr, "  -s <int>    support sampling seed, default 42\n");
     fprintf(stderr, "  -i <string> input prompt\n");
     fprintf(stderr, "  -z <string> optional path to custom tokenizer\n");
     fprintf(stderr, "  -o <string> optional flushed JSONL candidate trace\n");
@@ -3210,11 +3193,11 @@ int main(int argc, char *argv[]) {
     char *checkpoint_path = NULL;  // e.g. out/model.bin
     char *tokenizer_path = "tokenizer.bin";
     int steps = 256;            // number of steps to run for
-    unsigned long long leaf_budget = 0;
-    unsigned long long sample_seed = 0;
+    unsigned long long leaf_budget = 64;
+    unsigned long long sample_seed = 42;
     FeedbackBoundary feedback_boundary = FEEDBACK_IDENTITY;
     ProjectionObserverKind observer_kind =
-        PROJECTION_OBSERVER_LOGIT_STRENGTH;
+        PROJECTION_OBSERVER_COMPANY_STRENGTH;
     char *prompt = NULL;        // prompt string
     char *trace_path = NULL;
     char *mode = "generate";    // generate|chat
@@ -3238,8 +3221,24 @@ int main(int argc, char *argv[]) {
             }
         }
         else if (argv[i][1] == 'r') {
-            if (strcmp(argv[i + 1], "logits") != 0) error_usage();
-            observer_kind = PROJECTION_OBSERVER_LOGIT_STRENGTH;
+            if (strcmp(argv[i + 1], "company") == 0) {
+                observer_kind = PROJECTION_OBSERVER_COMPANY_STRENGTH;
+            } else if (strcmp(argv[i + 1], "logits") == 0) {
+                observer_kind = PROJECTION_OBSERVER_LOGIT_STRENGTH;
+            } else {
+                error_usage();
+            }
+        }
+        else if (argv[i][1] == 'b' || argv[i][1] == 's') {
+            errno = 0;
+            char *end = NULL;
+            unsigned long long parsed = strtoull(argv[i + 1], &end, 10);
+            if (errno != 0 || end == argv[i + 1] || *end != '\0' ||
+                parsed == 0) {
+                error_usage();
+            }
+            if (argv[i][1] == 'b') leaf_budget = parsed;
+            else sample_seed = parsed;
         }
         else if (argv[i][1] == 'i') { prompt = argv[i + 1]; }
         else if (argv[i][1] == 'z') { tokenizer_path = argv[i + 1]; }
@@ -3257,6 +3256,13 @@ int main(int argc, char *argv[]) {
     if (steps == 0 || steps > transformer.config.seq_len) steps = transformer.config.seq_len; // override to ~max length
 
     AtkeyRuntime *company_runtime = NULL;
+    if (observer_kind == PROJECTION_OBSERVER_COMPANY_STRENGTH) {
+        company_runtime = atkey_runtime_new(checkpoint_path, tokenizer_path);
+        if (company_runtime == NULL) {
+            fprintf(stderr, "could not initialize one-shot company runtime\n");
+            exit(EXIT_FAILURE);
+        }
+    }
 
     // build the Tokenizer via the tokenizer .bin file
     Tokenizer tokenizer;
