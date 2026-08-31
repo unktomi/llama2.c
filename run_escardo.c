@@ -3,8 +3,10 @@
  * functions.  Physical kernel/weight reuse is deliberately not claimed here;
  * that is a later lowering and performance problem.
  *
- * The selection carrier is a model-produced logit coordinate:
+ * The selection carrier is a hypothetical token constructor and the outcome
+ * is the frozen model trace at the endpoint of the completed branch:
  *
+ *     R = (selected suffix, terminal model node, terminal logit covector)
  *     J_R ModelLogit = (ModelLogit -> R) -> ModelLogit
  *
  * Token positions are composed with Escardo's dependent product.  The code
@@ -18,11 +20,15 @@
  * selected a.  Only the root applies tau, p(selection p), and starts the
  * scheduler.
  *
- * Exact mode enumerates an explicitly requested finite local support.  Timed
- * mode has no leaf-count bound: until a wall-clock deadline it repeatedly
- * invokes the same memoized product, samples one argument at each local
- * Select from the model distribution, records demand multiplicity, and backs
- * every completed observation through the visited local selections.  A
+ * For a demanded constructor x, the local Select first forces and memoizes
+ * b(x), then compares
+ *
+ *     ev(x, root_covector(x : b(x))).
+ *
+ * No path likelihood is formed.  Exact mode enumerates an explicitly
+ * requested finite local support.  Timed mode has no leaf-count bound: until
+ * a wall-clock deadline it samples which memo cells are demanded, then
+ * re-forces this same product over the retained finite function tree.  A
  * positive --top-k changes the sampling proposal only; the default proposal
  * is the full selectable vocabulary.
  *
@@ -988,6 +994,7 @@ static void model_request_node(
 
 typedef struct ModelLogit ModelLogit;
 typedef struct LogitPath LogitPath;
+typedef struct SelectionOutcome SelectionOutcome;
 
 struct ModelLogit {
     ModelNode *context;
@@ -1002,16 +1009,14 @@ struct LogitPath {
     LogitPath *tail;
 };
 
-typedef double (*PathObserverApply)(void *environment, LogitPath *path);
+struct SelectionOutcome {
+    LogitPath *path;
+    ModelNode *terminal;
+};
 
-typedef struct {
-    PathObserverApply apply;
-    void *environment;
-} PathObserver;
-
-typedef void (*PathContinuation)(
+typedef void (*OutcomeContinuation)(
     void *environment,
-    LogitPath *path,
+    SelectionOutcome *outcome,
     double selection_score
 );
 
@@ -1054,8 +1059,7 @@ struct SelectBranch {
     bool sampled;
     double support_probability;
     double draw;
-    LogitPath *tail;
-    LogitPath *path;
+    SelectionOutcome *outcome;
     double score;
     bool ready;
 };
@@ -1066,8 +1070,7 @@ struct SelectJob {
     ModelNode *history;
     int remaining;
     uint64_t budget;
-    PathObserver observer;
-    PathContinuation continuation;
+    OutcomeContinuation continuation;
     void *continuation_environment;
     SelectBranch *branches;
     int branch_count;
@@ -1075,10 +1078,10 @@ struct SelectJob {
     int ready_count;
 };
 
-/* A memoized local Select in the wall-clock-driven product.  Sampling may
+/* A memoized local Select in the wall-clock-driven product. Sampling may
  * demand the same outgoing continuation repeatedly; the edge is stored once
- * while multiplicity records every demand.  Scores arrive only from the root
- * observer after a complete recursively composed path has been produced. */
+ * while multiplicity records every demand. The edge retains b(x)'s terminal
+ * outcome and its ev(x, root_covector(x : b(x))) coordinate. */
 struct TimedSelectEdge {
     TimedSelectEdge *next;
     TimedSelectFrame *owner;
@@ -1090,8 +1093,10 @@ struct TimedSelectEdge {
     uint64_t demand_count;
     uint64_t observation_count;
     bool observed;
-    double best_score;
-    LogitPath *best_path;
+    double selected_rating;
+    LogitPath *selected_path;
+    ModelNode *selected_terminal;
+    ModelNode *terminal;
 };
 
 struct TimedSelectFrame {
@@ -1181,18 +1186,28 @@ static double sample_random_unit(uint64_t *state) {
         (1.0 / 9007199254740992.0);
 }
 
-static double path_log_probability(LogitPath *path) {
-    double total = 0.0;
-    for (; path != NULL; path = path->tail) {
-        total += path->head.log_probability;
-    }
-    return total;
-}
+static double log_partition(const Tensor *logits);
 
-static double root_payoff(void *environment, LogitPath *path) {
-    Search *search = environment;
+/* The sole constructor/codata elimination used by selection.  The covector
+ * belongs to the endpoint of the already completed branch x : b(x), not to
+ * x's eager prefix row. */
+static double terminal_root_coordinate(
+    Search *search,
+    int constructor,
+    ModelNode *terminal
+) {
+    if (terminal == NULL || !terminal->ready || terminal->logits == NULL ||
+        constructor < 0 || constructor >= search->model->vocab_size) {
+        escardo_fail("selection received an incomplete terminal outcome");
+    }
     search->payoff_observations++;
-    return path_log_probability(path);
+    double coordinate =
+        (double)terminal->logits->values[constructor] -
+        log_partition(terminal->logits);
+    if (!isfinite(coordinate)) {
+        escardo_fail("terminal root coordinate is not finite");
+    }
+    return coordinate;
 }
 
 static void json_string(FILE *stream, const char *text) {
@@ -1305,7 +1320,9 @@ static void trace_candidate(SelectBranch *branch) {
         "{\"event\":\"candidate\",\"frame\":%" PRIu64
         ",\"depth\":%d,\"remaining\":%d,\"token\":%d"
         ",\"local_rank\":%d,\"logit\":%.9g"
-        ",\"local_log_probability\":%.17g,\"backed_score\":%.17g"
+        ",\"proposal_log_probability\":%.17g"
+        ",\"terminal_node\":%" PRIu64
+        ",\"root_coordinate\":%.17g"
         ",\"text\":",
         branch->job->frame_id,
         branch->job->history->position - search->prompt_count + 1,
@@ -1314,9 +1331,14 @@ static void trace_candidate(SelectBranch *branch) {
         branch->value.local_rank,
         branch->value.logit,
         branch->value.log_probability,
+        branch->outcome->terminal->id,
         branch->score
     );
-    trace_decoded_path(search, branch->job->history, branch->path);
+    trace_decoded_path(
+        search,
+        branch->job->history,
+        branch->outcome->path
+    );
     fputs("}\n", stream);
     fflush(stream);
 }
@@ -1328,15 +1350,17 @@ static void trace_choice(SelectJob *job, const SelectBranch *branch) {
         search->trace,
         "{\"event\":\"select\",\"frame\":%" PRIu64
         ",\"depth\":%d,\"remaining\":%d,\"token\":%d"
-        ",\"local_rank\":%d,\"backed_score\":%.17g,\"text\":",
+        ",\"local_rank\":%d,\"terminal_node\":%" PRIu64
+        ",\"root_coordinate\":%.17g,\"text\":",
         job->frame_id,
         job->history->position - search->prompt_count + 1,
         job->remaining,
         branch->value.token,
         branch->value.local_rank,
+        branch->outcome->terminal->id,
         branch->score
     );
-    trace_decoded_path(search, job->history, branch->path);
+    trace_decoded_path(search, job->history, branch->outcome->path);
     fputs("}\n", search->trace);
     fflush(search->trace);
 }
@@ -1648,33 +1672,29 @@ static void select_path(
     ModelNode *history,
     int remaining,
     uint64_t budget,
-    PathObserver observer,
-    PathContinuation continuation,
+    OutcomeContinuation continuation,
     void *continuation_environment
 );
 
-typedef struct {
-    ModelLogit head;
-    PathObserver outer;
-    Search *search;
-} PrefixObserverEnvironment;
-
-static double prefix_observer_apply(void *environment, LogitPath *tail) {
-    PrefixObserverEnvironment *prefix = environment;
-    LogitPath *path = path_cons(prefix->search, prefix->head, tail);
-    return prefix->outer.apply(prefix->outer.environment, path);
-}
-
 static void select_job_finish_branch(
     SelectBranch *branch,
-    LogitPath *tail
+    SelectionOutcome *suffix
 ) {
     SelectJob *job = branch->job;
-    branch->tail = tail;
-    branch->path = path_cons(job->search, branch->value, tail);
-    branch->score = job->observer.apply(
-        job->observer.environment,
-        branch->path
+    if (suffix == NULL || suffix->terminal == NULL) {
+        escardo_fail("selection branch returned no terminal outcome");
+    }
+    SelectionOutcome *outcome = arena_allocate(
+        &job->search->model->arena,
+        sizeof(*outcome)
+    );
+    *outcome = *suffix;
+    outcome->path = path_cons(job->search, branch->value, suffix->path);
+    branch->outcome = outcome;
+    branch->score = terminal_root_coordinate(
+        job->search,
+        branch->value.token,
+        outcome->terminal
     );
     branch->ready = true;
     job->ready_count++;
@@ -1685,11 +1705,11 @@ static void select_job_finish_branch(
 
 static void select_branch_tail_ready(
     void *environment,
-    LogitPath *tail,
+    SelectionOutcome *suffix,
     double selection_score
 ) {
     (void)selection_score;
-    select_job_finish_branch(environment, tail);
+    select_job_finish_branch(environment, suffix);
 }
 
 static void select_branch_history_ready(
@@ -1698,25 +1718,22 @@ static void select_branch_history_ready(
 ) {
     SelectBranch *branch = environment;
     SelectJob *job = branch->job;
-    PrefixObserverEnvironment *prefix = arena_allocate(
-        &job->search->model->arena,
-        sizeof(*prefix)
-    );
-    *prefix = (PrefixObserverEnvironment){
-        .head = branch->value,
-        .outer = job->observer,
-        .search = job->search,
-    };
-    PathObserver observer = {
-        .apply = prefix_observer_apply,
-        .environment = prefix,
-    };
+    if (job->remaining == 1) {
+        SelectionOutcome *suffix = arena_allocate(
+            &job->search->model->arena,
+            sizeof(*suffix)
+        );
+        *suffix = (SelectionOutcome){
+            .terminal = child,
+        };
+        select_job_finish_branch(branch, suffix);
+        return;
+    }
     select_path(
         job->search,
         child,
         job->remaining - 1,
         branch->child_budget,
-        observer,
         select_branch_tail_ready,
         branch
     );
@@ -1724,10 +1741,6 @@ static void select_branch_history_ready(
 
 static void select_start_branch(SelectBranch *branch) {
     SelectJob *job = branch->job;
-    if (job->remaining == 1) {
-        select_job_finish_branch(branch, NULL);
-        return;
-    }
     model_request_node(
         job->search->model,
         job->history,
@@ -1805,7 +1818,7 @@ static void select_job_after_branch(SelectJob *job) {
     trace_choice(job, selected);
     job->continuation(
         job->continuation_environment,
-        selected->path,
+        selected->outcome,
         selected->score
     );
 }
@@ -1850,15 +1863,18 @@ static void select_path(
     ModelNode *history,
     int remaining,
     uint64_t budget,
-    PathObserver observer,
-    PathContinuation continuation,
+    OutcomeContinuation continuation,
     void *continuation_environment
 ) {
     if (remaining <= 0) {
-        continuation(continuation_environment, NULL, observer.apply(
-            observer.environment,
-            NULL
-        ));
+        SelectionOutcome *outcome = arena_allocate(
+            &search->model->arena,
+            sizeof(*outcome)
+        );
+        *outcome = (SelectionOutcome){
+            .terminal = history,
+        };
+        continuation(continuation_environment, outcome, NAN);
         return;
     }
     if (history == NULL || !history->ready || history->logits == NULL) {
@@ -1871,7 +1887,6 @@ static void select_path(
     job->history = history;
     job->remaining = remaining;
     job->budget = budget;
-    job->observer = observer;
     job->continuation = continuation;
     job->continuation_environment = continuation_environment;
     job->branch_count = demanded_branch_count(search, budget);
@@ -1941,25 +1956,6 @@ static void select_path(
     }
 }
 
-typedef struct TimedObservation TimedObservation;
-typedef struct TimedProgram TimedProgram;
-
-struct TimedObservation {
-    TimedObservation *next;
-    TimedSelectEdge **edges;
-    ModelLogit *values;
-    LogitPath *path;
-    double score;
-    int count;
-};
-
-struct TimedProgram {
-    Search *search;
-    TimedSelectFrame *root;
-    TimedObservation *observations;
-    uint64_t observation_count;
-};
-
 typedef struct {
     Search *search;
     int *tokens;
@@ -2019,35 +2015,35 @@ typedef struct {
     Search *search;
     bool done;
     LogitPath *selected;
+    ModelNode *terminal;
     double score;
 } RootRun;
 
 static void tau_selection_ready(
     void *environment,
-    LogitPath *selected,
+    SelectionOutcome *selected,
     double selection_score
 ) {
-    (void)selection_score;
     RootRun *root = environment;
-    /* tau epsilon p = p (epsilon p): this is the only terminal observation. */
-    root->selected = selected;
-    root->score = root_payoff(root->search, selected);
+    if (selected == NULL || selected->terminal == NULL ||
+        selected->path == NULL || !isfinite(selection_score)) {
+        escardo_fail("root received an incomplete selection outcome");
+    }
+    /* Only the root forgets the structured outcome and emits its witness. */
+    root->selected = selected->path;
+    root->terminal = selected->terminal;
+    root->score = selection_score;
     root->done = true;
 }
 
 static void exact_prompt_ready(void *environment, ModelNode *prompt) {
     RootRun *root = environment;
     Search *search = root->search;
-    PathObserver payoff = {
-        .apply = root_payoff,
-        .environment = search,
-    };
     select_path(
         search,
         prompt,
         search->horizon,
         UINT64_MAX,
-        payoff,
         tau_selection_ready,
         root
     );
@@ -2075,7 +2071,6 @@ static RootRun escardo_exact_run(
 }
 
 typedef struct {
-    TimedProgram *program;
     Search *search;
     TimedSelectFrame *root;
     TimedSelectFrame *frame;
@@ -2120,8 +2115,8 @@ static bool timed_edge_improves(
     const TimedSelectEdge *selected
 ) {
     if (selected == NULL) return true;
-    if (candidate->best_score > selected->best_score) return true;
-    if (candidate->best_score < selected->best_score) return false;
+    if (candidate->selected_rating > selected->selected_rating) return true;
+    if (candidate->selected_rating < selected->selected_rating) return false;
     if (candidate->local_rank < selected->local_rank) return true;
     if (candidate->local_rank > selected->local_rank) return false;
     return candidate->token < selected->token;
@@ -2132,10 +2127,12 @@ static void timed_trace_observation(TimedSample *sample) {
     if (search->trace == NULL) return;
     fprintf(
         search->trace,
-        "{\"event\":\"sample_observation\",\"sample\":%" PRIu64
-        ",\"token_count\":%d,\"score\":%.17g,\"text\":",
+        "{\"event\":\"strength_observation\",\"sample\":%" PRIu64
+        ",\"token_count\":%d,\"terminal_node\":%" PRIu64
+        ",\"root_coordinate\":%.17g,\"text\":",
         sample->sample_id,
         sample->count,
+        sample->root->selected->selected_terminal->id,
         sample->score
     );
     trace_decoded_path(search, sample->root->history, sample->path);
@@ -2143,86 +2140,95 @@ static void timed_trace_observation(TimedSample *sample) {
     fflush(search->trace);
 }
 
-static void timed_trace_backup(
-    TimedSample *sample,
-    int depth,
-    TimedSelectEdge *edge
-) {
-    Search *search = sample->search;
+static void timed_trace_candidate(TimedSelectEdge *edge) {
+    Search *search = edge->owner->search;
     if (search->trace == NULL) return;
     fprintf(
         search->trace,
-        "{\"event\":\"backup\",\"sample\":%" PRIu64
-        ",\"frame\":%" PRIu64 ",\"depth\":%d,\"token\":%d"
-        ",\"edge_observations\":%" PRIu64
+        "{\"event\":\"candidate\",\"frame\":%" PRIu64
+        ",\"depth\":%d,\"remaining\":%d,\"token\":%d"
+        ",\"local_rank\":%d,\"multiplicity\":%" PRIu64
+        ",\"terminal_node\":%" PRIu64
         ",\"frame_observations\":%" PRIu64
-        ",\"observed_score\":%.17g,\"backed_score\":%.17g}\n",
-        sample->sample_id,
+        ",\"root_coordinate\":%.17g,\"text\":",
         edge->owner->history->id,
-        depth,
+        edge->owner->history->position - search->prompt_count + 1,
+        edge->owner->remaining,
         edge->token,
-        edge->observation_count,
+        edge->local_rank,
+        edge->demand_count,
+        edge->selected_terminal->id,
         edge->owner->observation_count,
-        sample->score,
-        edge->best_score
+        edge->selected_rating
     );
+    trace_decoded_path(search, edge->owner->history, edge->selected_path);
+    fputs("}\n", search->trace);
     fflush(search->trace);
 }
 
-static void timed_sample_finish(TimedSample *sample) {
-    LogitPath *path = NULL;
-    for (int index = sample->count - 1; index >= 0; index--) {
-        path = path_cons(sample->search, sample->values[index], path);
-    }
-    sample->path = path;
-    sample->score = root_payoff(sample->search, path);
-    timed_trace_observation(sample);
+static ModelLogit timed_edge_value(const TimedSelectEdge *edge) {
+    return (ModelLogit){
+        .context = edge->owner->history,
+        .token = edge->token,
+        .local_rank = edge->local_rank,
+        .logit = edge->logit,
+        .log_probability = edge->log_probability,
+    };
+}
 
-    for (int depth = sample->count - 1; depth >= 0; depth--) {
-        TimedSelectEdge *edge = sample->edges[depth];
-        TimedSelectFrame *frame = edge->owner;
-        edge->observation_count++;
-        frame->observation_count++;
-        if (!edge->observed || sample->score > edge->best_score) {
+/* Force Escardo's product over exactly the memo cells sampled so far. Each
+ * edge is re-observed only when its recursively selected terminal outcome
+ * changes. This is b(x) memoization; there is no rollout reward or path
+ * backup. */
+static bool timed_strength_force(TimedSelectFrame *frame) {
+    TimedSelectEdge *best = NULL;
+    for (TimedSelectEdge *edge = frame->edges; edge != NULL;
+         edge = edge->next) {
+        ModelNode *terminal = NULL;
+        LogitPath *tail = NULL;
+        if (edge->suffix != NULL) {
+            if (!timed_strength_force(edge->suffix)) continue;
+            TimedSelectEdge *suffix = edge->suffix->selected;
+            terminal = suffix->selected_terminal;
+            tail = suffix->selected_path;
+        } else {
+            terminal = edge->terminal;
+        }
+        if (terminal == NULL) continue;
+
+        if (!edge->observed || edge->selected_terminal != terminal) {
+            edge->selected_terminal = terminal;
+            edge->selected_path = path_cons(
+                frame->search,
+                timed_edge_value(edge),
+                tail
+            );
+            edge->selected_rating = terminal_root_coordinate(
+                frame->search,
+                edge->token,
+                terminal
+            );
             edge->observed = true;
-            edge->best_score = sample->score;
-            edge->best_path = path;
+            edge->observation_count++;
+            frame->observation_count++;
+            frame->search->candidate_observations++;
+            timed_trace_candidate(edge);
         }
-        if (timed_edge_improves(edge, frame->selected)) {
-            frame->selected = edge;
-        }
-        timed_trace_backup(sample, depth, edge);
-        sample->search->candidate_observations++;
+        if (timed_edge_improves(edge, best)) best = edge;
     }
-    TimedObservation *observation = arena_allocate(
-        &sample->search->model->arena,
-        sizeof(*observation)
-    );
-    memset(observation, 0, sizeof(*observation));
-    observation->edges = arena_allocate(
-        &sample->search->model->arena,
-        (size_t)sample->count * sizeof(*observation->edges)
-    );
-    observation->values = arena_allocate(
-        &sample->search->model->arena,
-        (size_t)sample->count * sizeof(*observation->values)
-    );
-    memcpy(
-        observation->edges,
-        sample->edges,
-        (size_t)sample->count * sizeof(*observation->edges)
-    );
-    memcpy(
-        observation->values,
-        sample->values,
-        (size_t)sample->count * sizeof(*observation->values)
-    );
-    observation->path = path;
-    observation->score = sample->score;
-    observation->count = sample->count;
-    observation->next = sample->program->observations;
-    sample->program->observations = observation;
-    sample->program->observation_count++;
+    frame->selected = best;
+    return best != NULL;
+}
+
+static void timed_sample_finish(TimedSample *sample) {
+    if (!timed_strength_force(sample->root) ||
+        sample->root->selected->selected_path == NULL ||
+        sample->root->selected->selected_terminal == NULL) {
+        escardo_fail("sampled strength has no completed outcome");
+    }
+    sample->path = sample->root->selected->selected_path;
+    sample->score = sample->root->selected->selected_rating;
+    timed_trace_observation(sample);
     sample->search->completed_samples++;
     sample->done = true;
 }
@@ -2232,6 +2238,16 @@ static void timed_sample_step(TimedSample *sample);
 static void timed_sample_child_ready(void *environment, ModelNode *child) {
     TimedSample *sample = environment;
     TimedSelectEdge *edge = sample->edges[sample->depth];
+    if (edge->owner->remaining == 1 ||
+        (sample->search->allow_delimiter &&
+         edge->token == ESCARDO_SEQUENCE_DELIMITER)) {
+        if (edge->terminal != NULL && edge->terminal != child) {
+            escardo_fail("memoized terminal continuation changed node");
+        }
+        edge->terminal = child;
+        timed_sample_finish(sample);
+        return;
+    }
     TimedSelectFrame *suffix = timed_frame_for(
         sample->search,
         child,
@@ -2263,12 +2279,6 @@ static void timed_sample_step(TimedSample *sample) {
     sample->count = sample->depth + 1;
     timed_trace_demand(sample, edge);
 
-    if (frame->remaining == 1 ||
-        (sample->search->allow_delimiter &&
-         value.token == ESCARDO_SEQUENCE_DELIMITER)) {
-        timed_sample_finish(sample);
-        return;
-    }
     model_request_node(
         sample->search->model,
         frame->history,
@@ -2305,14 +2315,16 @@ static void timed_trace_selected(Search *search, TimedSelectFrame *root) {
             "{\"event\":\"select\",\"frame\":%" PRIu64
             ",\"depth\":%d,\"token\":%d,\"local_rank\":%d"
             ",\"alternatives\":%d,\"multiplicity\":%" PRIu64
-            ",\"backed_score\":%.17g}\n",
+            ",\"terminal_node\":%" PRIu64
+            ",\"root_coordinate\":%.17g}\n",
             frame->history->id,
             depth,
             edge->token,
             edge->local_rank,
             alternatives,
             edge->demand_count,
-            edge->best_score
+            edge->selected_terminal->id,
+            edge->selected_rating
         );
         fflush(search->trace);
         frame = edge->suffix;
@@ -2344,10 +2356,6 @@ static RootRun escardo_timed_run(
         prompt.node,
         search->horizon
     );
-    TimedProgram program = {
-        .search = search,
-        .root = root_frame,
-    };
     search->deadline = add_milliseconds(
         monotonic_now(),
         search->sample_milliseconds
@@ -2364,7 +2372,6 @@ static RootRun escardo_timed_run(
         uint64_t first_sample_id = search->completed_samples;
         for (int index = 0; index < search->batch_size; index++) {
             samples[index] = (TimedSample){
-                .program = &program,
                 .search = search,
                 .root = root_frame,
                 .frame = root_frame,
@@ -2407,21 +2414,20 @@ static RootRun escardo_timed_run(
     free(samples);
 
     if (root_frame->selected == NULL ||
-        root_frame->selected->best_path == NULL) {
+        root_frame->selected->selected_path == NULL ||
+        root_frame->selected->selected_terminal == NULL) {
         escardo_fail("timed selection produced no complete observation");
     }
     timed_trace_selected(search, root_frame);
     RootRun root = {
         .search = search,
         .done = true,
-        .selected = root_frame->selected->best_path,
+        .selected = root_frame->selected->selected_path,
+        .terminal = root_frame->selected->selected_terminal,
+        .score = root_frame->selected->selected_rating,
     };
-    /* tau epsilon p = p (epsilon p): exactly one final terminalization after
-     * sampling has finished composing the selection. */
-    root.score = root_payoff(search, root.selected);
-    if (fabs(root.score - root_frame->selected->best_score) > 1e-10) {
-        escardo_fail("timed terminalization changed selected observation");
-    }
+    /* The root alone forgets the selected structured outcome and emits the
+     * token witness. It does not run another model observation. */
     return root;
 }
 
