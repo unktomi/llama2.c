@@ -1391,6 +1391,14 @@ int main(int argc, char **argv) {
     int prompt_count = 0;
     encode(&tokenizer, prompt, 1, 0, prompt_tokens, &prompt_count);
     if (prompt_count <= 0) select_fail("prompt encoded to no tokens");
+    for (int position = 0; position < prompt_count; position++) {
+        if (prompt_tokens[position] < 0 ||
+            prompt_tokens[position] >= transformer.config.vocab_size) {
+            select_fail(
+                "tokenizer is incompatible with the checkpoint vocabulary"
+            );
+        }
+    }
     if (prompt_count > transformer.config.seq_len - completion_count) {
         select_fail("prompt plus completion exceeds model context");
     }

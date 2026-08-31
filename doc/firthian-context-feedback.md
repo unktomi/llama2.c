@@ -97,6 +97,25 @@ observations), so the maximum learned-filler call count is 15. It is a semantic
 correction and an inspectable sampled result, not the original one-physical-
 read performance goal.
 
+The corresponding 16-position Stories260K control must use its 512-token
+tokenizer:
+
+```sh
+./run_hidden_feedback_select test/stories260K.bin \
+  -z test/tok512.bin -i "Lily was" -l 16 -k 2 -s 42 \
+  -o candidates-260k.jsonl
+```
+
+It retains 17 complete leaves and selects:
+
+```text
+Lily was a little girl named Lily who loved to play with her
+```
+
+The executable rejects prompt token IDs outside the checkpoint vocabulary, so
+accidentally pairing Stories260K with the 32K tokenizer now reports an
+incompatibility instead of dereferencing token `-1`.
+
 ## Trace
 
 Every JSONL record is flushed immediately. Relevant records are:
