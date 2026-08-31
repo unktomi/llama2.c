@@ -1,5 +1,5 @@
 /*
- * Ordered masked joint decoder for hidden-feedback llama2.c.
+ * Hierarchical leave-one-out joint decoder for hidden-feedback llama2.c.
  *
  * The retained hidden tape is not assigned a scalar path energy.  A proposed
  * token tuple is placed in the company of the fixed prefill and the observer
@@ -7,13 +7,14 @@
  *
  *   observe : (Hidden^N, Token^N) -> Logits^N.
  *
- * The decoder is a tied-embedding, bidirectional masked language model.
- * Queries come from retained hidden states. Keys/values come from the fixed
- * prompt constructors and from every proposed completion constructor.
- * Completion position i is masked out of output row i, so the head cannot
- * copy the token it is rating. RoPE is applied to every query and key using
- * its absolute sequence position; unlike the rejected bag-of-embeddings
- * observer, this decoder can distinguish differently ordered company.
+ * The decoder is an ordered balanced span-message tree. Prompt leaves are
+ * projected constructors. Each active completion leaf is the typed pair
+ * (h_j, E[x_j]), with separate learned projections; deleted leaves are zero.
+ * One shared non-commutative nonlinear merge is reused at every internal span.
+ * For output row i, the complete pair at leaf i is replaced by a zero hole and
+ * only that leaf-to-root path is replayed against cached sibling messages. The
+ * resulting root is therefore exactly the root of the same tree rebuilt with
+ * leaf i zero, without rebuilding unaffected spans.
  *
  * Training denoises complete teacher tuples after deterministic deletion,
  * model-native wrong-token substitution, and repeated-company corruption;
@@ -42,34 +43,50 @@ typedef struct {
     int *targets;              /* completion positions, NULL for inference */
     int *prompt_tokens;
     int prompt_count;
+    uint64_t sample_key;       /* stable across training permutations */
 } ObserverExample;
 
 typedef struct {
     int dim;
-    int head_count;
-    int head_dim;
     size_t matrix_size;
     size_t parameter_count;
-    double *parameters;        /* Wq, Wk, Wv, Wo, Wh */
+    double *parameters;        /* ObserverMatrix order below */
 } ObserverHead;
+
+typedef enum {
+    OBSERVER_MATRIX_LEAF_CONSTRUCTOR = 0,
+    OBSERVER_MATRIX_LEAF_HIDDEN,
+    OBSERVER_MATRIX_MERGE_LEFT,
+    OBSERVER_MATRIX_MERGE_RIGHT,
+    OBSERVER_MATRIX_MERGE_OUTPUT,
+    OBSERVER_MATRIX_ROOT_OUTPUT,
+    OBSERVER_MATRIX_HIDDEN_OUTPUT,
+    OBSERVER_MATRIX_COUNT,
+} ObserverMatrix;
 
 typedef struct {
     int positions;
     int sources;
     int vocab;
-    double *source_input;
-    double *query;
-    double *key;
-    double *value;
-    double *attention;
-    double *context;
+    int node_count;
+    int root;
+    int max_depth;
+    int *node_left;
+    int *node_right;
+    int *node_parent;
+    int *source_node;
+    int *path_length;
+    int *path_sibling;
+    unsigned char *path_hole_is_left;
+    double *node_message;
+    double *node_left_linear;
+    double *node_right_linear;
+    double *hole_message;
+    double *path_left_linear;
+    double *path_right_linear;
     double *output;
     double *logits;
-    double *grad_query;
-    double *grad_key;
-    double *grad_value;
-    double *grad_attention;
-    double *grad_context;
+    double *grad_node;
     double *grad_output;
 } ObserverWorkspace;
 
@@ -80,6 +97,7 @@ typedef struct {
     int completion_count;
     int teacher_steps;
     int epochs;
+    int batch_size;
     unsigned long long seed;
     double learning_rate;
     double l2;
@@ -180,36 +198,33 @@ static const double *observer_const_matrix(
 static void observer_head_initialize(
     ObserverHead *head,
     int dim,
-    int head_count,
     unsigned long long seed
 ) {
-    if (dim <= 0 || head_count <= 0 || dim % head_count != 0) {
-        observer_fail("invalid observer head dimensions");
-    }
+    if (dim <= 0) observer_fail("invalid observer head dimension");
     *head = (ObserverHead){
         .dim = dim,
-        .head_count = head_count,
-        .head_dim = dim / head_count,
         .matrix_size = (size_t)dim * dim,
-        .parameter_count = 5U * (size_t)dim * dim,
+        .parameter_count =
+            (size_t)OBSERVER_MATRIX_COUNT * (size_t)dim * dim,
     };
     head->parameters = observer_allocate(head->parameter_count, sizeof(double));
     uint64_t random_state = seed != 0 ? seed : UINT64_C(1);
-    for (int matrix = 0; matrix < 4; matrix++) {
+    for (int matrix = 0; matrix < OBSERVER_MATRIX_COUNT; matrix++) {
         double *weight = observer_matrix(head, matrix);
         for (int row = 0; row < dim; row++) {
             for (int column = 0; column < dim; column++) {
-                double identity = row == column ? 1.0 : 0.0;
+                int identity_centered =
+                    matrix == OBSERVER_MATRIX_LEAF_CONSTRUCTOR ||
+                    matrix == OBSERVER_MATRIX_MERGE_LEFT ||
+                    matrix == OBSERVER_MATRIX_MERGE_RIGHT ||
+                    matrix == OBSERVER_MATRIX_ROOT_OUTPUT;
+                double identity = identity_centered && row == column ?
+                    1.0 : 0.0;
                 weight[(size_t)row * dim + column] = identity +
                     0.01 * observer_random_signed(&random_state) /
                     sqrt((double)dim);
             }
         }
-    }
-    double *hidden_output = observer_matrix(head, 4);
-    for (size_t index = 0; index < head->matrix_size; index++) {
-        hidden_output[index] = 0.01 * observer_random_signed(&random_state) /
-            sqrt((double)dim);
     }
 }
 
@@ -226,7 +241,12 @@ static double observer_initial_parameter(
     size_t coordinate = parameter % head->matrix_size;
     int row = (int)(coordinate / (size_t)head->dim);
     int column = (int)(coordinate % (size_t)head->dim);
-    return matrix < 4 && row == column ? 1.0 : 0.0;
+    int identity_centered =
+        matrix == OBSERVER_MATRIX_LEAF_CONSTRUCTOR ||
+        matrix == OBSERVER_MATRIX_MERGE_LEFT ||
+        matrix == OBSERVER_MATRIX_MERGE_RIGHT ||
+        matrix == OBSERVER_MATRIX_ROOT_OUTPUT;
+    return identity_centered && row == column ? 1.0 : 0.0;
 }
 
 static void observer_head_save(const char *path, const ObserverHead *head) {
@@ -235,10 +255,9 @@ static void observer_head_save(const char *path, const ObserverHead *head) {
         fprintf(stderr, "could not open observer output %s\n", path);
         exit(EXIT_FAILURE);
     }
-    const unsigned char magic[8] = {'T','J','M','A','E','0','0','5'};
+    const unsigned char magic[8] = {'T','J','M','A','E','0','0','7'};
     int ok = fwrite(magic, sizeof(magic), 1, file) == 1 &&
         fwrite(&head->dim, sizeof(head->dim), 1, file) == 1 &&
-        fwrite(&head->head_count, sizeof(head->head_count), 1, file) == 1 &&
         fwrite(
             head->parameters,
             sizeof(double),
@@ -256,14 +275,12 @@ static void observer_head_load(const char *path, ObserverHead *head) {
     }
     unsigned char magic[8];
     int dim = 0;
-    int heads = 0;
     if (fread(magic, sizeof(magic), 1, file) != 1 ||
-        memcmp(magic, "TJMAE005", sizeof(magic)) != 0 ||
-        fread(&dim, sizeof(dim), 1, file) != 1 ||
-        fread(&heads, sizeof(heads), 1, file) != 1) {
+        memcmp(magic, "TJMAE007", sizeof(magic)) != 0 ||
+        fread(&dim, sizeof(dim), 1, file) != 1) {
         observer_fail("invalid observer head file");
     }
-    observer_head_initialize(head, dim, heads, 1);
+    observer_head_initialize(head, dim, 1);
     if (fread(
             head->parameters,
             sizeof(double),
@@ -349,12 +366,14 @@ static void observer_build_example_from_tokens(
     const int *story_tokens,
     int content_start,
     int prompt_count,
-    int completion_count
+    int completion_count,
+    uint64_t sample_key
 ) {
     if (prompt_count + completion_count - 1 > student->config.seq_len) {
         observer_fail("student training span exceeds sequence length");
     }
     example->prompt_count = prompt_count;
+    example->sample_key = sample_key;
     example->prompt_tokens = observer_allocate((size_t)prompt_count, sizeof(int));
     example->targets = observer_allocate((size_t)completion_count, sizeof(int));
     example->hidden = observer_allocate(
@@ -426,6 +445,7 @@ static ObserverExample *observer_generate_dataset(
     int prompt_count,
     int completion_count,
     int teacher_steps,
+    uint64_t sample_key_base,
     const char *name
 ) {
     ObserverExample *examples = observer_allocate(
@@ -471,7 +491,10 @@ static ObserverExample *observer_generate_dataset(
                 story_tokens,
                 content_start,
                 prompt_count,
-                completion_count
+                completion_count,
+                observer_mix_u64(
+                    sample_key_base ^ (uint64_t)(unsigned int)(built + 1)
+                )
             );
             built++;
             if (built == count || built % 128 == 0) {
@@ -569,6 +592,41 @@ static void observer_build_prompt_example(
     }
 }
 
+/* Build an ordered, nearly balanced binary tree in postorder. Leaves and
+ * internal nodes both receive stable indices; every child precedes its
+ * parent, which makes the forward and reverse traversals linear scans. */
+static int observer_tree_build_topology(
+    ObserverWorkspace *workspace,
+    int first_source,
+    int source_count,
+    int *next_node
+) {
+    if (source_count == 1) {
+        int leaf = (*next_node)++;
+        workspace->source_node[first_source] = leaf;
+        return leaf;
+    }
+    int left_count = source_count / 2;
+    int left = observer_tree_build_topology(
+        workspace,
+        first_source,
+        left_count,
+        next_node
+    );
+    int right = observer_tree_build_topology(
+        workspace,
+        first_source + left_count,
+        source_count - left_count,
+        next_node
+    );
+    int parent = (*next_node)++;
+    workspace->node_left[parent] = left;
+    workspace->node_right[parent] = right;
+    workspace->node_parent[left] = parent;
+    workspace->node_parent[right] = parent;
+    return parent;
+}
+
 static void observer_workspace_initialize(
     ObserverWorkspace *workspace,
     const ObserverHead *head,
@@ -577,120 +635,200 @@ static void observer_workspace_initialize(
     int vocab,
     int with_gradients
 ) {
+    if (positions <= 0 || sources <= positions || vocab <= 0 ||
+        sources > (int)(((long long)INT_MAX + 1) / 2)) {
+        observer_fail("invalid joint observer workspace dimensions");
+    }
     *workspace = (ObserverWorkspace){
         .positions = positions,
         .sources = sources,
         .vocab = vocab,
+        .node_count = 2 * sources - 1,
     };
-    size_t query_count = (size_t)positions * head->dim;
-    size_t source_count = (size_t)sources * head->dim;
-    size_t attention_count =
-        (size_t)head->head_count * positions * sources;
-    workspace->source_input = observer_allocate(source_count, sizeof(double));
-    workspace->query = observer_allocate(query_count, sizeof(double));
-    workspace->key = observer_allocate(source_count, sizeof(double));
-    workspace->value = observer_allocate(source_count, sizeof(double));
-    workspace->attention = observer_allocate(attention_count, sizeof(double));
-    workspace->context = observer_allocate(query_count, sizeof(double));
-    workspace->output = observer_allocate(query_count, sizeof(double));
-    workspace->logits = observer_allocate(
-        (size_t)positions * vocab,
-        sizeof(double)
+    int nodes = workspace->node_count;
+    workspace->node_left = observer_allocate(nodes, sizeof(int));
+    workspace->node_right = observer_allocate(nodes, sizeof(int));
+    workspace->node_parent = observer_allocate(nodes, sizeof(int));
+    workspace->source_node = observer_allocate(sources, sizeof(int));
+    workspace->path_length = observer_allocate(positions, sizeof(int));
+    for (int node = 0; node < nodes; node++) {
+        workspace->node_left[node] = -1;
+        workspace->node_right[node] = -1;
+        workspace->node_parent[node] = -1;
+    }
+    for (int source = 0; source < sources; source++) {
+        workspace->source_node[source] = -1;
+    }
+    int next_node = 0;
+    workspace->root = observer_tree_build_topology(
+        workspace,
+        0,
+        sources,
+        &next_node
     );
+    if (next_node != nodes || workspace->root != nodes - 1) {
+        observer_fail("joint observer tree construction failed");
+    }
+
+    int prompt_count = sources - positions;
+    for (int position = 0; position < positions; position++) {
+        int depth = 0;
+        int node = workspace->source_node[prompt_count + position];
+        while (node != workspace->root) {
+            node = workspace->node_parent[node];
+            if (node < 0 || ++depth > nodes) {
+                observer_fail("joint observer tree path is invalid");
+            }
+        }
+        workspace->path_length[position] = depth;
+        if (depth > workspace->max_depth) workspace->max_depth = depth;
+    }
+    size_t path_count = (size_t)positions * workspace->max_depth;
+    workspace->path_sibling = observer_allocate(path_count, sizeof(int));
+    workspace->path_hole_is_left = observer_allocate(
+        path_count,
+        sizeof(unsigned char)
+    );
+    for (int position = 0; position < positions; position++) {
+        int node = workspace->source_node[prompt_count + position];
+        for (int depth = 0;
+             depth < workspace->path_length[position];
+             depth++) {
+            int parent = workspace->node_parent[node];
+            int hole_is_left = workspace->node_left[parent] == node;
+            size_t path = (size_t)position * workspace->max_depth + depth;
+            workspace->path_hole_is_left[path] =
+                (unsigned char)hole_is_left;
+            workspace->path_sibling[path] = hole_is_left ?
+                workspace->node_right[parent] : workspace->node_left[parent];
+            node = parent;
+        }
+    }
+
+    size_t node_width = (size_t)nodes * head->dim;
+    size_t path_width = path_count * head->dim;
+    size_t hole_width =
+        (size_t)positions * (workspace->max_depth + 1) * head->dim;
+    size_t output_width = (size_t)positions * head->dim;
+    workspace->node_message = observer_allocate(node_width, sizeof(double));
+    workspace->node_left_linear = observer_allocate(node_width, sizeof(double));
+    workspace->node_right_linear = observer_allocate(node_width, sizeof(double));
+    workspace->hole_message = observer_allocate(hole_width, sizeof(double));
+    workspace->path_left_linear = observer_allocate(path_width, sizeof(double));
+    workspace->path_right_linear = observer_allocate(path_width, sizeof(double));
+    workspace->output = observer_allocate(output_width, sizeof(double));
+    workspace->logits = observer_allocate((size_t)positions * vocab, sizeof(double));
     if (with_gradients) {
-        workspace->grad_query = observer_allocate(query_count, sizeof(double));
-        workspace->grad_key = observer_allocate(source_count, sizeof(double));
-        workspace->grad_value = observer_allocate(source_count, sizeof(double));
-        workspace->grad_attention = observer_allocate(
-            attention_count,
-            sizeof(double)
-        );
-        workspace->grad_context = observer_allocate(query_count, sizeof(double));
-        workspace->grad_output = observer_allocate(query_count, sizeof(double));
+        workspace->grad_node = observer_allocate(node_width, sizeof(double));
+        workspace->grad_output = observer_allocate(output_width, sizeof(double));
     }
 }
 
 static void observer_workspace_free(ObserverWorkspace *workspace) {
     free(workspace->grad_output);
-    free(workspace->grad_context);
-    free(workspace->grad_attention);
-    free(workspace->grad_value);
-    free(workspace->grad_key);
-    free(workspace->grad_query);
+    free(workspace->grad_node);
     free(workspace->logits);
     free(workspace->output);
-    free(workspace->context);
-    free(workspace->attention);
-    free(workspace->value);
-    free(workspace->key);
-    free(workspace->query);
-    free(workspace->source_input);
+    free(workspace->path_right_linear);
+    free(workspace->path_left_linear);
+    free(workspace->hole_message);
+    free(workspace->node_right_linear);
+    free(workspace->node_left_linear);
+    free(workspace->node_message);
+    free(workspace->path_hole_is_left);
+    free(workspace->path_sibling);
+    free(workspace->path_length);
+    free(workspace->source_node);
+    free(workspace->node_parent);
+    free(workspace->node_right);
+    free(workspace->node_left);
     memset(workspace, 0, sizeof(*workspace));
 }
 
-static void observer_linear(
+static void observer_project_float_add(
     const double *weight,
-    const double *input,
-    int rows,
+    const float *input,
     int dim,
     double *output
 ) {
-    for (int item = 0; item < rows; item++) {
-        for (int out = 0; out < dim; out++) {
-            double value = 0.0;
-            for (int in = 0; in < dim; in++) {
-                value += weight[(size_t)out * dim + in] *
-                    input[(size_t)item * dim + in];
-            }
-            output[(size_t)item * dim + out] = value;
+    for (int out = 0; out < dim; out++) {
+        double value = 0.0;
+        for (int in = 0; in < dim; in++) {
+            value += weight[(size_t)out * dim + in] * input[in];
         }
+        output[out] += value;
     }
 }
 
-/*
- * Give the masked company its sequence order. The old observer fed an
- * unordered multiset of token embeddings to attention, making every
- * permutation of a completion observationally identical. This is the same
- * per-head rotary map used by llama2.c, applied to the decoder's Q/K vectors.
- * direction=-1 applies the transpose map needed by back-propagation.
- */
-static void observer_apply_rope(
-    double *vectors,
-    int rows,
+static double observer_sigmoid(double value) {
+    if (value >= 0.0) return 1.0 / (1.0 + exp(-value));
+    double exponential = exp(value);
+    return exponential / (1.0 + exponential);
+}
+
+/* Ordered shared span composition. left_linear/right_linear are cached for
+ * exact reverse mode; the residual average supplies a direct affine path. */
+static void observer_merge_forward(
+    const ObserverHead *head,
+    const double *left,
+    const double *right,
+    double *left_linear,
+    double *right_linear,
+    double *output
+) {
+    const double *left_weight = observer_const_matrix(
+        head,
+        OBSERVER_MATRIX_MERGE_LEFT
+    );
+    const double *right_weight = observer_const_matrix(
+        head,
+        OBSERVER_MATRIX_MERGE_RIGHT
+    );
+    const double *output_weight = observer_const_matrix(
+        head,
+        OBSERVER_MATRIX_MERGE_OUTPUT
+    );
+    int dim = head->dim;
+    for (int out = 0; out < dim; out++) {
+        double left_value = 0.0;
+        double right_value = 0.0;
+        for (int in = 0; in < dim; in++) {
+            left_value += left_weight[(size_t)out * dim + in] * left[in];
+            right_value += right_weight[(size_t)out * dim + in] * right[in];
+        }
+        left_linear[out] = left_value;
+        right_linear[out] = right_value;
+    }
+    for (int out = 0; out < dim; out++) {
+        double value = 0.5 * (left[out] + right[out]);
+        for (int lane = 0; lane < dim; lane++) {
+            double gated = left_linear[lane] *
+                observer_sigmoid(left_linear[lane]) * right_linear[lane];
+            value += output_weight[(size_t)out * dim + lane] * gated;
+        }
+        output[out] = value;
+    }
+}
+
+static double *observer_hole_stage(
+    ObserverWorkspace *workspace,
+    int position,
+    int depth,
     int dim,
-    int head_count,
-    int first_position,
-    int direction
+    int max_depth
 ) {
-    int head_dim = dim / head_count;
-    for (int row = 0; row < rows; row++) {
-        int position = first_position + row;
-        for (int head = 0; head < head_count; head++) {
-            double *vector = vectors + (size_t)row * dim + head * head_dim;
-            for (int lane = 0; lane + 1 < head_dim; lane += 2) {
-                double frequency = 1.0 /
-                    pow(10000.0, lane / (double)head_dim);
-                double angle = direction * position * frequency;
-                double cosine = cos(angle);
-                double sine = sin(angle);
-                double first = vector[lane];
-                double second = vector[lane + 1];
-                vector[lane] = first * cosine - second * sine;
-                vector[lane + 1] = first * sine + second * cosine;
-            }
-        }
-    }
+    return workspace->hole_message +
+        ((size_t)position * (max_depth + 1) + depth) * dim;
 }
 
-static int observer_source_visible(
-    const int *candidate_tokens,
-    int prompt_count,
-    int source,
-    int self_source
+static double *observer_path_linear(
+    double *storage,
+    int position,
+    int depth,
+    int dim,
+    int max_depth
 ) {
-    if (source == self_source) return 0;
-    if (source < prompt_count) return 1;
-    return candidate_tokens[source - prompt_count] >= 0;
+    return storage + ((size_t)position * max_depth + depth) * dim;
 }
 
 static void observer_forward(
@@ -704,161 +842,137 @@ static void observer_forward(
     int sources = workspace->sources;
     int dim = head->dim;
     int prompt_count = example->prompt_count;
-    int head_dim = head->head_dim;
-    memset(
-        workspace->source_input,
-        0,
-        (size_t)sources * dim * sizeof(double)
+    if (prompt_count + positions != sources) {
+        observer_fail("joint observer source layout mismatch");
+    }
+    size_t node_width = (size_t)workspace->node_count * dim;
+    size_t path_width =
+        (size_t)positions * workspace->max_depth * dim;
+    size_t hole_width =
+        (size_t)positions * (workspace->max_depth + 1) * dim;
+    memset(workspace->node_message, 0, node_width * sizeof(double));
+    memset(workspace->node_left_linear, 0, node_width * sizeof(double));
+    memset(workspace->node_right_linear, 0, node_width * sizeof(double));
+    memset(workspace->hole_message, 0, hole_width * sizeof(double));
+    memset(workspace->path_left_linear, 0, path_width * sizeof(double));
+    memset(workspace->path_right_linear, 0, path_width * sizeof(double));
+
+    const double *constructor_weight = observer_const_matrix(
+        head,
+        OBSERVER_MATRIX_LEAF_CONSTRUCTOR
     );
-    memset(
-        workspace->context,
-        0,
-        (size_t)positions * dim * sizeof(double)
+    const double *hidden_weight = observer_const_matrix(
+        head,
+        OBSERVER_MATRIX_LEAF_HIDDEN
     );
     for (int source = 0; source < prompt_count; source++) {
         const float *embedding = student->weights.wcls +
             (size_t)example->prompt_tokens[source] * dim;
-        for (int lane = 0; lane < dim; lane++) {
-            workspace->source_input[(size_t)source * dim + lane] =
-                embedding[lane];
-        }
+        double *leaf = workspace->node_message +
+            (size_t)workspace->source_node[source] * dim;
+        observer_project_float_add(constructor_weight, embedding, dim, leaf);
     }
     for (int position = 0; position < positions; position++) {
         int source = prompt_count + position;
         if (candidate_tokens[position] < 0) continue;
+        if (candidate_tokens[position] >= workspace->vocab) {
+            observer_fail("joint observer candidate token is out of range");
+        }
         const float *embedding = student->weights.wcls +
             (size_t)candidate_tokens[position] * dim;
-        for (int lane = 0; lane < dim; lane++) {
-            workspace->source_input[(size_t)source * dim + lane] =
-                embedding[lane];
-        }
+        double *leaf = workspace->node_message +
+            (size_t)workspace->source_node[source] * dim;
+        observer_project_float_add(constructor_weight, embedding, dim, leaf);
+        const float *hidden = example->hidden + (size_t)position * dim;
+        observer_project_float_add(hidden_weight, hidden, dim, leaf);
     }
-    double *query_input = observer_allocate(
-        (size_t)positions * dim,
-        sizeof(double)
-    );
-    for (int position = 0; position < positions; position++) {
-        for (int lane = 0; lane < dim; lane++) {
-            query_input[(size_t)position * dim + lane] =
-                example->hidden[(size_t)position * dim + lane];
-        }
-    }
-    observer_linear(
-        observer_const_matrix(head, 0),
-        query_input,
-        positions,
-        dim,
-        workspace->query
-    );
-    free(query_input);
-    observer_apply_rope(
-        workspace->query,
-        positions,
-        dim,
-        head->head_count,
-        prompt_count,
-        1
-    );
-    observer_linear(
-        observer_const_matrix(head, 1),
-        workspace->source_input,
-        sources,
-        dim,
-        workspace->key
-    );
-    observer_apply_rope(
-        workspace->key,
-        sources,
-        dim,
-        head->head_count,
-        0,
-        1
-    );
-    observer_linear(
-        observer_const_matrix(head, 2),
-        workspace->source_input,
-        sources,
-        dim,
-        workspace->value
-    );
 
-    double scale = 1.0 / sqrt((double)head_dim);
-    for (int attention_head = 0;
-         attention_head < head->head_count;
-         attention_head++) {
-        int lane_start = attention_head * head_dim;
-        for (int output_position = 0;
-             output_position < positions;
-             output_position++) {
-            double *row = workspace->attention +
-                ((size_t)attention_head * positions + output_position) * sources;
-            int masked_source = prompt_count + output_position;
-            double maximum = -DBL_MAX;
-            for (int source = 0; source < sources; source++) {
-                if (!observer_source_visible(
-                        candidate_tokens,
-                        prompt_count,
-                        source,
-                        masked_source)) {
-                    row[source] = 0.0;
-                    continue;
-                }
-                double score = 0.0;
-                for (int lane = 0; lane < head_dim; lane++) {
-                    int coordinate = lane_start + lane;
-                    score += workspace->query[
-                        (size_t)output_position * dim + coordinate
-                    ] * workspace->key[(size_t)source * dim + coordinate];
-                }
-                score *= scale;
-                row[source] = score;
-                if (score > maximum) maximum = score;
-            }
-            double partition = 0.0;
-            for (int source = 0; source < sources; source++) {
-                if (!observer_source_visible(
-                        candidate_tokens,
-                        prompt_count,
-                        source,
-                        masked_source)) continue;
-                row[source] = exp(row[source] - maximum);
-                partition += row[source];
-            }
-            for (int source = 0; source < sources; source++) {
-                if (!observer_source_visible(
-                        candidate_tokens,
-                        prompt_count,
-                        source,
-                        masked_source)) {
-                    row[source] = 0.0;
-                    continue;
-                }
-                row[source] /= partition;
-                for (int lane = 0; lane < head_dim; lane++) {
-                    int coordinate = lane_start + lane;
-                    workspace->context[
-                        (size_t)output_position * dim + coordinate
-                    ] += row[source] * workspace->value[
-                        (size_t)source * dim + coordinate
-                    ];
-                }
-            }
+    for (int node = 0; node < workspace->node_count; node++) {
+        int left = workspace->node_left[node];
+        if (left < 0) continue;
+        int right = workspace->node_right[node];
+        observer_merge_forward(
+            head,
+            workspace->node_message + (size_t)left * dim,
+            workspace->node_message + (size_t)right * dim,
+            workspace->node_left_linear + (size_t)node * dim,
+            workspace->node_right_linear + (size_t)node * dim,
+            workspace->node_message + (size_t)node * dim
+        );
+    }
+
+    /* Each row starts with an actual zero leaf and replays just that leaf's
+     * path. Cached siblings never contain the removed completion pair. */
+    for (int position = 0; position < positions; position++) {
+        for (int depth = 0;
+             depth < workspace->path_length[position];
+             depth++) {
+            size_t path = (size_t)position * workspace->max_depth + depth;
+            const double *hole = observer_hole_stage(
+                workspace,
+                position,
+                depth,
+                dim,
+                workspace->max_depth
+            );
+            const double *sibling = workspace->node_message +
+                (size_t)workspace->path_sibling[path] * dim;
+            const double *left = workspace->path_hole_is_left[path] ?
+                hole : sibling;
+            const double *right = workspace->path_hole_is_left[path] ?
+                sibling : hole;
+            observer_merge_forward(
+                head,
+                left,
+                right,
+                observer_path_linear(
+                    workspace->path_left_linear,
+                    position,
+                    depth,
+                    dim,
+                    workspace->max_depth
+                ),
+                observer_path_linear(
+                    workspace->path_right_linear,
+                    position,
+                    depth,
+                    dim,
+                    workspace->max_depth
+                ),
+                observer_hole_stage(
+                    workspace,
+                    position,
+                    depth + 1,
+                    dim,
+                    workspace->max_depth
+                )
+            );
         }
     }
 
-    const double *output_weight = observer_const_matrix(head, 3);
-    const double *hidden_delta = observer_const_matrix(head, 4);
+    const double *root_weight = observer_const_matrix(
+        head,
+        OBSERVER_MATRIX_ROOT_OUTPUT
+    );
+    const double *hidden_delta = observer_const_matrix(
+        head,
+        OBSERVER_MATRIX_HIDDEN_OUTPUT
+    );
     for (int position = 0; position < positions; position++) {
+        const double *root = observer_hole_stage(
+            workspace,
+            position,
+            workspace->path_length[position],
+            dim,
+            workspace->max_depth
+        );
+        const float *hidden = example->hidden + (size_t)position * dim;
         for (int out = 0; out < dim; out++) {
-            /* Preserve the frozen model's predictive covector. Matrix 4 is a
-             * zero-centred residual adapter, not a replacement initialized
-             * near zero for the entire hidden path. */
-            double value = example->hidden[(size_t)position * dim + out];
+            double value = hidden[out];
             for (int in = 0; in < dim; in++) {
-                value += output_weight[(size_t)out * dim + in] *
-                    workspace->context[(size_t)position * dim + in];
+                value += root_weight[(size_t)out * dim + in] * root[in];
                 value += hidden_delta[(size_t)out * dim + in] *
-                    example->hidden[(size_t)position * dim + in];
+                    hidden[in];
             }
             workspace->output[(size_t)position * dim + out] = value;
         }
@@ -877,6 +991,238 @@ static void observer_forward(
                 value;
         }
     }
+}
+
+static void observer_merge_backward(
+    const ObserverHead *head,
+    const double *left,
+    const double *right,
+    const double *left_linear,
+    const double *right_linear,
+    const double *grad_output,
+    double *gradient,
+    double *grad_left,
+    double *grad_right
+) {
+    int dim = head->dim;
+    const double *left_weight = observer_const_matrix(
+        head,
+        OBSERVER_MATRIX_MERGE_LEFT
+    );
+    const double *right_weight = observer_const_matrix(
+        head,
+        OBSERVER_MATRIX_MERGE_RIGHT
+    );
+    const double *output_weight = observer_const_matrix(
+        head,
+        OBSERVER_MATRIX_MERGE_OUTPUT
+    );
+    double *gradient_left_weight = gradient +
+        (size_t)OBSERVER_MATRIX_MERGE_LEFT * head->matrix_size;
+    double *gradient_right_weight = gradient +
+        (size_t)OBSERVER_MATRIX_MERGE_RIGHT * head->matrix_size;
+    double *gradient_output_weight = gradient +
+        (size_t)OBSERVER_MATRIX_MERGE_OUTPUT * head->matrix_size;
+    for (int lane = 0; lane < dim; lane++) {
+        grad_left[lane] = 0.5 * grad_output[lane];
+        grad_right[lane] = 0.5 * grad_output[lane];
+    }
+    for (int lane = 0; lane < dim; lane++) {
+        double sigmoid = observer_sigmoid(left_linear[lane]);
+        double silu = left_linear[lane] * sigmoid;
+        double gated = silu * right_linear[lane];
+        double grad_gated = 0.0;
+        for (int out = 0; out < dim; out++) {
+            gradient_output_weight[(size_t)out * dim + lane] +=
+                grad_output[out] * gated;
+            grad_gated += output_weight[(size_t)out * dim + lane] *
+                grad_output[out];
+        }
+        double grad_left_linear = grad_gated * right_linear[lane] *
+            (sigmoid + left_linear[lane] * sigmoid * (1.0 - sigmoid));
+        double grad_right_linear = grad_gated * silu;
+        for (int in = 0; in < dim; in++) {
+            gradient_left_weight[(size_t)lane * dim + in] +=
+                grad_left_linear * left[in];
+            gradient_right_weight[(size_t)lane * dim + in] +=
+                grad_right_linear * right[in];
+            grad_left[in] += left_weight[(size_t)lane * dim + in] *
+                grad_left_linear;
+            grad_right[in] += right_weight[(size_t)lane * dim + in] *
+                grad_right_linear;
+        }
+    }
+}
+
+/* Reverse the leave-one-out computation without rebuilding a tree per row.
+ * Each row first walks its temporary hole path backward and deposits the
+ * sibling-side derivatives into cached full-tree nodes. One descending scan
+ * of the postorder full tree then propagates all deposited derivatives to the
+ * shared merges and active leaves. */
+static void observer_backward(
+    const ObserverExample *example,
+    const int *candidate_tokens,
+    const Transformer *student,
+    const ObserverHead *head,
+    ObserverWorkspace *workspace,
+    double *gradient
+) {
+    if (workspace->grad_node == NULL || workspace->grad_output == NULL) {
+        observer_fail("joint observer reverse workspace is missing");
+    }
+    int positions = workspace->positions;
+    int dim = head->dim;
+    int prompt_count = example->prompt_count;
+    memset(
+        workspace->grad_node,
+        0,
+        (size_t)workspace->node_count * dim * sizeof(double)
+    );
+    double *current_gradient = observer_allocate(dim, sizeof(double));
+    double *grad_left = observer_allocate(dim, sizeof(double));
+    double *grad_right = observer_allocate(dim, sizeof(double));
+
+    const double *root_weight = observer_const_matrix(
+        head,
+        OBSERVER_MATRIX_ROOT_OUTPUT
+    );
+    double *gradient_root_weight = gradient +
+        (size_t)OBSERVER_MATRIX_ROOT_OUTPUT * head->matrix_size;
+    double *gradient_hidden_output = gradient +
+        (size_t)OBSERVER_MATRIX_HIDDEN_OUTPUT * head->matrix_size;
+    for (int position = 0; position < positions; position++) {
+        const double *grad_output = workspace->grad_output +
+            (size_t)position * dim;
+        const double *root = observer_hole_stage(
+            workspace,
+            position,
+            workspace->path_length[position],
+            dim,
+            workspace->max_depth
+        );
+        const float *hidden = example->hidden + (size_t)position * dim;
+        memset(current_gradient, 0, (size_t)dim * sizeof(double));
+        for (int out = 0; out < dim; out++) {
+            for (int in = 0; in < dim; in++) {
+                gradient_root_weight[(size_t)out * dim + in] +=
+                    grad_output[out] * root[in];
+                gradient_hidden_output[(size_t)out * dim + in] +=
+                    grad_output[out] * hidden[in];
+                current_gradient[in] +=
+                    root_weight[(size_t)out * dim + in] * grad_output[out];
+            }
+        }
+
+        for (int depth = workspace->path_length[position] - 1;
+             depth >= 0;
+             depth--) {
+            size_t path = (size_t)position * workspace->max_depth + depth;
+            const double *hole = observer_hole_stage(
+                workspace,
+                position,
+                depth,
+                dim,
+                workspace->max_depth
+            );
+            int sibling_node = workspace->path_sibling[path];
+            const double *sibling = workspace->node_message +
+                (size_t)sibling_node * dim;
+            int hole_is_left = workspace->path_hole_is_left[path] != 0;
+            observer_merge_backward(
+                head,
+                hole_is_left ? hole : sibling,
+                hole_is_left ? sibling : hole,
+                observer_path_linear(
+                    workspace->path_left_linear,
+                    position,
+                    depth,
+                    dim,
+                    workspace->max_depth
+                ),
+                observer_path_linear(
+                    workspace->path_right_linear,
+                    position,
+                    depth,
+                    dim,
+                    workspace->max_depth
+                ),
+                current_gradient,
+                gradient,
+                grad_left,
+                grad_right
+            );
+            double *grad_sibling = workspace->grad_node +
+                (size_t)sibling_node * dim;
+            const double *grad_hole = hole_is_left ? grad_left : grad_right;
+            const double *grad_sibling_step =
+                hole_is_left ? grad_right : grad_left;
+            for (int lane = 0; lane < dim; lane++) {
+                grad_sibling[lane] += grad_sibling_step[lane];
+                current_gradient[lane] = grad_hole[lane];
+            }
+        }
+        /* current_gradient is now the derivative of a literal zero hole.
+         * Discarding it is the exact reverse of removing the complete pair. */
+    }
+
+    for (int node = workspace->node_count - 1; node >= 0; node--) {
+        int left_node = workspace->node_left[node];
+        if (left_node < 0) continue;
+        int right_node = workspace->node_right[node];
+        observer_merge_backward(
+            head,
+            workspace->node_message + (size_t)left_node * dim,
+            workspace->node_message + (size_t)right_node * dim,
+            workspace->node_left_linear + (size_t)node * dim,
+            workspace->node_right_linear + (size_t)node * dim,
+            workspace->grad_node + (size_t)node * dim,
+            gradient,
+            grad_left,
+            grad_right
+        );
+        double *grad_left_node = workspace->grad_node +
+            (size_t)left_node * dim;
+        double *grad_right_node = workspace->grad_node +
+            (size_t)right_node * dim;
+        for (int lane = 0; lane < dim; lane++) {
+            grad_left_node[lane] += grad_left[lane];
+            grad_right_node[lane] += grad_right[lane];
+        }
+    }
+
+    double *gradient_constructor = gradient +
+        (size_t)OBSERVER_MATRIX_LEAF_CONSTRUCTOR * head->matrix_size;
+    double *gradient_hidden = gradient +
+        (size_t)OBSERVER_MATRIX_LEAF_HIDDEN * head->matrix_size;
+    for (int source = 0; source < workspace->sources; source++) {
+        int completion_position = source - prompt_count;
+        if (completion_position >= 0 &&
+            candidate_tokens[completion_position] < 0) {
+            continue;
+        }
+        const float *embedding = student->weights.wcls +
+            (size_t)(completion_position < 0 ?
+                example->prompt_tokens[source] :
+                candidate_tokens[completion_position]) * dim;
+        const double *grad_leaf = workspace->grad_node +
+            (size_t)workspace->source_node[source] * dim;
+        for (int out = 0; out < dim; out++) {
+            for (int in = 0; in < dim; in++) {
+                gradient_constructor[(size_t)out * dim + in] +=
+                    grad_leaf[out] * embedding[in];
+                if (completion_position >= 0) {
+                    gradient_hidden[(size_t)out * dim + in] +=
+                        grad_leaf[out] * example->hidden[
+                            (size_t)completion_position * dim + in
+                        ];
+                }
+            }
+        }
+    }
+
+    free(grad_right);
+    free(grad_left);
+    free(current_gradient);
 }
 
 enum {
@@ -939,15 +1285,9 @@ static double observer_dataset_loss(
 ) {
     int dim = head->dim;
     int vocab = student->config.vocab_size;
-    int head_dim = head->head_dim;
     if (gradient != NULL) {
         memset(gradient, 0, head->parameter_count * sizeof(double));
     }
-    double *gradient_q = gradient;
-    double *gradient_k = gradient == NULL ? NULL : gradient + head->matrix_size;
-    double *gradient_v = gradient == NULL ? NULL : gradient_k + head->matrix_size;
-    double *gradient_o = gradient == NULL ? NULL : gradient_v + head->matrix_size;
-    double *gradient_h = gradient == NULL ? NULL : gradient_o + head->matrix_size;
     double loss = 0.0;
     unsigned long long correct_tokens = 0;
     unsigned long long correct_sequences = 0;
@@ -960,11 +1300,18 @@ static double observer_dataset_loss(
             (size_t)positions,
             sizeof(int)
         );
-        int corruption_mode =
-            (example_index + corruption_phase) % OBSERVER_CORRUPTION_MODES;
-        uint64_t example_key =
-            ((uint64_t)(unsigned int)(example_index + 1) << 32) ^
-            ((uint64_t)(unsigned int)(corruption_phase + 1) << 48);
+        uint64_t stable_mode = observer_mix_u64(example->sample_key);
+        int corruption_mode = (int)(
+            (stable_mode + (uint64_t)(unsigned int)corruption_phase) %
+            OBSERVER_CORRUPTION_MODES
+        );
+        uint64_t phase_key = observer_mix_u64(
+            UINT64_C(0x7068617365000000) ^
+            (uint64_t)(unsigned int)(corruption_phase + 1)
+        );
+        uint64_t example_key = observer_mix_u64(
+            example->sample_key ^ phase_key
+        );
         int repeated_position = (int)(
             observer_mix_u64(example_key ^ UINT64_C(0x7265706561746564)) %
             (uint64_t)positions
@@ -1000,8 +1347,8 @@ static double observer_dataset_loss(
             } else if (corruption_mode == 3) {
                 /* Directly train against the repeated-token fixed points seen
                  * in the v4/v5 exact traces.  The target remains the original
-                 * teacher tuple and observer_forward still masks the source at
-                 * the row being rated. */
+                 * teacher tuple and observer_forward still replaces the whole
+                 * typed source pair with zero at the row being rated. */
                 candidate_tokens[position] = repeated_token;
             } else {
                 candidate_tokens[position] = draw < 25 ? -1 :
@@ -1020,32 +1367,6 @@ static double observer_dataset_loss(
         );
         observer_forward(example, candidate_tokens, student, head, &workspace);
         if (gradient != NULL) {
-            memset(
-                workspace.grad_query,
-                0,
-                (size_t)positions * dim * sizeof(double)
-            );
-            memset(
-                workspace.grad_key,
-                0,
-                (size_t)sources * dim * sizeof(double)
-            );
-            memset(
-                workspace.grad_value,
-                0,
-                (size_t)sources * dim * sizeof(double)
-            );
-            memset(
-                workspace.grad_attention,
-                0,
-                (size_t)head->head_count * positions * sources *
-                    sizeof(double)
-            );
-            memset(
-                workspace.grad_context,
-                0,
-                (size_t)positions * dim * sizeof(double)
-            );
             memset(
                 workspace.grad_output,
                 0,
@@ -1097,139 +1418,14 @@ static double observer_dataset_loss(
         if (sequence_correct) correct_sequences++;
 
         if (gradient != NULL) {
-            const double *output_weight = observer_const_matrix(head, 3);
-            for (int position = 0; position < positions; position++) {
-                for (int out = 0; out < dim; out++) {
-                    double output_gradient = workspace.grad_output[
-                        (size_t)position * dim + out
-                    ];
-                    for (int in = 0; in < dim; in++) {
-                        gradient_o[(size_t)out * dim + in] +=
-                            output_gradient * workspace.context[
-                                (size_t)position * dim + in
-                            ];
-                        gradient_h[(size_t)out * dim + in] +=
-                            output_gradient * example->hidden[
-                                (size_t)position * dim + in
-                            ];
-                        workspace.grad_context[(size_t)position * dim + in] +=
-                            output_weight[(size_t)out * dim + in] *
-                            output_gradient;
-                    }
-                }
-            }
-
-            double attention_scale = 1.0 / sqrt((double)head_dim);
-            for (int attention_head = 0;
-                 attention_head < head->head_count;
-                 attention_head++) {
-                int lane_start = attention_head * head_dim;
-                for (int output_position = 0;
-                     output_position < positions;
-                     output_position++) {
-                    int masked_source = example->prompt_count + output_position;
-                    double *attention_row = workspace.attention +
-                        ((size_t)attention_head * positions + output_position) *
-                            sources;
-                    double *gradient_row = workspace.grad_attention +
-                        ((size_t)attention_head * positions + output_position) *
-                            sources;
-                    for (int source = 0; source < sources; source++) {
-                        if (!observer_source_visible(
-                                candidate_tokens,
-                                example->prompt_count,
-                                source,
-                                masked_source)) {
-                            gradient_row[source] = 0.0;
-                            continue;
-                        }
-                        double attention_gradient = 0.0;
-                        for (int lane = 0; lane < head_dim; lane++) {
-                            int coordinate = lane_start + lane;
-                            attention_gradient += workspace.grad_context[
-                                (size_t)output_position * dim + coordinate
-                            ] * workspace.value[(size_t)source * dim + coordinate];
-                            workspace.grad_value[
-                                (size_t)source * dim + coordinate
-                            ] += attention_row[source] * workspace.grad_context[
-                                (size_t)output_position * dim + coordinate
-                            ];
-                        }
-                        gradient_row[source] = attention_gradient;
-                    }
-                    double softmax_dot = 0.0;
-                    for (int source = 0; source < sources; source++) {
-                        if (!observer_source_visible(
-                                candidate_tokens,
-                                example->prompt_count,
-                                source,
-                                masked_source)) continue;
-                        softmax_dot += gradient_row[source] * attention_row[source];
-                    }
-                    for (int source = 0; source < sources; source++) {
-                        if (!observer_source_visible(
-                                candidate_tokens,
-                                example->prompt_count,
-                                source,
-                                masked_source)) continue;
-                        double score_gradient = attention_row[source] *
-                            (gradient_row[source] - softmax_dot);
-                        for (int lane = 0; lane < head_dim; lane++) {
-                            int coordinate = lane_start + lane;
-                            workspace.grad_query[
-                                (size_t)output_position * dim + coordinate
-                            ] += score_gradient * workspace.key[
-                                (size_t)source * dim + coordinate
-                            ] * attention_scale;
-                            workspace.grad_key[
-                                (size_t)source * dim + coordinate
-                            ] += score_gradient * workspace.query[
-                                (size_t)output_position * dim + coordinate
-                            ] * attention_scale;
-                        }
-                    }
-                }
-            }
-
-            /* Q/K were rotary-positioned before attention. Undo that fixed
-             * orthogonal map before differentiating their learned matrices. */
-            observer_apply_rope(
-                workspace.grad_query,
-                positions,
-                dim,
-                head->head_count,
-                example->prompt_count,
-                -1
+            observer_backward(
+                example,
+                candidate_tokens,
+                student,
+                head,
+                &workspace,
+                gradient
             );
-            observer_apply_rope(
-                workspace.grad_key,
-                sources,
-                dim,
-                head->head_count,
-                0,
-                -1
-            );
-
-            for (int out = 0; out < dim; out++) {
-                for (int in = 0; in < dim; in++) {
-                    for (int position = 0; position < positions; position++) {
-                        gradient_q[(size_t)out * dim + in] +=
-                            workspace.grad_query[(size_t)position * dim + out] *
-                            example->hidden[(size_t)position * dim + in];
-                    }
-                    for (int source = 0; source < sources; source++) {
-                        double source_input = workspace.source_input[
-                            (size_t)source * dim + in
-                        ];
-                        gradient_k[(size_t)out * dim + in] +=
-                            workspace.grad_key[(size_t)source * dim + out] *
-                            source_input;
-                        gradient_v[(size_t)out * dim + in] +=
-                            workspace.grad_value[(size_t)source * dim + out] *
-                            source_input;
-                    }
-                }
-            }
         }
         observer_workspace_free(&workspace);
         free(candidate_tokens);
@@ -1271,6 +1467,8 @@ static void observer_train(
     ObserverHead *head,
     int positions,
     int epochs,
+    int batch_size,
+    unsigned long long seed,
     double learning_rate,
     double l2
 ) {
@@ -1279,44 +1477,86 @@ static void observer_train(
     double *first_moment = observer_allocate(count, sizeof(double));
     double *second_moment = observer_allocate(count, sizeof(double));
     double *best = observer_allocate(count, sizeof(double));
+    ObserverExample *shuffled = observer_allocate(
+        (size_t)training_count,
+        sizeof(*shuffled)
+    );
     memcpy(best, head->parameters, count * sizeof(double));
     double best_validation = DBL_MAX;
     double beta1_power = 1.0;
     double beta2_power = 1.0;
     for (int epoch = 1; epoch <= epochs; epoch++) {
-        double train_token = 0.0;
-        double train_sequence = 0.0;
-        double train_loss = observer_dataset_loss(
+        memcpy(
+            shuffled,
             training,
-            training_count,
-            student,
-            head,
-            positions,
-            epoch,
-            l2,
-            gradient,
-            &train_token,
-            &train_sequence
+            (size_t)training_count * sizeof(*shuffled)
         );
-        double squared_norm = 0.0;
-        for (size_t parameter = 0; parameter < count; parameter++) {
-            squared_norm += gradient[parameter] * gradient[parameter];
+        uint64_t shuffle_state = observer_mix_u64(
+            (uint64_t)seed ^ UINT64_C(0x73687566666c6500) ^
+            (uint64_t)(unsigned int)epoch
+        );
+        if (shuffle_state == 0) shuffle_state = UINT64_C(1);
+        for (int index = training_count - 1; index > 0; index--) {
+            int other = (int)(
+                observer_random_u64(&shuffle_state) %
+                (uint64_t)(unsigned int)(index + 1)
+            );
+            ObserverExample swap = shuffled[index];
+            shuffled[index] = shuffled[other];
+            shuffled[other] = swap;
         }
-        double gradient_scale = squared_norm > 25.0 ?
-            5.0 / sqrt(squared_norm) : 1.0;
-        beta1_power *= 0.9;
-        beta2_power *= 0.999;
-        for (size_t parameter = 0; parameter < count; parameter++) {
-            double value = gradient[parameter] * gradient_scale;
-            first_moment[parameter] =
-                0.9 * first_moment[parameter] + 0.1 * value;
-            second_moment[parameter] =
-                0.999 * second_moment[parameter] + 0.001 * value * value;
-            double first = first_moment[parameter] / (1.0 - beta1_power);
-            double second = second_moment[parameter] / (1.0 - beta2_power);
-            head->parameters[parameter] -= learning_rate * first /
-                (sqrt(second) + 1e-8);
+
+        double weighted_train_loss = 0.0;
+        double weighted_train_token = 0.0;
+        double weighted_train_sequence = 0.0;
+        double weighted_gradient_norm = 0.0;
+        for (int first = 0; first < training_count; first += batch_size) {
+            int actual_batch = training_count - first;
+            if (actual_batch > batch_size) actual_batch = batch_size;
+            double batch_token = 0.0;
+            double batch_sequence = 0.0;
+            double batch_loss = observer_dataset_loss(
+                shuffled + first,
+                actual_batch,
+                student,
+                head,
+                positions,
+                epoch,
+                l2,
+                gradient,
+                &batch_token,
+                &batch_sequence
+            );
+            double squared_norm = 0.0;
+            for (size_t parameter = 0; parameter < count; parameter++) {
+                squared_norm += gradient[parameter] * gradient[parameter];
+            }
+            double gradient_scale = squared_norm > 25.0 ?
+                5.0 / sqrt(squared_norm) : 1.0;
+            beta1_power *= 0.9;
+            beta2_power *= 0.999;
+            for (size_t parameter = 0; parameter < count; parameter++) {
+                double value = gradient[parameter] * gradient_scale;
+                first_moment[parameter] =
+                    0.9 * first_moment[parameter] + 0.1 * value;
+                second_moment[parameter] =
+                    0.999 * second_moment[parameter] + 0.001 * value * value;
+                double first_moment_hat =
+                    first_moment[parameter] / (1.0 - beta1_power);
+                double second_moment_hat =
+                    second_moment[parameter] / (1.0 - beta2_power);
+                head->parameters[parameter] -= learning_rate *
+                    first_moment_hat / (sqrt(second_moment_hat) + 1e-8);
+            }
+            weighted_train_loss += actual_batch * batch_loss;
+            weighted_train_token += actual_batch * batch_token;
+            weighted_train_sequence += actual_batch * batch_sequence;
+            weighted_gradient_norm += actual_batch * sqrt(squared_norm);
         }
+        double train_loss = weighted_train_loss / training_count;
+        double train_token = weighted_train_token / training_count;
+        double train_sequence = weighted_train_sequence / training_count;
+        double gradient_norm = weighted_gradient_norm / training_count;
         double validation_token = 0.0;
         double validation_sequence = 0.0;
         double validation_loss = observer_dataset_loss(
@@ -1348,10 +1588,11 @@ static void observer_train(
             validation_loss,
             validation_token,
             validation_sequence,
-            sqrt(squared_norm)
+            gradient_norm
         );
     }
     memcpy(head->parameters, best, count * sizeof(double));
+    free(shuffled);
     free(best);
     free(second_moment);
     free(first_moment);
@@ -1849,6 +2090,7 @@ static int *observer_search(
         fprintf(
             trace,
             "{\"event\":\"run\","
+            "\"observer\":\"balanced_leave_one_out_span_tree\","
             "\"reward_type\":\"finite_covector_family\","
             "\"backup\":\"selection_product_model_attainment\","
             "\"proposal\":\"model_native_hidden_feedback_covectors\","
@@ -2026,6 +2268,7 @@ static void observer_usage(const char *program) {
         "  --completion-tokens N    default 16\n"
         "  --teacher-steps N        default 96\n"
         "  --epochs N               default 30\n"
+        "  --batch-size N           default 64\n"
         "  --seed N                 default 26015\n"
         "  --learning-rate X        default 0.001\n"
         "  --l2 X                   default 0.000001\n\n"
@@ -2056,6 +2299,7 @@ static void observer_parse_train_options(
         .completion_count = 16,
         .teacher_steps = 96,
         .epochs = 30,
+        .batch_size = 64,
         .seed = 26015,
         .learning_rate = 0.001,
         .l2 = 1e-6,
@@ -2082,6 +2326,8 @@ static void observer_parse_train_options(
             options->teacher_steps = observer_parse_positive(value, "teacher steps");
         } else if (strcmp(flag, "--epochs") == 0) {
             options->epochs = observer_parse_positive(value, "epochs");
+        } else if (strcmp(flag, "--batch-size") == 0) {
+            options->batch_size = observer_parse_positive(value, "batch size");
         } else if (strcmp(flag, "--seed") == 0) {
             options->seed = observer_parse_seed(value);
         } else if (strcmp(flag, "--learning-rate") == 0) {
@@ -2182,9 +2428,9 @@ static int observer_train_main(int argc, char **argv) {
     );
     fprintf(
         stderr,
-        "mode=train_joint_observer teacher_vocab=%d student_vocab=%d "
+        "mode=train_joint_span_observer teacher_vocab=%d student_vocab=%d "
         "student_dim=%d train=%d validation=%d prompt=%d completion=%d "
-        "epochs=%d seed=%llu\n",
+        "epochs=%d batch=%d seed=%llu\n",
         teacher.config.vocab_size,
         student.config.vocab_size,
         student.config.dim,
@@ -2193,6 +2439,7 @@ static int observer_train_main(int argc, char **argv) {
         options.prompt_count,
         options.completion_count,
         options.epochs,
+        options.batch_size,
         options.seed
     );
     ObserverExample *training = observer_generate_dataset(
@@ -2205,6 +2452,9 @@ static int observer_train_main(int argc, char **argv) {
         options.prompt_count,
         options.completion_count,
         options.teacher_steps,
+        observer_mix_u64(
+            (uint64_t)options.seed ^ UINT64_C(0x747261696e696e67)
+        ),
         "training"
     );
     ObserverExample *validation = observer_generate_dataset(
@@ -2217,13 +2467,15 @@ static int observer_train_main(int argc, char **argv) {
         options.prompt_count,
         options.completion_count,
         options.teacher_steps,
+        observer_mix_u64(
+            (uint64_t)options.seed ^ UINT64_C(0x76616c6964617465)
+        ),
         "validation"
     );
     ObserverHead head;
     observer_head_initialize(
         &head,
         student.config.dim,
-        student.config.n_heads,
         options.seed ^ UINT64_C(0x9e3779b97f4a7c15)
     );
     double initial_token = 0.0;
@@ -2257,6 +2509,8 @@ static int observer_train_main(int argc, char **argv) {
         &head,
         options.completion_count,
         options.epochs,
+        options.batch_size,
+        options.seed,
         options.learning_rate,
         options.l2
     );
@@ -2350,7 +2604,7 @@ static int observer_infer_main(int argc, char **argv) {
     fflush(stdout);
     fprintf(
         stderr,
-        "mode=ordered_masked_joint_decoder positions=%d top_k=%d exact=%d "
+        "mode=hierarchical_span_joint_decoder positions=%d top_k=%d exact=%d "
         "attempted=%llu unique=%d nodes=%d recurrence_ms=%ld search_ms=%ld "
         "trace=%s\n",
         options.length,
