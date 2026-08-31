@@ -46,6 +46,7 @@ typedef struct {
     float *positive_features;
     float *negative_features;
     double ar_margin;
+    size_t viable_choice_count;
 } CompanyPair;
 
 typedef struct {
@@ -512,16 +513,21 @@ static int choose_challenging_word_replacement(
     unsigned long long *rng,
     int *target,
     int *replacement,
-    double *margin
+    double *margin,
+    size_t *viable_choice_count
 ) {
-    int *positions = checked_calloc((size_t)token_count, sizeof(*positions));
+    if ((size_t)top_k > SIZE_MAX / (size_t)token_count) {
+        fail("candidate choice capacity overflow");
+    }
+    size_t viable_capacity = (size_t)token_count * (size_t)top_k;
+    int *positions = checked_calloc(viable_capacity, sizeof(*positions));
     int *replacements = checked_calloc(
-        (size_t)token_count,
+        viable_capacity,
         sizeof(*replacements)
     );
-    double *margins = checked_calloc((size_t)token_count, sizeof(*margins));
+    double *margins = checked_calloc(viable_capacity, sizeof(*margins));
     int *best = checked_calloc((size_t)top_k, sizeof(*best));
-    int viable_count = 0;
+    size_t viable_count = 0;
     int fallback_position = -1;
     int fallback_replacement = -1;
     double fallback_margin = DBL_MAX;
@@ -552,6 +558,9 @@ static int choose_challenging_word_replacement(
                 fallback_replacement = candidate;
             }
             if (candidate_margin <= 0.0) {
+                if (viable_count >= viable_capacity) {
+                    fail("candidate choice capacity exceeded");
+                }
                 positions[viable_count] = position;
                 replacements[viable_count] = candidate;
                 margins[viable_count] = candidate_margin;
@@ -560,9 +569,10 @@ static int choose_challenging_word_replacement(
         }
     }
 
+    *viable_choice_count = viable_count;
     int found = 0;
     if (viable_count > 0) {
-        int selected = (int)(random_u32(rng) % (unsigned int)viable_count);
+        size_t selected = (size_t)random_u32(rng) % viable_count;
         *target = positions[selected];
         *replacement = replacements[selected];
         *margin = margins[selected];
@@ -752,7 +762,8 @@ static CompanyPair *make_dataset(
                 rng,
                 &pair->target,
                 &pair->negative_token,
-                &pair->ar_margin
+                &pair->ar_margin,
+                &pair->viable_choice_count
             )) {
             free_pair(pair);
             continue;
@@ -814,6 +825,23 @@ static CompanyPair *make_dataset(
             );
         }
     }
+    size_t viable_choice_max = 0;
+    long double viable_choice_total = 0.0L;
+    for (int index = 0; index < pair_count; index++) {
+        size_t count = pairs[index].viable_choice_count;
+        if (count > viable_choice_max) viable_choice_max = count;
+        viable_choice_total += (long double)count;
+    }
+    fprintf(
+        stderr,
+        "%s viable replacement choices: mean=%.2Lf max=%zu "
+        "old_capacity=%d corrected_capacity=%zu\n",
+        split,
+        viable_choice_total / pair_count,
+        viable_choice_max,
+        sequence_tokens,
+        (size_t)sequence_tokens * (size_t)top_k
+    );
     free(logits);
     return pairs;
 }
@@ -1620,11 +1648,12 @@ static void report_candidate_support(
                     trace,
                     "{\"event\":\"company_candidate\",\"pair\":%d,"
                     "\"support_index\":%d,\"candidate_count\":%d,"
-                    "\"position\":%d,\"token_count\":%d,"
+                    "\"viable_choices\":%zu,\"position\":%d,\"token_count\":%d,"
                     "\"suffix_tokens\":%d,\"token\":%d,\"piece\":",
                     pair_index,
                     candidate->support_index,
                     candidate_count,
+                    pair->viable_choice_count,
                     pair->target,
                     pair->token_count,
                     pair->token_count - pair->target - 1,
@@ -1803,13 +1832,14 @@ static void report_pairs(
             fprintf(
                 trace,
                 "{\"event\":\"company_pair\",\"index\":%d,\"position\":%d,"
-                "\"token_count\":%d,\"suffix_tokens\":%d,"
+                "\"token_count\":%d,\"suffix_tokens\":%d,\"viable_choices\":%zu,"
                 "\"positive_token\":%d,\"negative_token\":%d,"
                 "\"positive_piece\":",
                 index,
                 pair->target,
                 pair->token_count,
                 pair->token_count - pair->target - 1,
+                pair->viable_choice_count,
                 pair->positive_token,
                 pair->negative_token
             );
