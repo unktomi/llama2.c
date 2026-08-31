@@ -3373,6 +3373,7 @@ void error_usage() {
     fprintf(stderr, "Example: run_hidden_feedback_select model.bin -n 256 -i \"Once upon a time\"\n");
     fprintf(stderr, "Options:\n");
     fprintf(stderr, "  -n <int>    number of steps to run for, default 256. 0 = max_seq_len\n");
+    fprintf(stderr, "  -l <int>    exact completion positions; overrides total -n\n");
     fprintf(stderr, "  -g <string> feedback boundary: identity (default) or affine\n");
     fprintf(stderr, "  -r <string> observer: company (default) or logits\n");
     fprintf(stderr, "  -k <int>    token memo cells demanded per prefix, default 4\n");
@@ -3391,6 +3392,7 @@ int main(int argc, char *argv[]) {
     char *checkpoint_path = NULL;  // e.g. out/model.bin
     char *tokenizer_path = "tokenizer.bin";
     int steps = 256;            // number of steps to run for
+    int completion_length = -1;
     int local_support = 4;
     unsigned long long leaf_limit = ULLONG_MAX;
     unsigned long long sample_seed = 42;
@@ -3410,6 +3412,10 @@ int main(int argc, char *argv[]) {
         if (strlen(argv[i]) != 2) { error_usage(); } // must be -x (one dash, one letter)
         // read in the args
         if (argv[i][1] == 'n') { steps = atoi(argv[i + 1]); }
+        else if (argv[i][1] == 'l') {
+            completion_length = atoi(argv[i + 1]);
+            if (completion_length <= 0) error_usage();
+        }
         else if (argv[i][1] == 'g') {
             if (strcmp(argv[i + 1], "affine") == 0) {
                 feedback_boundary = FEEDBACK_AFFINE_TOKEN_BARYCENTER;
@@ -3473,6 +3479,43 @@ int main(int argc, char *argv[]) {
     // build the Tokenizer via the tokenizer .bin file
     Tokenizer tokenizer;
     build_tokenizer(&tokenizer, tokenizer_path, transformer.config.vocab_size);
+
+    if (completion_length > 0) {
+        const char *effective_prompt = prompt == NULL ? "" : prompt;
+        size_t prompt_capacity = strlen(effective_prompt) + 3;
+        if (prompt_capacity > (size_t)INT_MAX) {
+            fprintf(stderr, "prompt is too large to tokenize\n");
+            exit(EXIT_FAILURE);
+        }
+        int *counted_tokens = malloc(prompt_capacity * sizeof(*counted_tokens));
+        if (counted_tokens == NULL) {
+            fprintf(stderr, "could not allocate prompt token count\n");
+            exit(EXIT_FAILURE);
+        }
+        int counted_prompt_tokens = 0;
+        encode(
+            &tokenizer,
+            (char *)effective_prompt,
+            1,
+            0,
+            counted_tokens,
+            &counted_prompt_tokens
+        );
+        free(counted_tokens);
+        if (counted_prompt_tokens > transformer.config.seq_len -
+                completion_length) {
+            fprintf(
+                stderr,
+                "prompt has %d tokens; %d completion positions exceed "
+                "the %d-token model context\n",
+                counted_prompt_tokens,
+                completion_length,
+                transformer.config.seq_len
+            );
+            exit(EXIT_FAILURE);
+        }
+        steps = counted_prompt_tokens + completion_length;
+    }
 
     FILE *trace = NULL;
     if (trace_path != NULL) {

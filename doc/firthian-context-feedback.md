@@ -82,6 +82,10 @@ For a two-token completion with `-k 4`, the term has all `4^2 = 16` leaves:
   -r company -k 4 -b 16 -s 42 -o candidates.jsonl
 ```
 
+Use `-l N` to request exactly `N` completion positions independently of the
+tokenized prompt length. This overrides the older total-position `-n` option
+and refuses prompts that would exceed the model context.
+
 The proposal carrier is still produced by independently unembedding the fixed
 hidden-feedback tape. That is a known semantic limitation, not a solved
 quality result. Backward induction cannot select a coherent completion absent
