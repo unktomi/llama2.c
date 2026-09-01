@@ -13,10 +13,13 @@
  * At every typed transformer boundary, the complete local A/B action jet for
  * each C fiber is written to an append-only float32 sidecar.  C changes the
  * frontier type by changing the number of positions, so the program does not
- * invent a local subtraction between those differently typed fibers.  At the
- * terminal boundary both fibers have the same fixed token-observation type;
- * there the program applies a genuine three-bit fast Moebius transform and
- * retains carrier, all first-order, all pairwise, and the third-order terms.
+ * invent a local subtraction between those differently typed fibers.  The
+ * learned token-observation function is also retained before every consumed
+ * constructor.  These Mealy-style edge observations remain zipped by token
+ * position; they are never folded into a sequence score.  At the terminal
+ * boundary both fibers have the same fixed token-observation type; there the
+ * program applies a genuine three-bit fast Moebius transform and retains
+ * carrier, all first-order, all pairwise, and the third-order terms.
  *
  * The terminal observation is a vector of learned classifier contrasts
  *
@@ -596,6 +599,96 @@ static void write_cube_context(
     fflush(trace);
 }
 
+static double write_edge_observation_zip(
+    FILE *trace,
+    const TokenContrastObserver *observer,
+    GrammarTerm *term,
+    ContextFrontiers captures[SQUARE_CORNER_COUNT],
+    const EncodedContext contexts[SQUARE_CORNER_COUNT],
+    const char *fiber
+) {
+    int width = observer->count;
+    int positions = term->positions;
+    int dim = term->dim;
+    float *normalized[SQUARE_CORNER_COUNT];
+    for (int corner = 0; corner < SQUARE_CORNER_COUNT; corner++) {
+        if (contexts[corner].count != positions) {
+            fail("edge observation context width differs from its term");
+        }
+        normalized[corner] = checked_calloc(
+            (size_t)term->frontier_width,
+            sizeof(*normalized[corner])
+        );
+        term->final_rms_map.apply(
+            term->final_rms_map.environment,
+            layer_frontier(&captures[corner], term->layers),
+            normalized[corner]
+        );
+    }
+
+    size_t value_count = (size_t)SQUARE_CORNER_COUNT * width;
+    float *raw = checked_calloc(value_count, sizeof(*raw));
+    float *mobius = checked_calloc(value_count, sizeof(*mobius));
+    float *reconstructed = checked_calloc(value_count, sizeof(*reconstructed));
+    double maximum_inverse_defect = 0.0;
+    static const char *names[SQUARE_CORNER_COUNT] = {
+        "carrier", "A", "B", "AB"
+    };
+    for (int token_position = 1; token_position < positions; token_position++) {
+        int predecessor = token_position - 1;
+        for (int corner = 0; corner < SQUARE_CORNER_COUNT; corner++) {
+            observe_token_contrasts(
+                observer,
+                normalized[corner] + (size_t)predecessor * dim,
+                raw + (size_t)corner * width
+            );
+        }
+        memcpy(mobius, raw, value_count * sizeof(*mobius));
+        fast_mobius(mobius, 2, width);
+        memcpy(reconstructed, mobius, value_count * sizeof(*reconstructed));
+        inverse_fast_mobius(reconstructed, 2, width);
+        double defect = maximum_difference(raw, reconstructed, value_count);
+        if (defect > maximum_inverse_defect) maximum_inverse_defect = defect;
+
+        fputs("{\"kind\":\"grammatical_cube_edge_zip\",\"fiber\":", trace);
+        fprint_json_string(trace, fiber);
+        fprintf(
+            trace,
+            ",\"token_position\":%d,\"predecessor_position\":%d,"
+            "\"corner_token_ids\":[%d,%d,%d,%d],"
+            "\"observer_width\":%d,\"mobius_subsets\":["
+            "\"carrier\",\"A\",\"B\",\"AB\"],\"coefficients\":{",
+            token_position,
+            predecessor,
+            contexts[CUBE_X].tokens[token_position],
+            contexts[CUBE_A].tokens[token_position],
+            contexts[CUBE_B].tokens[token_position],
+            contexts[CUBE_AB].tokens[token_position],
+            width
+        );
+        for (int mask = 0; mask < SQUARE_CORNER_COUNT; mask++) {
+            if (mask != 0) fputc(',', trace);
+            fprint_json_string(trace, names[mask]);
+            fputc(':', trace);
+            write_float_vector(
+                trace,
+                mobius + (size_t)mask * width,
+                width
+            );
+        }
+        fputs("}}\n", trace);
+        fflush(trace);
+    }
+
+    free(reconstructed);
+    free(mobius);
+    free(raw);
+    for (int corner = 0; corner < SQUARE_CORNER_COUNT; corner++) {
+        free(normalized[corner]);
+    }
+    return maximum_inverse_defect;
+}
+
 static double reference_logit_contrast_defect(
     Transformer *transformer,
     const TokenContrastObserver *observer,
@@ -763,8 +856,8 @@ int main(int argc, char **argv) {
     }
     fprintf(
         trace,
-        "{\"kind\":\"grammatical_cube_meta\",\"schema_version\":1,"
-        "\"semantics\":\"carrier_conditioned_action_jet_with_terminal_token_contrasts\","
+        "{\"kind\":\"grammatical_cube_meta\",\"schema_version\":2,"
+        "\"semantics\":\"carrier_conditioned_action_jet_with_mealy_edge_zip\","
         "\"base_positions\":%d,\"extended_positions\":%d,"
         "\"extension_token_count\":%d,\"layers\":%d,\"dim\":%d,"
         "\"observer\":\"logit_token_minus_logit_reference\","
@@ -782,7 +875,9 @@ int main(int argc, char **argv) {
     }
     fprintf(trace, "] ,\"local_jets_retained\":%s,",
         options.retain_local_jets ? "true" : "false");
-    fputs("\"terminal_probabilities_used\":false,"
+    fputs("\"edge_observation_zip_retained\":true,"
+          "\"edge_observations_folded\":false,"
+          "\"terminal_probabilities_used\":false,"
           "\"scalar_completion_reward_used\":false,"
           "\"local_c_difference_defined\":false,"
           "\"local_c_reason\":\"C changes the position-indexed frontier type\","
@@ -807,6 +902,25 @@ int main(int argc, char **argv) {
     if (base_writer.boundary_index != extended_writer.boundary_index) {
         fail("C fibers produced different typed-boundary counts");
     }
+
+    double maximum_edge_inverse_defect = fmax(
+        write_edge_observation_zip(
+            trace,
+            &observer,
+            &base_term,
+            base_captures,
+            cube,
+            "without_C"
+        ),
+        write_edge_observation_zip(
+            trace,
+            &observer,
+            &extended_term,
+            extended_captures,
+            cube + CUBE_C,
+            "with_C"
+        )
+    );
 
     float *terminal_raw = NULL;
     double terminal_inverse_defect = 0.0;
@@ -872,6 +986,7 @@ int main(int argc, char **argv) {
         "{\"kind\":\"grammatical_cube_check\",\"typed_boundaries\":%d,"
         "\"maximum_typed_chain_output_l2_defect\":%.17g,"
         "\"maximum_local_mobius_inverse_absolute_defect\":%.17g,"
+        "\"maximum_edge_mobius_inverse_absolute_defect\":%.17g,"
         "\"terminal_mobius_inverse_absolute_defect\":%.17g,"
         "\"maximum_stock_hidden_relative_defect\":%.17g,"
         "\"maximum_stock_logit_contrast_l2_defect\":%.17g,"
@@ -885,6 +1000,7 @@ int main(int argc, char **argv) {
             base_writer.maximum_mobius_inverse_defect,
             extended_writer.maximum_mobius_inverse_defect
         ),
+        maximum_edge_inverse_defect,
         terminal_inverse_defect,
         maximum_hidden_relative_defect,
         maximum_logit_contrast_defect,

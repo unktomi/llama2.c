@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Analyze terminal behavior and carrier-conditioned local action jets.
+"""Analyze edge demand, terminal behavior, and typed local action jets.
+
+The primary edge object is a Mealy zip of pre-constructor token-indexed codata
+and constructor injections. Independent feature actions probe which product
+projections each constructor contrast demands. Edge observations remain
+separate by position and never become a scalar completion score.
 
 The terminal object is a context x extension x Moebius-subset x token-contrast
 tensor.  Its primary Hankel slice is Delta_A Delta_B q(Cx).  Both contexts and
@@ -45,6 +50,7 @@ ROOT = Path(__file__).resolve().parent
 DEFAULT_RESULT = ROOT / "outputs" / "cps-grammar-cubes-analysis.json"
 DEFAULT_COMPOSITE_TRACES = ROOT / "work_traces" / "grammar_cube_composites"
 SUBSETS = ("carrier", "A", "B", "AB", "C", "AC", "BC", "ABC")
+EDGE_SUBSETS = ("carrier", "A", "B", "AB")
 FEATURES = {
     "AB": (3,),
     "carrier_AB": (0, 3),
@@ -66,6 +72,15 @@ class LocalReference:
     count: int
 
 
+@dataclass(frozen=True)
+class EdgeObservation:
+    fiber: str
+    token_position: int
+    predecessor_position: int
+    corner_tokens: tuple[int, int, int, int]
+    coefficients: np.ndarray
+
+
 @dataclass
 class CubeTrace:
     state: StateSpec
@@ -75,9 +90,11 @@ class CubeTrace:
     observer_tokens: tuple[int, ...]
     reference_token: int
     coefficients: dict[str, np.ndarray]
+    edges: dict[str, list[EdgeObservation]]
     local: dict[str, list[LocalReference]]
     maximum_chain_defect: float
     maximum_local_inverse_defect: float
+    maximum_edge_inverse_defect: float
     terminal_inverse_defect: float
     typed_boundaries: int
     maximum_hidden_relative_defect: float
@@ -103,6 +120,16 @@ def arguments() -> argparse.Namespace:
     parser.add_argument("--output", type=Path, default=DEFAULT_RESULT)
     parser.add_argument("--model-label", default="Stories15M")
     parser.add_argument("--evaluator-commit")
+    parser.add_argument(
+        "--primitive-terminal-only",
+        action="store_true",
+        help="primitive traces retain edge and terminal observations but no local sidecars",
+    )
+    parser.add_argument(
+        "--edge-company-only",
+        action="store_true",
+        help="analyze constructor/codata edge evaluations without requiring composed traces",
+    )
     return parser.parse_args()
 
 
@@ -122,18 +149,22 @@ def git_head() -> str:
     return result.stdout.strip() if result.returncode == 0 else "unknown"
 
 
-def read_observer_ids(path: Path) -> tuple[int, ...]:
+def read_observers(path: Path) -> tuple[tuple[int, ...], dict[int, str]]:
     ids: list[int] = []
+    labels: dict[int, str] = {}
     for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
         stripped = line.lstrip()
         if not stripped or stripped.startswith("#"):
             continue
         try:
-            ids.append(int(stripped.split(maxsplit=1)[0]))
+            token_field, separator, label = stripped.partition("\t")
+            token = int(token_field.split(maxsplit=1)[0])
         except ValueError as error:
             raise SystemExit(f"{path}:{line_number}: invalid token ID") from error
+        ids.append(token)
+        labels[token] = label if separator else str(token)
     require(bool(ids) and len(ids) == len(set(ids)), "observer IDs are empty or duplicated")
-    return tuple(ids)
+    return tuple(ids), labels
 
 
 def trace_stem(state: StateSpec, extension: ActionWord) -> str:
@@ -159,6 +190,7 @@ def read_cube_trace(
         "grammatical_cube_meta",
         "grammatical_cube_context",
         "grammatical_cube_local_jet",
+        "grammatical_cube_edge_zip",
         "grammatical_cube_terminal",
         "grammatical_cube_check",
     }
@@ -180,11 +212,14 @@ def read_cube_trace(
     meta = one("grammatical_cube_meta")
     terminal = one("grammatical_cube_terminal")
     check = one("grammatical_cube_check")
-    require(meta.get("schema_version") == 1, f"{path}: wrong cube schema")
+    require(meta.get("schema_version") == 2, f"{path}: wrong cube schema")
     require(
-        meta.get("semantics") == "carrier_conditioned_action_jet_with_terminal_token_contrasts",
+        meta.get("semantics")
+        == "carrier_conditioned_action_jet_with_mealy_edge_zip",
         f"{path}: wrong cube semantics",
     )
+    require(meta.get("edge_observation_zip_retained") is True, f"{path}: edge zip absent")
+    require(meta.get("edge_observations_folded") is False, f"{path}: edge zip was folded")
     require(meta.get("terminal_probabilities_used") is False, f"{path}: probabilities entered observer")
     require(meta.get("scalar_completion_reward_used") is False, f"{path}: scalar reward entered observer")
     require(meta.get("local_c_difference_defined") is False, f"{path}: ill-typed local C difference")
@@ -202,6 +237,38 @@ def read_cube_trace(
         f"{path}: invalid terminal coefficients",
     )
     require(len(retained["grammatical_cube_context"]) == 8, f"{path}: cube lacks corners")
+
+    edges: dict[str, list[EdgeObservation]] = defaultdict(list)
+    for row in retained["grammatical_cube_edge_zip"]:
+        require(int(row["observer_width"]) == width, f"{path}: edge width differs")
+        require(tuple(row["mobius_subsets"]) == EDGE_SUBSETS, f"{path}: edge subset order differs")
+        tokens = tuple(int(token) for token in row["corner_token_ids"])
+        require(len(tokens) == 4, f"{path}: edge corner token count differs")
+        values = np.stack(
+            [np.asarray(row["coefficients"][name], dtype=np.float64) for name in EDGE_SUBSETS]
+        )
+        require(values.shape == (4, width) and np.all(np.isfinite(values)), f"{path}: invalid edge coefficients")
+        edge = EdgeObservation(
+            fiber=str(row["fiber"]),
+            token_position=int(row["token_position"]),
+            predecessor_position=int(row["predecessor_position"]),
+            corner_tokens=tokens,  # type: ignore[arg-type]
+            coefficients=values,
+        )
+        require(edge.predecessor_position == edge.token_position - 1, f"{path}: edge predecessor differs")
+        edges[edge.fiber].append(edge)
+    require(set(edges) == {"without_C", "with_C"}, f"{path}: edge fibers differ")
+    expected_positions = {
+        "without_C": int(meta["base_positions"]),
+        "with_C": int(meta["extended_positions"]),
+    }
+    for fiber, rows in edges.items():
+        rows.sort(key=lambda row: row.token_position)
+        require(
+            [row.token_position for row in rows]
+            == list(range(1, expected_positions[fiber])),
+            f"{path}: edge positions differ for {fiber}",
+        )
 
     local: dict[str, list[LocalReference]] = defaultdict(list)
     maximum_end = 0
@@ -251,6 +318,7 @@ def read_cube_trace(
     require(float(check["maximum_typed_chain_output_l2_defect"]) == 0.0, f"{path}: typed chain defect")
     for field in (
         "maximum_local_mobius_inverse_absolute_defect",
+        "maximum_edge_mobius_inverse_absolute_defect",
         "terminal_mobius_inverse_absolute_defect",
         "maximum_stock_hidden_relative_defect",
         "maximum_stock_logit_contrast_relative_defect",
@@ -264,9 +332,11 @@ def read_cube_trace(
         observer_tokens=observer_tokens,
         reference_token=int(meta["observer_reference_token"]),
         coefficients=coefficients,
+        edges=dict(edges),
         local=dict(local),
         maximum_chain_defect=float(check["maximum_typed_chain_output_l2_defect"]),
         maximum_local_inverse_defect=float(check["maximum_local_mobius_inverse_absolute_defect"]),
+        maximum_edge_inverse_defect=float(check["maximum_edge_mobius_inverse_absolute_defect"]),
         terminal_inverse_defect=float(check["terminal_mobius_inverse_absolute_defect"]),
         typed_boundaries=typed_boundaries,
         maximum_hidden_relative_defect=float(check["maximum_stock_hidden_relative_defect"]),
@@ -1602,11 +1672,228 @@ def predictive_partition_refinement(
     }
 
 
+def reconstruct_edge_corners(edge: EdgeObservation) -> np.ndarray:
+    carrier, a, b, ab = edge.coefficients
+    return np.stack(
+        (
+            carrier,
+            carrier + a,
+            carrier + b,
+            carrier + a + b + ab,
+        )
+    )
+
+
+def margin_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    margins = np.asarray([float(row["margin"]) for row in rows], dtype=np.float64)
+    require(len(margins) > 0 and np.all(np.isfinite(margins)), "empty company margins")
+    return {
+        "decisions": len(rows),
+        "matches_manifest_expectation": sum(
+            bool(row["matches_manifest_expectation"]) for row in rows
+        ),
+        "manifest_match_rate": float(np.mean(margins > 0.0)),
+        "minimum_margin": float(margins.min()),
+        "mean_margin": float(margins.mean()),
+        "maximum_margin": float(margins.max()),
+    }
+
+
+def branch_margin_summaries(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    for row in rows:
+        groups[(str(row["role"]), str(row["branch"]))].append(row)
+    return {
+        f"{role}/{branch}": margin_summary(group)
+        for (role, branch), group in sorted(groups.items())
+    }
+
+
+def edge_company_evaluation_analysis(
+    traces: dict[tuple[StateSpec, str], CubeTrace],
+    states: list[StateSpec],
+    extensions: list[ActionWord],
+    observer_ids: tuple[int, ...],
+    observer_labels: dict[int, str],
+) -> dict[str, Any]:
+    observer_index = {token: index for index, token in enumerate(observer_ids)}
+    reference_extension = extensions[0].name
+    maximum_base_edge_difference = 0.0
+    for state in states:
+        reference = traces[(state, reference_extension)].edges["without_C"]
+        for extension in extensions[1:]:
+            candidate = traces[(state, extension.name)].edges["without_C"]
+            require(len(candidate) == len(reference), "base edge zip length differs")
+            for left, right in zip(reference, candidate):
+                require(
+                    left.token_position == right.token_position
+                    and left.corner_tokens == right.corner_tokens,
+                    "base edge constructors differ across future actions",
+                )
+                maximum_base_edge_difference = max(
+                    maximum_base_edge_difference,
+                    float(np.max(np.abs(left.coefficients - right.coefficients))),
+                )
+    require(maximum_base_edge_difference == 0.0, "base edge codata differs across C")
+
+    main_rows: list[dict[str, Any]] = []
+    future_rows: list[dict[str, Any]] = []
+    interactions: dict[str, list[float]] = {"controller": [], "attractor": []}
+    future_interactions: dict[str, list[float]] = {"controller": [], "attractor": []}
+    maximum_counterfactual_prefix_leak = 0.0
+
+    def append_margin(
+        destination: list[dict[str, Any]],
+        state: StateSpec,
+        branch: str,
+        raw: np.ndarray,
+        corner: int,
+        expected: int,
+        alternative: int,
+    ) -> None:
+        require(expected in observer_index and alternative in observer_index, "choice token absent from observer")
+        margin = float(
+            raw[corner, observer_index[expected]]
+            - raw[corner, observer_index[alternative]]
+        )
+        destination.append(
+            {
+                "state": state.key,
+                "role": state.diagram.role,
+                "branch": branch,
+                "expected_token": expected,
+                "expected_constructor": observer_labels[expected],
+                "alternative_token": alternative,
+                "alternative_constructor": observer_labels[alternative],
+                "margin": margin,
+                "matches_manifest_expectation": margin > 0.0,
+            }
+        )
+
+    for state in states:
+        base_edges = traces[(state, reference_extension)].edges["without_C"]
+        verb_edges = [
+            edge
+            for edge in base_edges
+            if edge.corner_tokens[0] == edge.corner_tokens[1]
+            and edge.corner_tokens[2] == edge.corner_tokens[3]
+            and edge.corner_tokens[0] != edge.corner_tokens[2]
+        ]
+        require(len(verb_edges) == 1, f"{state.key}: expected one B constructor edge")
+        verb_edge = verb_edges[0]
+        singular, plural = verb_edge.corner_tokens[0], verb_edge.corner_tokens[2]
+        require(singular in observer_index and plural in observer_index, f"{state.key}: verb observer absent")
+        maximum_counterfactual_prefix_leak = max(
+            maximum_counterfactual_prefix_leak,
+            float(np.max(np.abs(verb_edge.coefficients[2:]))),
+        )
+        raw = reconstruct_edge_corners(verb_edge)
+        role = state.diagram.role
+        if role == "controller":
+            append_margin(main_rows, state, "x", raw, 0, singular, plural)
+            append_margin(main_rows, state, "AB", raw, 3, plural, singular)
+        else:
+            append_margin(main_rows, state, "x", raw, 0, singular, plural)
+            append_margin(main_rows, state, "A", raw, 1, singular, plural)
+        interactions[role].append(
+            float(
+                raw[1, observer_index[plural]]
+                - raw[1, observer_index[singular]]
+                - raw[0, observer_index[plural]]
+                + raw[0, observer_index[singular]]
+            )
+        )
+
+        plural_trace = traces[(state, "plural_pronoun")]
+        singular_trace = traces[(state, "singular_pronoun")]
+        base_positions = len(plural_trace.edges["without_C"]) + 1
+        plural_edges = [
+            edge
+            for edge in plural_trace.edges["with_C"]
+            if edge.token_position >= base_positions
+        ]
+        singular_edges = [
+            edge
+            for edge in singular_trace.edges["with_C"]
+            if edge.token_position >= base_positions
+        ]
+        require(plural_edges and singular_edges, f"{state.key}: pronoun action has no edges")
+        plural_edge = plural_edges[0]
+        singular_edge = singular_edges[0]
+        require(
+            plural_edge.token_position == singular_edge.token_position
+            and np.array_equal(plural_edge.coefficients, singular_edge.coefficients),
+            f"{state.key}: pre-pronoun codata depends on unconsumed action",
+        )
+        plural_token = plural_edge.corner_tokens[0]
+        singular_token = singular_edge.corner_tokens[0]
+        require(
+            len(set(plural_edge.corner_tokens)) == 1
+            and len(set(singular_edge.corner_tokens)) == 1
+            and plural_token != singular_token,
+            f"{state.key}: pronoun constructor test differs",
+        )
+        raw = reconstruct_edge_corners(plural_edge)
+        if role == "controller":
+            append_margin(future_rows, state, "x", raw, 0, singular_token, plural_token)
+            append_margin(future_rows, state, "AB", raw, 3, plural_token, singular_token)
+        else:
+            append_margin(future_rows, state, "x", raw, 0, singular_token, plural_token)
+            append_margin(future_rows, state, "A", raw, 1, singular_token, plural_token)
+        edited_corner = 3 if role == "controller" else 1
+        future_interactions[role].append(
+            float(
+                raw[edited_corner, observer_index[plural_token]]
+                - raw[edited_corner, observer_index[singular_token]]
+                - raw[0, observer_index[plural_token]]
+                + raw[0, observer_index[singular_token]]
+            )
+        )
+
+    def interaction_summary(values: list[float]) -> dict[str, float]:
+        array = np.asarray(values, dtype=np.float64)
+        return {
+            "minimum": float(array.min()),
+            "mean": float(array.mean()),
+            "maximum": float(array.max()),
+        }
+
+    return {
+        "semantics": "token constructors are coproduct injections selecting coordinates of prefix codata; feature edits probe product projections demanded by that observer; edge evaluations remain separate and are never folded across a sequence",
+        "polynomial_interface_slice": {
+            "product_projection_probe": "A changes target-number while preserving the typed token square",
+            "coproduct_injection_probe": "the retained singular/plural constructor coordinates",
+            "main_edge_demand_formula": "D_A[(iota_plural^* - iota_singular^*)q](x)",
+            "scope": "one measured cell of the projection-injection demand lattice, not a quotient of complete hidden states",
+        },
+        "base_edge_maximum_difference_across_extensions": maximum_base_edge_difference,
+        "maximum_unconsumed_B_prefix_leak": maximum_counterfactual_prefix_leak,
+        "main_verb_company": {
+            "summary": margin_summary(main_rows),
+            "summary_by_role_and_branch": branch_margin_summaries(main_rows),
+            "projection_demand_response_by_role": {
+                role: interaction_summary(values) for role, values in interactions.items()
+            },
+            "decisions": main_rows,
+        },
+        "future_pronoun_company": {
+            "interaction_semantics": "controller compares grammatical x versus AB; attractor compares grammatical x versus A",
+            "summary": margin_summary(future_rows),
+            "summary_by_role_and_branch": branch_margin_summaries(future_rows),
+            "grammatical_path_injection_response_by_role": {
+                role: interaction_summary(values)
+                for role, values in future_interactions.items()
+            },
+            "decisions": future_rows,
+        },
+    }
+
+
 def main() -> None:
     args = arguments()
     manifest = read_manifest(args.manifest)
     actions = read_actions(args.actions)
-    observer_ids = read_observer_ids(args.observers)
+    observer_ids, observer_labels = read_observers(args.observers)
     states = expand_states(manifest)
     extensions = [word for word in expand_words(actions) if len(word.factors) == 1]
     composite_extensions = [
@@ -1625,7 +1912,84 @@ def main() -> None:
                 state,
                 extension,
                 args.traces,
+                require_local_jets=not args.primitive_terminal_only,
             )
+    if args.edge_company_only:
+        require(
+            all(trace.observer_tokens == observer_ids for trace in traces.values()),
+            "cube observer token sets differ",
+        )
+        require(
+            {trace.reference_token for trace in traces.values()} == {1},
+            "cube reference tokens differ",
+        )
+        boundary_counts = {trace.typed_boundaries for trace in traces.values()}
+        require(len(boundary_counts) == 1, "cube typed-boundary counts differ")
+        edge_company = edge_company_evaluation_analysis(
+            traces,
+            states,
+            extensions,
+            observer_ids,
+            observer_labels,
+        )
+        result = {
+            "schema_version": 2,
+            "artifact": "projection_injection_edge_demand_slice",
+            "semantics": {
+                "firthian_invariant": "the actual computation must respect company; this artifact checks whether constructor/codata edge evaluation exposes it",
+                "edge_observer": "complete logit(token)-logit(BOS) codata before every consumed token constructor",
+                "composition": "constructor injections select coordinates of codata; feature actions probe demanded projections; observations are zipped and never folded across positions",
+                "manifest_comparison": "a negative margin means the measured model demand differs from the supplied grammatical expectation, not that company went unobserved",
+                "not_an_inference_reward": True,
+            },
+            "provenance": {
+                "model": args.model_label,
+                "evaluator_commit": args.evaluator_commit or "unspecified",
+                "analyzer_commit": git_head(),
+                "manifest_sha256": hashlib.sha256(args.manifest.read_bytes()).hexdigest(),
+                "actions_sha256": hashlib.sha256(args.actions.read_bytes()).hexdigest(),
+                "observers_sha256": hashlib.sha256(args.observers.read_bytes()).hexdigest(),
+                "trace_count": len(traces),
+            },
+            "validation": {
+                "contexts": len(states),
+                "extensions": len(extensions),
+                "terminal_observer_width": len(observer_ids),
+                "typed_boundaries": next(iter(boundary_counts)),
+                "maximum_typed_chain_output_l2_defect": max(
+                    trace.maximum_chain_defect for trace in traces.values()
+                ),
+                "maximum_edge_mobius_inverse_absolute_defect": max(
+                    trace.maximum_edge_inverse_defect for trace in traces.values()
+                ),
+                "maximum_stock_hidden_relative_defect": max(
+                    trace.maximum_hidden_relative_defect for trace in traces.values()
+                ),
+                "maximum_stock_logit_contrast_relative_defect": max(
+                    trace.maximum_logit_relative_defect for trace in traces.values()
+                ),
+            },
+            "edge_company_evaluation": edge_company,
+            "scope": {
+                "establishes": "the number-projection demand of retained verb and future-pronoun constructor injections, plus its agreement with the supplied grammar manifest",
+                "does_not_yet_recover": "the full projection-injection demand lattice, its recursive polynomial composition, joint completion selection, or inference sharing law",
+                "interpretation": "every margin is an observed company preference; disagreement with the manifest localizes the model's different demand rather than negating Firthian semantics",
+            },
+        }
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+        print(
+            "edge validation: "
+            f"traces={len(traces)} observer={len(observer_ids)} "
+            f"chain={result['validation']['maximum_typed_chain_output_l2_defect']:.8g}"
+        )
+        for name in ("main_verb_company", "future_pronoun_company"):
+            summary = edge_company[name]["summary"]
+            print(
+                f"  {name:24s} manifest={summary['matches_manifest_expectation']}/{summary['decisions']} "
+                f"minimum_margin={summary['minimum_margin']:.6f}"
+            )
+        return
     composite_traces: dict[tuple[StateSpec, str], CubeTrace] = {}
     for state in states:
         for extension in composite_extensions:
@@ -1689,6 +2053,13 @@ def main() -> None:
 
     terminal_ablation = terminal_action_jet_ablation(tensor, states, extensions)
     terminal_atlas = terminal_finite_atlas_analysis(tensor, states, extensions)
+    edge_company = edge_company_evaluation_analysis(
+        traces,
+        states,
+        extensions,
+        observer_ids,
+        observer_labels,
+    )
     local_ablation = local_transition_ablation(
         traces,
         states,
@@ -1712,12 +2083,14 @@ def main() -> None:
         for name, (matrix, _) in representations.items()
     }
     result: dict[str, Any] = {
-        "schema_version": 1,
+        "schema_version": 2,
         "artifact": "carrier_conditioned_predictive_grammar_cube",
         "semantics": {
             "firthian_invariant": "observational equivalence must be a congruence under every retained company action",
             "terminal_observer": "fixed vector logit(token)-logit(BOS); no softmax or scalar reward",
-            "hankel": "H[i,(C,t)]=Delta_A Delta_B(q_t after C)(x_i)",
+            "edge_observer": "before each consumed constructor, retain the complete token-indexed observation and the constructor ID as separate zipped data",
+            "edge_evaluation": "a constructor selects one coordinate of the preceding codata; no edge values are summed",
+            "hankel": "endpoint diagnostic H[i,(C,t)]=Delta_A Delta_B(q_t after C)(x_i)",
             "terminal_mobius": "eight corners transformed into carrier,A,B,AB,C,AC,BC,ABC",
             "local_jet": "carrier,A,B,AB retained separately within each position-indexed C fiber",
             "local_C": "not subtracted because suffix extension changes the frontier type",
@@ -1751,6 +2124,10 @@ def main() -> None:
             "maximum_local_mobius_inverse_absolute_defect": max(
                 trace.maximum_local_inverse_defect for trace in traces.values()
             ),
+            "maximum_edge_mobius_inverse_absolute_defect": max(
+                trace.maximum_edge_inverse_defect
+                for trace in (*traces.values(), *composite_traces.values())
+            ),
             "maximum_terminal_mobius_inverse_absolute_defect": max(
                 trace.terminal_inverse_defect
                 for trace in (*traces.values(), *composite_traces.values())
@@ -1772,10 +2149,11 @@ def main() -> None:
         "behavioral_hankel_double_holdout": hankel,
         "terminal_uniform_action_jet_ablation": terminal_ablation,
         "terminal_carrier_conditioned_finite_atlas": terminal_atlas,
+        "edge_company_evaluation": edge_company,
         "local_typed_transition_jet_ablation": local_ablation,
         "predictive_partition_refinement": partition_refinement,
         "scope": {
-            "establishes": "which sampled observer/state/action factorizations preserve or lose finite future-company distinctions on Stories15M",
+            "establishes": f"which sampled observer/state/action factorizations preserve or lose finite future-company distinctions on {args.model_label}",
             "does_not_yet_recover": "the exhaustive root-reachable observational quotient, its completion selection, or its inference sharing law",
             "interpretation": "a failed congruence test refines the proposed representation or transport; it is not evidence against Firthian semantics",
         },
@@ -1812,6 +2190,13 @@ def main() -> None:
         print(
             f"  {name:20s} median={row['error_median']:.6f} "
             f"best={row['best_transition_count']}/{local_ablation['transition_count']}"
+        )
+    print("edge company decisions:")
+    for name in ("main_verb_company", "future_pronoun_company"):
+        summary = edge_company[name]["summary"]
+        print(
+            f"  {name:24s} manifest={summary['matches_manifest_expectation']}/{summary['decisions']} "
+            f"minimum_margin={summary['minimum_margin']:.6f}"
         )
 
 

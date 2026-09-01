@@ -153,6 +153,8 @@ GRAMMAR_CUBE_TRACES ?= work_traces/grammar_cubes
 GRAMMAR_CUBE_COMPOSITE_TRACES ?= work_traces/grammar_cube_composites
 GRAMMAR_CUBE_ANALYSIS ?= outputs/cps-grammar-cubes-analysis.json
 GRAMMAR_CUBE_EVALUATOR_COMMIT ?= $(shell git log -1 --format=%H -- cps_grammar_cube.c gather_grammar_cubes.py)
+GRAMMAR_EDGE_TRACES ?= work_traces/grammar_cubes_edge_v2
+GRAMMAR_EDGE_ANALYSIS ?= outputs/cps-stories15m-edge-company-analysis.json
 
 .PHONY: grammarrelations
 grammarrelations: cpsgrammaractions
@@ -188,6 +190,18 @@ grammarcompositecubes: cpsgrammarcube
 		--extension-mode composed \
 		--terminal-only \
 		--output $(GRAMMAR_CUBE_COMPOSITE_TRACES)
+
+.PHONY: grammaredgedemands
+grammaredgedemands: cpsgrammarcube
+	python3 gather_grammar_cubes.py \
+		--terminal-only \
+		--output $(GRAMMAR_EDGE_TRACES)
+	python3 analyze_grammar_cubes.py \
+		--traces $(GRAMMAR_EDGE_TRACES) \
+		--primitive-terminal-only \
+		--edge-company-only \
+		--evaluator-commit $(GRAMMAR_CUBE_EVALUATOR_COMMIT) \
+		--output $(GRAMMAR_EDGE_ANALYSIS)
 
 .PHONY: longcontextprofiles
 longcontextprofiles: companyprobe

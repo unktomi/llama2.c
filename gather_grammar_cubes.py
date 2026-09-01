@@ -77,6 +77,7 @@ def trace_complete(trace: Path, jet: Path | None, terminal_only: bool) -> bool:
     check: dict[str, Any] | None = None
     terminal_count = 0
     local_rows = 0
+    edge_rows = 0
     maximum_binary_end = 0
     try:
         with trace.open(encoding="utf-8") as source:
@@ -94,6 +95,8 @@ def trace_complete(trace: Path, jet: Path | None, terminal_only: bool) -> bool:
                         int(row["binary_byte_offset"])
                         + 4 * int(row["binary_float32_count"]),
                     )
+                elif kind == "grammatical_cube_edge_zip":
+                    edge_rows += 1
                 elif kind == "grammatical_cube_terminal":
                     terminal_count += 1
                 elif kind == "grammatical_cube_check":
@@ -106,7 +109,11 @@ def trace_complete(trace: Path, jet: Path | None, terminal_only: bool) -> bool:
     return (
         meta is not None
         and meta.get("kind") == "grammatical_cube_meta"
-        and meta.get("schema_version") == 1
+        and meta.get("schema_version") == 2
+        and meta.get("semantics")
+        == "carrier_conditioned_action_jet_with_mealy_edge_zip"
+        and meta.get("edge_observation_zip_retained") is True
+        and meta.get("edge_observations_folded") is False
         and check is not None
         and typed_boundaries > 0
         and (
@@ -115,6 +122,10 @@ def trace_complete(trace: Path, jet: Path | None, terminal_only: bool) -> bool:
             else meta.get("local_jets_retained") in (None, True)
         )
         and local_rows == (0 if terminal_only else 2 * typed_boundaries)
+        and edge_rows
+        == int(meta.get("base_positions", 0))
+        + int(meta.get("extended_positions", 0))
+        - 2
         and terminal_count == 1
         and (
             (jet is None and maximum_binary_end == 0)

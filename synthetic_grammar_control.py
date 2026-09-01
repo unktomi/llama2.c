@@ -6,10 +6,11 @@ cross-sentence-pronoun choices: controller number, together with the finite
 construction phase supplied by the generator.  Controller and PP-attractor
 templates use the same lexical substitutions as the real grammar cubes.
 
-This program trains and exports a real Transformer from model.py.  It does not
-implement the quotient extractor itself; the exported checkpoint and tokenizer
-are consumed by cps_grammar_cube, gather_grammar_cubes.py, and
-analyze_grammar_cubes.py so the positive control traverses the same evaluator.
+This program trains and exports a real Transformer from model.py. It does not
+implement the projection--injection demand analysis itself; the exported
+checkpoint and stock tokenizer are consumed by cps_grammar_cube,
+gather_grammar_cubes.py, and analyze_grammar_cubes.py so the known-law control
+traverses the same evaluator.
 """
 
 from __future__ import annotations
@@ -29,12 +30,11 @@ from export import legacy_export
 from gather_grammar_behaviors import expand_words, read_actions
 from gather_grammar_relations import DEFAULT_MANIFEST, read_manifest
 from model import ModelArgs, Transformer
-from tokenizer import Tokenizer
 
 
 ROOT = Path(__file__).resolve().parent
 DEFAULT_ACTIONS = ROOT / "grammar_future_actions.json"
-DEFAULT_OUTPUT = ROOT / "work_traces" / "synthetic_grammar"
+DEFAULT_OUTPUT = ROOT / "work_traces" / "synthetic_grammar_stock"
 
 
 @dataclass(frozen=True)
@@ -50,12 +50,17 @@ def arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
     parser.add_argument("--actions", type=Path, default=DEFAULT_ACTIONS)
+    parser.add_argument(
+        "--tokenizer-model",
+        type=Path,
+        default=ROOT / "tokenizer.model",
+        help="aligned SentencePiece model whose sibling .bin is used by llama2.c",
+    )
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--steps", type=int, default=1600)
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--seed", type=int, default=20260901)
     parser.add_argument("--device", choices=("auto", "cpu", "mps"), default="auto")
-    parser.add_argument("--force-tokenizer", action="store_true")
     parser.add_argument("--force-train", action="store_true")
     return parser.parse_args()
 
@@ -177,34 +182,6 @@ def build_corpus(
                             if set(word.factors) <= allowed_names:
                                 examples.add(base + word.text)
     return sorted(examples), records
-
-
-def train_tokenizer(corpus: list[str], output: Path, force: bool) -> Path:
-    model = output / "synthetic.model"
-    tokenizer_bin = output / "synthetic.bin"
-    if model.is_file() and tokenizer_bin.is_file() and not force:
-        return model
-    corpus_path = output / "synthetic-corpus.txt"
-    corpus_path.write_text("\n".join(corpus) + "\n", encoding="utf-8")
-    spm.SentencePieceTrainer.train(
-        input=str(corpus_path),
-        model_prefix=str(output / "synthetic"),
-        model_type="bpe",
-        vocab_size=384,
-        self_test_sample_size=0,
-        input_format="text",
-        character_coverage=1.0,
-        num_threads=4,
-        split_digits=True,
-        allow_whitespace_only_pieces=True,
-        byte_fallback=True,
-        unk_surface=r" \342\201\207 ",
-        normalization_rule_name="identity",
-        hard_vocab_limit=False,
-    )
-    Tokenizer(str(model)).export()
-    require(tokenizer_bin.is_file(), "tokenizer export did not create synthetic.bin")
-    return model
 
 
 def encode_corpus(
@@ -365,14 +342,14 @@ def evaluate_choices(
 
 def observer_file(
     processor: spm.SentencePieceProcessor,
+    grammar_tokens: set[int],
     output: Path,
 ) -> Path:
     path = output / "synthetic-observers.tsv"
     with path.open("w", encoding="utf-8") as destination:
-        destination.write("# Every synthetic vocabulary coordinate except BOS.\n")
-        for token in range(processor.vocab_size()):
-            if token != processor.bos_id():
-                destination.write(f"{token}\t{processor.id_to_piece(token)}\n")
+        destination.write("# Every token constructor occurring in the finite grammar except BOS.\n")
+        for token in sorted(grammar_tokens - {processor.bos_id()}):
+            destination.write(f"{token}\t{processor.id_to_piece(token)}\n")
     return path
 
 
@@ -395,7 +372,14 @@ def main() -> None:
     manifest = read_manifest(args.manifest)
     actions = read_actions(args.actions)
     corpus, records = build_corpus(manifest, actions)
-    tokenizer_model = train_tokenizer(corpus, args.output, args.force_tokenizer)
+    tokenizer_model = args.tokenizer_model.resolve()
+    tokenizer_bin = tokenizer_model.with_suffix(".bin")
+    require(tokenizer_model.is_file(), f"missing tokenizer model: {tokenizer_model}")
+    require(tokenizer_bin.is_file(), f"missing tokenizer binary: {tokenizer_bin}")
+    (args.output / "synthetic-corpus.txt").write_text(
+        "\n".join(corpus) + "\n",
+        encoding="utf-8",
+    )
     processor = spm.SentencePieceProcessor(model_file=str(tokenizer_model))
     sequences = encode_corpus(processor, corpus)
     tests = build_choice_tests(processor, records, actions)
@@ -469,7 +453,11 @@ def main() -> None:
     model.eval()
     model_path = args.output / "synthetic-model.bin"
     legacy_export(model, str(model_path))
-    observers = observer_file(processor, args.output)
+    observers = observer_file(
+        processor,
+        {token for sequence in sequences for token in sequence},
+        args.output,
+    )
     report = {
         "schema_version": 1,
         "artifact": "trained_finite_agreement_grammar_control",
@@ -493,7 +481,7 @@ def main() -> None:
         "exhaustive_choice_metrics": final_metrics,
         "paths": {
             "model": str(model_path.resolve()),
-            "tokenizer": str((args.output / "synthetic.bin").resolve()),
+            "tokenizer": str(tokenizer_bin),
             "observer_tokens": str(observers.resolve()),
         },
     }

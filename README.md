@@ -169,8 +169,8 @@ induced sampled pullback operator, and checking every eigen-equation again on
 held-out TinyStories contexts. It separately measures representability and
 whether pullback descends through the sampled-function quotient; this prevents
 an underdetermined fit from being reported as an eigenspace. The sixteen-token
-Stories15M run, resumable mapped formats, full equations, and negative
-depth-three closure result are documented in the
+Stories15M run, resumable mapped formats, full equations, and measured
+depth-three non-descent are documented in the
 [root-reachable spectrum section](doc/cps-fixed-points.md#root-reachable-pullback-spectrum).
 
 `cps_grammar_actions.c` provides action-derived observations to replace the
@@ -198,8 +198,9 @@ norms or residuals into a completion reward. The checked Stories15M result and
 its unseen-template confirmation are documented under
 [matched controller/attractor geometry](doc/cps-fixed-points.md#matched-controller-attractor-continuation-geometry).
 The same evaluator now retains three exact residual-block pullback generations.
-Their held-out descent test is negative: the sampled dictionaries saturate all
-available rows and do not yet yield a small pullback-closed quotient.  The
+Their held-out descent test shows that the sampled complete-coordinate
+dictionaries saturate all available rows and do not descend through that
+proposed small quotient. The
 documentation distinguishes that residual-block result from a direct test of
 the controller/attractor role-swap action on the full typed zip.  Its neutral
 and action-adapted rank curves also fail to produce a small quotient that both
@@ -211,10 +212,34 @@ counterexample-guided observational one. They extend every corner of each
 diagram by the same future company, retain complete final-root behavior, and
 form explicit third- and fourth-order Möbius observations. On 2,376 checked
 Stories15M traces the future increments carry a held-out grammatical-role
-signal, but exact refinement yields 88 singletons and every behavior matrix
-has full 88/88 row rank. Thus this finite experiment discovers no nontrivial
-exact quotient or computational sharing rule. See
+signal, while exact refinement yields 88 singletons and every behavior matrix
+has full 88/88 row rank. This records that complete final-root observation
+retains all sampled projections; it is not interpreted as absence of a
+smaller active demand interface. See
 [future-company observational refinement](doc/cps-fixed-points.md#future-company-observational-refinement).
+
+That endpoint result is now interpreted more narrowly. Complete hidden-root
+observation retains every available projection and therefore fingerprints
+complete contexts; its singleton partition is not evidence that Firthian
+sharing is absent. Schema 2 of `cps_grammar_cube.c` additionally retains the
+complete token-indexed codata immediately **before** every consumed token
+constructor. Constructors and observations remain zipped by position and are
+never folded into a sequence score. `analyze_grammar_cubes.py
+--edge-company-only` then measures the first projection--injection demand cell
+
+```text
+D_A[(iota_plural^* - iota_singular^*) q](x),
+```
+
+where `A` is the target-number projection probe and the two `iota` terms are
+the singular/plural token-constructor injections. A trained finite-grammar
+control recovers all 352 verb/pronoun constructor choices. Stories15M instead
+demands target number in both controller and PP-attractor arrangements: all
+44 edited controller branches choose the plural verb, while only 4/44 edited
+attractor branches retain the manifest's singular verb. This is a measured
+difference in the model's active interface, not a failed test of company
+semantics. The equations, decoded decisions, and exact run validation are in
+[the projection--injection demand section](doc/cps-fixed-points.md#projection-injection-demand-at-token-edges).
 
 The preceding endpoint-observer experiment is retained only as
 `terminal-unembedding-observer-don't-do-this.c`. It selected final token

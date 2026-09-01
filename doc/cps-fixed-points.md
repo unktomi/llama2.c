@@ -925,13 +925,14 @@ is no numerical rank collapse.  Even their complete training spans leave
 confirmation residuals of `0.90397` and `0.90324`.
 
 This direct action result therefore identifies the current uncentered linear
-zip as the wrong carrier for the quotient: on these 44 matched diagrams it
-cannot simultaneously retain the grammatical role distinction and carry the
-role action to unseen contexts.  The earlier 8/8 relative classification of
-the large zip is real, but relative separation is not closure.  The next
-state must retain additional actions and higher-order Möbius terms, use a
-model-derived observation geometry, or both.  No completion observer or
-inference speedup follows from this particular factorization.
+zip as a more specific observer interface than the tested role action can
+carry uniformly: on these 44 matched diagrams it cannot simultaneously retain
+the grammatical role distinction and transport that action to unseen
+contexts. The earlier 8/8 relative classification of the large zip is real,
+but relative separation is not closure. This measurement does not say that a
+smaller company-demand interface is absent; it says the complete zip does not
+factor through the proposed uniform linear transport. No completion observer
+or inference speedup follows from this particular factorization.
 
 Absolute confirmation residuals for the all-transition controller span remain
 between about `0.81` and `0.96`; only their matched relative ordering is being
@@ -958,8 +959,9 @@ make grammarrelations CC=clang
 
 #### Future-company observational refinement
 
-The failed role-action regression above asked a chosen geometric zip to carry
-an action. The next experiment changes the object being represented. For a
+The held-action discrepancy in the role-action regression above asked a chosen
+geometric zip to carry an action. The next experiment changes the object being
+represented. For a
 grammatical interaction diagram `x`, a future action word `w`, and the complete
 288-coordinate post-final-RMS observation at the last token, it retains
 
@@ -1036,8 +1038,9 @@ Only after that exact result does the analyzer inspect the behavior matrices:
 | sixteen fourth-order conditional observations | 88 x 4,608 | 88/88 | 66 | 0.02483 |
 
 There is no numerical rank collapse in this sample. In particular, moving
-from the geometric zip to future behavior does not by itself produce the
-hoped-for small exact quotient.
+from the geometric zip to complete-coordinate future behavior still retains a
+fully specific interface; it does not by itself expose which projections the
+current company actually demands.
 
 There is nevertheless a reusable relative signal in how future company
 changes the interaction. Labels are introduced only after behavior
@@ -1064,12 +1067,12 @@ object exposes distinctions that the identical local bridge cannot contain,
 and subtracting the identity behavior transfers substantially better than the
 absolute endpoint behavior. But complete hidden-root coordinates distinguish
 every sampled context, so their exact observational quotient is the discrete
-88-state partition. More future words can only refine that exact partition;
-they cannot merge it. Any nontrivial sharing result now requires a justified
-coarser family of retained model observations or a predictive approximation
-criterion whose error is checked under further company. It cannot be obtained
-by fitting another global matrix to these rows or by treating the relative
-span residual as an inference score.
+88-state partition. More future words can only refine that complete interface;
+they cannot reveal which projections were unnecessary to a particular
+constructor. Sharing must instead be derived by factoring each active
+continuation through the projections it demands, as in the edge experiment
+below. It cannot be obtained by fitting another global matrix to these rows or
+by treating the relative span residual as an inference score.
 
 The maximum stock-`forward()` hidden relative defect over all 2,376 traces is
 `1.57e-6`. Mixed and commutator vectors reconstruct from the retained roots
@@ -1084,3 +1087,154 @@ and can be regenerated with:
 ```bash
 make grammarbehaviors CC=clang
 ```
+
+### Projection--injection demand at token edges
+
+The preceding endpoint experiments asked complete hidden coordinates to
+identify complete contexts. That retains every projection. The resulting
+singleton partitions and full ranks are facts about that observer interface,
+but they are not a test of whether two computations can share the smaller
+interface demanded by their current company.
+
+The relevant algebra is contravariant. If a product projection
+
+```text
+pi_S : A -> A_S
+```
+
+forgets features, then precomposition embeds exactly the continuations that do
+not demand them:
+
+```text
+pi_S^* : R^(A_S) -> R^A,    k |-> k . pi_S.
+```
+
+On the filler side, token alternatives are coproduct injections. On the
+observer side, the same coproduct is a product of token-indexed observations:
+
+```text
+R^(sum_t Token_t) = product_t R^(Token_t).
+```
+
+Consequently a token constructor and a hidden observation must be kept as two
+typed roles. At prefix `p`, the transformer supplies the complete codata
+
+```text
+q(h_p) = [logit_t(h_p) - logit_BOS(h_p)]_t.
+```
+
+Consuming constructor `t` selects `iota_t^* q(h_p)` and advances the hidden
+state. A word is therefore a Mealy-style zip of edge observations and
+constructors, not a fold of token probabilities:
+
+```text
+(q(h_p), t_{p+1}), (q(h_{p+1}), t_{p+2}), ...
+```
+
+Only after an edge is consumed may the next state forget the projection that
+was needed to choose it. Observing only the final post-suffix state can
+therefore miss a law that the model used correctly at an earlier constructor.
+
+Schema 2 of `cps_grammar_cube.c` emits one flushed
+`grammatical_cube_edge_zip` record for every real token edge in both cube
+fibers. Each record contains the four corner constructor IDs and the complete
+carrier/A/B/AB Moebius coefficients of the pre-constructor token-contrast
+codata. The checks establish:
+
+* the B/AB state coefficients before the unconsumed B constructor are exactly
+  zero;
+* every edge's four raw codata corners reconstruct from its Moebius
+  coefficients;
+* the factored typed chains still reproduce the stock computation;
+* observations at distinct positions remain separate and no scalar sequence
+  score or probability is introduced.
+
+For the main verb, let `A` pluralize the target noun and let the singular and
+plural verb constructors be `iota_s` and `iota_p`. The first measured cell of
+the projection--injection demand lattice is
+
+```text
+D_A[(iota_p^* - iota_s^*)q](x)
+ = (q_p(Ax)-q_s(Ax)) - (q_p(x)-q_s(x)).
+```
+
+This is not a completion reward. It asks whether this particular constructor
+contrast demands the number feature exposed by `A`. Higher feature actions
+and their mixed differences will add further cells; composing those demand
+interfaces recursively is the polynomial-grammar task.
+
+#### Known-law trained control
+
+`synthetic_grammar_control.py` trains the repository's real `model.py`
+transformer on the finite language generated by the same controller/attractor
+manifest and the stock tokenizer. Its exhaustive teacher-forced checks cover
+all generated choices before the C trace is inspected:
+
+| Choice | Matches | Minimum margin |
+|---|---:|---:|
+| main verb | 640/640 | 6.891069 |
+| future pronoun | 640/640 | 5.660831 |
+
+The unchanged schema-2 C evaluator then applies all 88 contexts and nine
+future actions (792 cubes). Its edge analysis recovers every retained choice:
+
+| Edge choice | Manifest matches | Minimum margin |
+|---|---:|---:|
+| main verb | 176/176 | 6.891069 |
+| future pronoun | 176/176 | 5.660831 |
+
+The main-verb demand response separates the intended interfaces. Controller
+contexts have mean response `29.502194` (minimum `22.231576`); attractor
+contexts have mean `1.484175` (range `-0.517457` to `4.539331`). At the future
+pronoun edge, the grammatical path response is `12.692550` for controllers and
+`0.003335` for attractors. The independent exhaustive and C-edge minimum
+margins agree exactly. The maximum edge Moebius inverse defect is
+`9.54e-7`, the maximum stock logit-contrast relative defect is `3.53e-8`, and
+typed-chain output defect is zero.
+
+This also explains why its former endpoint fit looked poor: after the model
+has emitted the correct verb or pronoun constructor, the terminal state need
+not retain the number demand that was just discharged.
+
+#### Stories15M demand slice
+
+The identical 792-cube system run on Stories15M produces the following
+constructor decisions. “Match” means agreement with the supplied grammatical
+manifest; every row still records the model's actual decoded constructors and
+both competing logit contrasts.
+
+| Branch | Manifest matches | Mean expected-minus-alternative margin |
+|---|---:|---:|
+| controller baseline `x` | 27/44 | -0.036468 |
+| controller plural `AB` | 44/44 | 2.042212 |
+| attractor baseline `x` | 13/44 | -0.886815 |
+| attractor target-plural `A` | 4/44 | -1.544800 |
+
+The number-projection response is positive in both roles: mean `2.005744` for
+controllers and `0.657985` for attractors. Thus the small model's verb
+observer strongly demands plural target number even when that target occupies
+the PP-attractor position. In the clearest comparison, every edited controller
+selects its plural verb, but 40/44 edited attractors also prefer the plural
+alternative instead of retaining the singular controller agreement. This
+localizes the familiar attraction behavior as a demand-interface fact: this
+model has not made the target-number projection irrelevant in the attractor
+construction.
+
+Future pronoun constructors match the manifest on 110/176 branches. Their
+controller grammatical-path response has mean `3.007364`; the attractor path
+response remains `1.534084`, again showing that the supposedly irrelevant
+edit is still observed by this model.
+
+The Stories run has zero typed-chain output defect, maximum edge Moebius
+inverse defect `9.54e-7`, maximum stock hidden relative defect `1.48e-6`, and
+maximum stock logit-contrast relative defect `1.76e-6`. The two compact,
+decoded artifacts are
+`outputs/cps-synthetic-grammar-edge-demand.json` and
+`outputs/cps-stories15m-edge-company-analysis.json`.
+
+This establishes one number/constructor slice, not the whole polynomial
+grammar. The next inference task is to add independent feature actions and
+recover the minimal demanded projection sets for each constructor family,
+then compose those sum-of-products interfaces upward. Complete hidden states
+may remain unique throughout; sharing depends on common demanded projections,
+not equality of full values.
