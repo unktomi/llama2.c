@@ -31,8 +31,10 @@ from gather_number_demand_cubes import (
 
 ROOT = Path(__file__).resolve().parent
 DEFAULT_OBSERVERS = ROOT / "grammar_observer_tokens.tsv"
+DEFAULT_CONSTRUCTOR_FAMILY = ROOT / "verb_constructor_family.tsv"
 DEFAULT_RESULT = ROOT / "outputs" / "cps-stories15m-number-demand-analysis.json"
 EDGE_SUBSETS = ("carrier", "A", "B", "AB")
+CORNER_NAMES = ("x", "A", "C", "AC")
 
 
 def require(condition: bool, message: str) -> None:
@@ -56,10 +58,111 @@ def arguments() -> argparse.Namespace:
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
     parser.add_argument("--traces", type=Path, default=DEFAULT_TRACES)
     parser.add_argument("--observers", type=Path, default=DEFAULT_OBSERVERS)
+    parser.add_argument(
+        "--constructor-family",
+        type=Path,
+        default=DEFAULT_CONSTRUCTOR_FAMILY,
+    )
     parser.add_argument("--output", type=Path, default=DEFAULT_RESULT)
     parser.add_argument("--model-label", default="Stories15M")
     parser.add_argument("--evaluator-commit")
     return parser.parse_args()
+
+
+def weak_pairwise_order(values: np.ndarray) -> tuple[int, ...]:
+    result: list[int] = []
+    for left in range(len(values)):
+        for right in range(left + 1, len(values)):
+            difference = float(values[left] - values[right])
+            result.append(1 if difference > 0.0 else -1 if difference < 0.0 else 0)
+    return tuple(result)
+
+
+def argmax_set(values: np.ndarray) -> tuple[int, ...]:
+    maximum = float(np.max(values))
+    return tuple(index for index, value in enumerate(values) if float(value) == maximum)
+
+
+def essential_feature_support(signatures: dict[str, Any]) -> list[str]:
+    fibers = {
+        "A": (("x", "A"), ("C", "AC")),
+        "C": (("x", "C"), ("A", "AC")),
+    }
+    return [
+        feature
+        for feature, pairs in fibers.items()
+        if any(signatures[left] != signatures[right] for left, right in pairs)
+    ]
+
+
+def multiway_observation(corners: np.ndarray) -> dict[str, Any]:
+    require(corners.ndim == 2 and corners.shape[0] == 4, "multiway corner shape differs")
+    gauge_free = corners[:, 1:] - corners[:, :1]
+    codata_signatures = {
+        corner: tuple(float(value) for value in gauge_free[index])
+        for index, corner in enumerate(CORNER_NAMES)
+    }
+    order_signatures = {
+        corner: weak_pairwise_order(corners[index])
+        for index, corner in enumerate(CORNER_NAMES)
+    }
+    choice_signatures = {
+        corner: argmax_set(corners[index])
+        for index, corner in enumerate(CORNER_NAMES)
+    }
+    supports = {
+        "contrast_codata": essential_feature_support(codata_signatures),
+        "constructor_ordering": essential_feature_support(order_signatures),
+        "selected_injection": essential_feature_support(choice_signatures),
+    }
+    require(
+        set(supports["selected_injection"])
+        <= set(supports["constructor_ordering"])
+        <= set(supports["contrast_codata"]),
+        "observer-indexed support inclusion failed",
+    )
+    return {
+        "gauge_free_contrasts": {
+            corner: list(codata_signatures[corner]) for corner in CORNER_NAMES
+        },
+        "weak_pairwise_order": {
+            corner: list(order_signatures[corner]) for corner in CORNER_NAMES
+        },
+        "argmax_indices": {
+            corner: list(choice_signatures[corner]) for corner in CORNER_NAMES
+        },
+        "supports": supports,
+    }
+
+
+def strict_inclusion_oracle() -> dict[str, Any]:
+    corners = np.asarray(
+        (
+            (3.0, 0.0, -1.0),
+            (3.0, 0.0, 1.0),
+            (0.0, 3.0, -1.0),
+            (0.0, 3.0, 1.0),
+        ),
+        dtype=np.float64,
+    )
+    observation = multiway_observation(corners)
+    expected = {
+        "contrast_codata": ["A", "C"],
+        "constructor_ordering": ["A", "C"],
+        "selected_injection": ["C"],
+    }
+    require(observation["supports"] == expected, "strict-inclusion oracle differs")
+    return {
+        "constructors": ["s", "p", "n"],
+        "law": {
+            "q_s": "3(1-C)",
+            "q_p": "3C",
+            "q_n": "-1+2A",
+        },
+        "corners": dict(zip(CORNER_NAMES, corners.tolist())),
+        "expected_supports": expected,
+        "observation": observation,
+    }
 
 
 def reconstruct_square(coefficients: np.ndarray) -> np.ndarray:
@@ -200,6 +303,13 @@ def main() -> None:
     args = arguments()
     observer_ids, observer_labels = read_observers(args.observers)
     observer_index = {token: index for index, token in enumerate(observer_ids)}
+    constructor_ids, constructor_labels = read_observers(args.constructor_family)
+    require(len(constructor_ids) >= 3, "multiway constructor family must have at least three injections")
+    require(
+        set(constructor_ids) <= set(observer_ids),
+        "multiway constructor family is not contained in the retained observer",
+    )
+    constructor_indices = [observer_index[token] for token in constructor_ids]
     cases = expand_cases(read_manifest(args.manifest))
     records: list[dict[str, Any]] = []
     decisions: list[dict[str, Any]] = []
@@ -274,6 +384,19 @@ def main() -> None:
             contrast_codata_support.append("A")
         if demand["D_controller_L"] != 0.0 or demand["D_controller_D_attractor_L"] != 0.0:
             contrast_codata_support.append("C")
+        multiway = multiway_observation(
+            np.stack((q_x, q_a, q_c, q_ac))[:, constructor_indices]
+        )
+        multiway["argmax_constructors"] = {
+            corner: [
+                {
+                    "token": constructor_ids[index],
+                    "text": constructor_labels[constructor_ids[index]],
+                }
+                for index in multiway["argmax_indices"][corner]
+            ]
+            for corner in CORNER_NAMES
+        }
 
         branch_values = {
             "x": (l_x, singular, plural),
@@ -338,6 +461,7 @@ def main() -> None:
                     "constructor_ordering": choice_support,
                     "selected_injection": choice_support,
                 },
+                "fixed_multiway_constructor_observation": multiway,
                 "choice_changes_along_feature_fibers": choice_changes,
                 "attractor_projection_decision_preserving": {
                     "controller_singular": a_preserves_at_controller_singular,
@@ -414,6 +538,45 @@ def main() -> None:
             "selected_injection",
         )
     }
+
+    def multiway_support_counts(
+        rows: list[dict[str, Any]],
+        observer: str,
+    ) -> dict[str, int]:
+        counts: dict[str, int] = defaultdict(int)
+        for record in rows:
+            features = record["fixed_multiway_constructor_observation"]["supports"][observer]
+            counts[support_name(features)] += 1
+        return dict(sorted(counts.items()))
+
+    multiway_support = {
+        observer: {
+            "all_cases": multiway_support_counts(records, observer),
+            "by_phase": {
+                phase: multiway_support_counts(
+                    [record for record in records if record["phase"] == phase],
+                    observer,
+                )
+                for phase in ("exploration", "confirmation")
+            },
+        }
+        for observer in (
+            "contrast_codata",
+            "constructor_ordering",
+            "selected_injection",
+        )
+    }
+    multiway_ties = sum(
+        value == 0
+        for record in records
+        for values in record["fixed_multiway_constructor_observation"]["weak_pairwise_order"].values()
+        for value in values
+    )
+    multiway_strict_inclusions = sum(
+        record["fixed_multiway_constructor_observation"]["supports"]["constructor_ordering"]
+        != record["fixed_multiway_constructor_observation"]["supports"]["selected_injection"]
+        for record in records
+    )
     decision_preservation_by_phase: dict[str, dict[str, int]] = {}
     for phase in ("exploration", "confirmation"):
         summary = {
@@ -455,6 +618,9 @@ def main() -> None:
             "analyzer_commit": git_head(),
             "manifest_sha256": hashlib.sha256(args.manifest.read_bytes()).hexdigest(),
             "observers_sha256": hashlib.sha256(args.observers.read_bytes()).hexdigest(),
+            "constructor_family_sha256": hashlib.sha256(
+                args.constructor_family.read_bytes()
+            ).hexdigest(),
             "trace_count": len(records),
         },
         "validation": {
@@ -513,6 +679,29 @@ def main() -> None:
             },
             "inclusion": "P_contrast_codata contains P_ordering contains P_choice",
         },
+        "fixed_multiway_injection_family": {
+            "candidate_policy": "one fixed coproduct is used at every feature corner and is never selected from local top logits",
+            "constructors": [
+                {"token": token, "text": constructor_labels[token]}
+                for token in constructor_ids
+            ],
+            "gauge_free_contrast_basis": [
+                {
+                    "left": constructor_ids[index],
+                    "right": constructor_ids[0],
+                }
+                for index in range(1, len(constructor_ids))
+            ],
+            "weak_pairwise_order_basis": [
+                {"left": constructor_ids[left], "right": constructor_ids[right]}
+                for left in range(len(constructor_ids))
+                for right in range(left + 1, len(constructor_ids))
+            ],
+            "observer_indexed_support": multiway_support,
+            "pairwise_ties_retained": multiway_ties,
+            "cases_with_strict_ordering_choice_support_inclusion": multiway_strict_inclusions,
+            "strict_inclusion_oracle": strict_inclusion_oracle(),
+        },
         "attractor_projection_decision_preservation": {
             "cases": len(records),
             **decision_preservation,
@@ -548,6 +737,15 @@ def main() -> None:
         f"controller_pl={preservation['controller_plural']}/{len(records)} "
         f"both={preservation['both_controller_numbers']}/{len(records)}"
     )
+    multiway_result = result["fixed_multiway_injection_family"]
+    print(
+        f"  fixed multiway constructors={len(constructor_ids)} "
+        f"ties={multiway_result['pairwise_ties_retained']} "
+        "strict_order_choice="
+        f"{multiway_result['cases_with_strict_ordering_choice_support_inclusion']}/{len(records)}"
+    )
+    for observer, summary in multiway_result["observer_indexed_support"].items():
+        print(f"    {observer:22s} {summary['all_cases']}")
 
 
 if __name__ == "__main__":

@@ -255,6 +255,15 @@ Stories15M choice support is `{}` in 27 cases, `{A}` in 7, `{C}` in 1, and
 choice support exactly `{C}` in all 44 cases.
 See [the joint-number subsection](doc/cps-fixed-points.md#joint-controller-attractor-number-demand).
 
+`verb_constructor_family.tsv` then fixes one 12-injection verb coproduct for
+every number-cube corner; candidates are never chosen from corner-local top
+logits. Gauge-free codata and complete weak pairwise order demand `{A,C}` in
+all 44 Stories and synthetic cases. Winner support is smaller: the synthetic
+control recovers `{C}` in 44/44, while Stories15M yields `{}` in 25, `{A}` in
+5, and `{A,C}` in 14. Thus ordering and choice separate strictly in 30/44
+Stories cases. A three-injection algebraic oracle independently recovers the
+specified strict inclusion `{A,C} >= {A,C} >= {C}`.
+
 The preceding endpoint-observer experiment is retained only as
 `terminal-unembedding-observer-don't-do-this.c`. It selected final token
 coordinates before discovering the transformer's own continuation structure,

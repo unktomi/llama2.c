@@ -1400,3 +1400,82 @@ substitution; unexpected support means a component interface omitted a
 demand. Ordering and selected-injection behavior must be checked separately on
 unseen lexemes, templates, and company. Numeric equality of coefficients would
 additionally require recovering the component maps, not only their support.
+
+#### Fixed multiway verb coproduct
+
+The binary singular/plural family cannot separate ordering from winner:
+without ties, its complete pairwise order is its selected injection. The same
+pre-verb codata already retains a larger fixed family, so no additional model
+execution is required. `verb_constructor_family.tsv` declares twelve verb
+injections:
+
+```text
+lives/live, runs/run, works/work, plays/play, moves/move, helps/help.
+```
+
+This exact coproduct is used for all four number corners of all 44 contexts in
+both models. It is declared before any logits are inspected and never changes
+with a corner or context.
+
+For an `m`-constructor vector `q`, the analyzer retains a gauge-free contrast
+basis
+
+```text
+(q_1-q_0, ..., q_(m-1)-q_0),
+```
+
+all `m(m-1)/2` weak pairwise comparisons, and the full argmax set. Feature
+support is recovered separately by exact constancy along every A and C fiber.
+Ties remain zero entries in the weak order and multiple members of the argmax
+set; none occurred in these runs.
+
+The analyzer also evaluates the specified algebraic three-constructor oracle
+
+```text
+q_s=3(1-C),  q_p=3C,  q_n=-1+2A.
+```
+
+It recovers exactly:
+
+```text
+P_codata={A,C}, P_ordering={A,C}, P_choice={C}.
+```
+
+This oracle checks the observer definitions. The learned-model result remains
+the system measurement.
+
+The trained grammar control realizes the same strict inclusion in every real
+context:
+
+| Observer | Support | Cases |
+|---|---|---:|
+| contrast codata | `{A,C}` | 44/44 |
+| weak ordering | `{A,C}` | 44/44 |
+| selected injection | `{C}` | 44/44 |
+
+Attractor number therefore reorders losing verb alternatives without changing
+the winner, while controller number selects the winning singular/plural form.
+
+Stories15M retains both number features in every contrast and every complete
+ordering, but its winner behavior is:
+
+| Winner support | Cases | Interpretation |
+|---|---:|---|
+| `{}` | 25 | one carrier/lexical winner across all number corners |
+| `{A}` | 5 | winner changes only with attractor number |
+| `{A,C}` | 14 | both number features can change the winner |
+| `{C}` | 0 | intended controller-only interface |
+
+Ordering support is therefore strictly larger than choice support in `30/44`
+Stories contexts. Compared with the binary family, expanding the observer
+changes choice support from `{}`/`{A}`/`{C}`/`{A,C}` = `27/7/1/9` to
+`25/5/0/14`. That is expected: demanded projections are indexed by the
+constructor family being preserved. Several decoded Stories winners are verbs
+from a different lexical pair, which the compact artifact exposes rather than
+hiding behind the intended singular/plural contrast.
+
+This is still the pre-injection interface. It says which features control
+selection among a fixed coproduct. Recovering the exponent `P(d)` requires the
+next stage: consume each injection `d`, then measure the independently typed
+feature demands of its hole. Those per-injection interfaces can finally be
+tested under polynomial substitution.
