@@ -1575,3 +1575,90 @@ outside Git. Reproduce both stages with:
 ```bash
 make polynomialsubstitution CC=clang
 ```
+
+#### Recursive constructor company
+
+`cps_recursive_company.c` removes the evaluator's fixed two-level limit. A
+root table supplies already-tokenized causal prefixes, and each repeated
+`--family` argument supplies the retained constructor family at one recursive
+depth. The evaluator first constructs the complete finite occurrence trie and
+then calls `llama_company_evaluate` once. Every observation remains attached
+to its prefix path:
+
+```text
+root x
+  -> q_D(x)
+  -> for every d in D, q_E(d(x))
+  -> for every e in E, q_T(e(d(x))).
+```
+
+`q_T` is another token-indexed contrast vector, not a score assigned to the
+path `(d,e)`. The JSONL records the decoded path and every candidate contrast
+at every demand node and terminal. Probabilities, path folds, and a
+whole-completion argmax are absent. Repeating `--family` extends the same term
+to further depths without changing the C evaluator.
+
+The retained Stories15M run uses all 176 A/C roots, the twelve-verb family,
+the eight post-verb family, and the 83-token grammatical observer family at
+the terminal boundary. Its exact finite term contains:
+
+```text
+19,352 causal company rows
+ 2,288 demand nodes (176 roots + 176*12 shape-indexed holes)
+16,896 complete branches (176*12*8)
+```
+
+All 57 learned fillers are applied once to that whole family; the maximum
+calls for any filler is one and the scalar-weight-read counter is 15,210,144.
+The terminal trace contains 16,896 unique `(root,path)` keys and no non-finite
+coordinate.
+
+As an independent numerical check, the 176 depth-zero observations and 2,112
+depth-one observations were compared with the earlier CPU polynomial-company
+trace. Across all retained parent coordinates the largest relative defect is
+`2.31e-5`. Thus adding and evaluating the grandchildren did not change the
+already measured parent codata beyond the Metal/CPU float32 discrepancy.
+
+The first large Metal attempt exposed NaNs only in the
+`19,352 x 32,000` output-head product, while stage-level guards showed every
+earlier layer and final RMS state remained finite. `metal_backend.mm` now
+tiles materialized matrix results below 256 MiB while retaining one cached
+weight buffer and one semantic family application. The complete rerun is
+finite and passes the parent parity check.
+
+For example, the retained branch browser shows:
+
+```text
+The animal near the flower
+  lives  -0.548340797
+  play   -0.683662891
+  live   -1.40223742
+
+The animal near the flower lives
+  .       6.07788277
+  ,       5.25651646
+  with    3.85400271
+
+The animal near the flower lives.
+  It      6.60629177
+  The     5.20262146
+  They    3.44647598
+```
+
+These are three separate, path-indexed codata observations. They are not
+added and the displayed local ordering is not presented as a joint completion
+ordering. The remaining semantic boundary is explicit: a model-derived
+terminal algebra capable of comparing complete nested outcomes has not yet
+been recovered, so this executable does not silently substitute leximin,
+likelihood, or nested greedy choice for it.
+
+Reproduce and browse the retained system run with:
+
+```bash
+make cpsrecursivecompanymetal
+python3 gather_recursive_company.py --force
+python3 analyze_recursive_company.py
+python3 browse_recursive_company.py \
+  --root 'exploration/near/animal-flower-lives::x' \
+  --path 12080,29889 --top 8
+```

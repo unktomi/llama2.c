@@ -22,6 +22,8 @@ __pycache__/
 /cps_grammar_actions
 /cps_grammar_cube
 /cps_polynomial_company
+/cps_recursive_company
+/cps_recursive_company_metal
 /semantic_fixed_points
 /exhaustive_scale_probe
 /forced_phrase_probe

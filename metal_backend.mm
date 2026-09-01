@@ -358,14 +358,27 @@ bool atkey_metal_matmul_family(
         weights == NULL || input_width <= 0 || output_width <= 0) return false;
     @autoreleasepool {
         AtkeyMetalContext *context = context_for(backend);
+        /*
+         * MPS can report a completed command while corrupting isolated rows
+         * of a multi-gigabyte result matrix. Keep each materialized input and
+         * result slab below 256 MiB. The learned weight buffer remains cached
+         * once, and the caller still records one family/filler application.
+         */
+        const NSUInteger maximum_scratch_bytes =
+            (NSUInteger)256 * 1024 * 1024;
         NSUInteger input_row_bytes = [MPSMatrixDescriptor
             rowBytesFromColumns:(NSUInteger)input_width
             dataType:MPSDataTypeFloat32];
         NSUInteger output_row_bytes = [MPSMatrixDescriptor
             rowBytesFromColumns:(NSUInteger)output_width
             dataType:MPSDataTypeFloat32];
-        NSUInteger input_bytes = (NSUInteger)count * input_row_bytes;
-        NSUInteger output_bytes = (NSUInteger)count * output_row_bytes;
+        NSUInteger input_row_limit = maximum_scratch_bytes / input_row_bytes;
+        NSUInteger output_row_limit = maximum_scratch_bytes / output_row_bytes;
+        NSUInteger row_limit = MIN(input_row_limit, output_row_limit);
+        if (row_limit == 0) row_limit = 1;
+        if (row_limit > (NSUInteger)count) row_limit = (NSUInteger)count;
+        NSUInteger input_bytes = row_limit * input_row_bytes;
+        NSUInteger output_bytes = row_limit * output_row_bytes;
         context.inputScratch = ensure_scratch(
             context.device,
             context.inputScratch,
@@ -385,67 +398,71 @@ bool atkey_metal_matmul_family(
         );
         if (context.inputScratch == nil || context.outputScratch == nil ||
             weight_buffer == nil) return false;
-
-        unsigned char *input_destination =
-            (unsigned char *)context.inputScratch.contents;
-        size_t packed_input_bytes = (size_t)input_width * sizeof(float);
-        for (int row = 0; row < count; row++) {
-            memcpy(
-                input_destination + (NSUInteger)row * input_row_bytes,
-                inputs + (size_t)row * (size_t)input_width,
-                packed_input_bytes
-            );
-        }
-
-        MPSMatrixDescriptor *input_descriptor = [MPSMatrixDescriptor
-            matrixDescriptorWithRows:(NSUInteger)count
-            columns:(NSUInteger)input_width
-            rowBytes:input_row_bytes
-            dataType:MPSDataTypeFloat32];
         MPSMatrixDescriptor *weight_descriptor = [MPSMatrixDescriptor
             matrixDescriptorWithRows:(NSUInteger)output_width
             columns:(NSUInteger)input_width
             rowBytes:input_row_bytes
             dataType:MPSDataTypeFloat32];
-        MPSMatrixDescriptor *output_descriptor = [MPSMatrixDescriptor
-            matrixDescriptorWithRows:(NSUInteger)count
-            columns:(NSUInteger)output_width
-            rowBytes:output_row_bytes
-            dataType:MPSDataTypeFloat32];
-        MPSMatrix *input_matrix = [[MPSMatrix alloc]
-            initWithBuffer:context.inputScratch
-            descriptor:input_descriptor];
         MPSMatrix *weight_matrix = [[MPSMatrix alloc]
             initWithBuffer:weight_buffer
             descriptor:weight_descriptor];
-        MPSMatrix *output_matrix = [[MPSMatrix alloc]
-            initWithBuffer:context.outputScratch
-            descriptor:output_descriptor];
-        MPSMatrixMultiplication *multiplication = [[MPSMatrixMultiplication alloc]
-            initWithDevice:context.device
-            transposeLeft:NO
-            transposeRight:YES
-            resultRows:(NSUInteger)count
-            resultColumns:(NSUInteger)output_width
-            interiorColumns:(NSUInteger)input_width
-            alpha:1.0
-            beta:0.0];
-        id<MTLCommandBuffer> command = [context.queue commandBuffer];
-        [multiplication encodeToCommandBuffer:command
-            leftMatrix:input_matrix
-            rightMatrix:weight_matrix
-            resultMatrix:output_matrix];
-        if (!finish_command(backend, command, "matrix family")) return false;
-
+        unsigned char *input_destination =
+            (unsigned char *)context.inputScratch.contents;
         const unsigned char *output_source =
             (const unsigned char *)context.outputScratch.contents;
+        size_t packed_input_bytes = (size_t)input_width * sizeof(float);
         size_t packed_output_bytes = (size_t)output_width * sizeof(float);
-        for (int row = 0; row < count; row++) {
-            memcpy(
-                outputs + (size_t)row * (size_t)output_width,
-                output_source + (NSUInteger)row * output_row_bytes,
-                packed_output_bytes
-            );
+        for (NSUInteger first = 0; first < (NSUInteger)count;
+             first += row_limit) {
+            NSUInteger rows = MIN(row_limit, (NSUInteger)count - first);
+            for (NSUInteger row = 0; row < rows; row++) {
+                memcpy(
+                    input_destination + row * input_row_bytes,
+                    inputs + (first + row) * (NSUInteger)input_width,
+                    packed_input_bytes
+                );
+            }
+
+            MPSMatrixDescriptor *input_descriptor = [MPSMatrixDescriptor
+                matrixDescriptorWithRows:rows
+                columns:(NSUInteger)input_width
+                rowBytes:input_row_bytes
+                dataType:MPSDataTypeFloat32];
+            MPSMatrixDescriptor *output_descriptor = [MPSMatrixDescriptor
+                matrixDescriptorWithRows:rows
+                columns:(NSUInteger)output_width
+                rowBytes:output_row_bytes
+                dataType:MPSDataTypeFloat32];
+            MPSMatrix *input_matrix = [[MPSMatrix alloc]
+                initWithBuffer:context.inputScratch
+                descriptor:input_descriptor];
+            MPSMatrix *output_matrix = [[MPSMatrix alloc]
+                initWithBuffer:context.outputScratch
+                descriptor:output_descriptor];
+            MPSMatrixMultiplication *multiplication =
+                [[MPSMatrixMultiplication alloc]
+                    initWithDevice:context.device
+                    transposeLeft:NO
+                    transposeRight:YES
+                    resultRows:rows
+                    resultColumns:(NSUInteger)output_width
+                    interiorColumns:(NSUInteger)input_width
+                    alpha:1.0
+                    beta:0.0];
+            id<MTLCommandBuffer> command = [context.queue commandBuffer];
+            [multiplication encodeToCommandBuffer:command
+                leftMatrix:input_matrix
+                rightMatrix:weight_matrix
+                resultMatrix:output_matrix];
+            if (!finish_command(backend, command, "matrix family")) return false;
+
+            for (NSUInteger row = 0; row < rows; row++) {
+                memcpy(
+                    outputs + (first + row) * (NSUInteger)output_width,
+                    output_source + row * output_row_bytes,
+                    packed_output_bytes
+                );
+            }
         }
         return true;
     }

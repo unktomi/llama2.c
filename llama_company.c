@@ -1,8 +1,10 @@
 #include "llama_company.h"
 
 #include <limits.h>
+#include <math.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -124,6 +126,35 @@ static float *new_family(int rows, int width) {
         return NULL;
     }
     return company_calloc(elements, sizeof(float));
+}
+
+static bool finite_family(
+    const float *values,
+    int rows,
+    int width,
+    const char *stage,
+    int layer
+) {
+    if (values == NULL || rows <= 0 || width <= 0) return false;
+    for (int row = 0; row < rows; row++) {
+        for (int lane = 0; lane < width; lane++) {
+            float value = values[(size_t)row * width + lane];
+            if (!isfinite(value)) {
+                fprintf(
+                    stderr,
+                    "llama_company: non-finite %s layer=%d row=%d "
+                    "lane=%d value=%g\n",
+                    stage,
+                    layer,
+                    row,
+                    lane,
+                    value
+                );
+                return false;
+            }
+        }
+    }
+    return true;
 }
 
 static bool copy_scale(
@@ -259,6 +290,7 @@ bool llama_company_evaluate(
         vocab_size,
         dim
     );
+    if (!finite_family(hidden, rows, dim, "embedding", -1)) goto failure;
     if (!copy_scale(result, 0, hidden)) goto failure;
 
     for (int layer = 0; layer < layers; layer++) {
@@ -271,6 +303,10 @@ bool llama_company_evaluate(
             atkey_attention_rms_weight(runtime, layer),
             dim
         );
+        if (!finite_family(
+                normalized, rows, dim, "attention_rms", layer)) {
+            goto failure;
+        }
         atkey_matmul_family_apply(
             runtime,
             atkey_layer_filler_id(layer, LLAMA_COMPANY_QUERY),
@@ -281,6 +317,7 @@ bool llama_company_evaluate(
             dim,
             dim
         );
+        if (!finite_family(query, rows, dim, "query", layer)) goto failure;
         atkey_matmul_family_apply(
             runtime,
             atkey_layer_filler_id(layer, LLAMA_COMPANY_KEY),
@@ -291,6 +328,7 @@ bool llama_company_evaluate(
             dim,
             kv_dim
         );
+        if (!finite_family(key, rows, kv_dim, "key", layer)) goto failure;
         atkey_matmul_family_apply(
             runtime,
             atkey_layer_filler_id(layer, LLAMA_COMPANY_VALUE),
@@ -301,6 +339,7 @@ bool llama_company_evaluate(
             dim,
             kv_dim
         );
+        if (!finite_family(value, rows, kv_dim, "value", layer)) goto failure;
 
         for (int row = 0; row < rows; row++) {
             atkey_rope(
@@ -313,6 +352,10 @@ bool llama_company_evaluate(
                 kv_dim,
                 head_size
             );
+        }
+        if (!finite_family(query, rows, dim, "query_rope", layer) ||
+            !finite_family(key, rows, kv_dim, "key_rope", layer)) {
+            goto failure;
         }
 
         for (int row = 0; row < rows; row++) {
@@ -335,6 +378,9 @@ bool llama_company_evaluate(
                 kv_heads
             );
         }
+        if (!finite_family(attended, rows, dim, "attention", layer)) {
+            goto failure;
+        }
 
         atkey_matmul_family_apply(
             runtime,
@@ -346,6 +392,10 @@ bool llama_company_evaluate(
             dim,
             dim
         );
+        if (!finite_family(
+                projected, rows, dim, "attention_output", layer)) {
+            goto failure;
+        }
         for (int row = 0; row < rows; row++) {
             atkey_add(
                 hidden + (size_t)row * dim,
@@ -353,6 +403,10 @@ bool llama_company_evaluate(
                 projected + (size_t)row * dim,
                 dim
             );
+        }
+        if (!finite_family(
+                hidden, rows, dim, "attention_residual", layer)) {
+            goto failure;
         }
 
         atkey_rms_family_apply(
@@ -364,6 +418,9 @@ bool llama_company_evaluate(
             atkey_ffn_rms_weight(runtime, layer),
             dim
         );
+        if (!finite_family(normalized, rows, dim, "ffn_rms", layer)) {
+            goto failure;
+        }
         atkey_matmul_family_apply(
             runtime,
             atkey_layer_filler_id(layer, LLAMA_COMPANY_FFN_GATE),
@@ -374,6 +431,9 @@ bool llama_company_evaluate(
             dim,
             hidden_dim
         );
+        if (!finite_family(gate, rows, hidden_dim, "ffn_gate", layer)) {
+            goto failure;
+        }
         atkey_matmul_family_apply(
             runtime,
             atkey_layer_filler_id(layer, LLAMA_COMPANY_FFN_UP),
@@ -384,7 +444,13 @@ bool llama_company_evaluate(
             dim,
             hidden_dim
         );
+        if (!finite_family(up, rows, hidden_dim, "ffn_up", layer)) {
+            goto failure;
+        }
         atkey_swiglu(gate, gate, gate, up, rows * hidden_dim);
+        if (!finite_family(gate, rows, hidden_dim, "swiglu", layer)) {
+            goto failure;
+        }
         atkey_matmul_family_apply(
             runtime,
             atkey_layer_filler_id(layer, LLAMA_COMPANY_FFN_DOWN),
@@ -395,6 +461,9 @@ bool llama_company_evaluate(
             hidden_dim,
             dim
         );
+        if (!finite_family(down, rows, dim, "ffn_down", layer)) {
+            goto failure;
+        }
         for (int row = 0; row < rows; row++) {
             atkey_add(
                 hidden + (size_t)row * dim,
@@ -402,6 +471,9 @@ bool llama_company_evaluate(
                 down + (size_t)row * dim,
                 dim
             );
+        }
+        if (!finite_family(hidden, rows, dim, "ffn_residual", layer)) {
+            goto failure;
         }
         if (!copy_scale(result, layer + 1, hidden)) goto failure;
     }
@@ -415,6 +487,9 @@ bool llama_company_evaluate(
         atkey_final_rms_weight(runtime),
         dim
     );
+    if (!finite_family(normalized, rows, dim, "final_rms", -1)) {
+        goto failure;
+    }
     result->logits = new_family(rows, vocab_size);
     if (result->logits == NULL) goto failure;
     atkey_matmul_family_apply(
@@ -427,6 +502,9 @@ bool llama_company_evaluate(
         dim,
         vocab_size
     );
+    if (!finite_family(result->logits, rows, vocab_size, "output", -1)) {
+        goto failure;
+    }
 
     free(context_values);
     free(context_keys);

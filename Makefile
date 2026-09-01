@@ -83,6 +83,34 @@ cpspolynomialcompany: cps_polynomial_company.c llama_company.c llama_company.h a
 		-o cps_polynomial_company cps_polynomial_company.c \
 		llama_company.c atkey_term_c.c -lm
 
+.PHONY: cpsrecursivecompany
+cpsrecursivecompany: cps_recursive_company.c llama_company.c llama_company.h atkey_term_c.c atkey_term_c.h run.c
+	$(CC) -std=c11 -O3 -Wall -Wextra -Werror \
+		-Wno-sign-compare -Wno-unused-variable -Wno-unused-function \
+		-o cps_recursive_company cps_recursive_company.c \
+		llama_company.c atkey_term_c.c -lm
+
+cps_recursive_company_main.o: cps_recursive_company.c llama_company.h atkey_term_c.h
+	$(METAL_CC) -std=c11 -O3 -Wall -Wextra -Werror \
+		-Wno-sign-compare -Wno-unused-variable -Wno-unused-function \
+		-DATKEY_METAL -c cps_recursive_company.c -o $@
+
+llama_company_metal.o: llama_company.c llama_company.h atkey_term_c.h
+	$(METAL_CC) -std=c11 -O3 -Wall -Wextra -Werror \
+		-Wno-sign-compare -Wno-unused-variable -Wno-unused-function \
+		-DATKEY_METAL -c llama_company.c -o $@
+
+.PHONY: cpsrecursivecompanymetal
+cpsrecursivecompanymetal: cps_recursive_company_metal
+
+cps_recursive_company_metal: cps_recursive_company_main.o \
+		llama_company_metal.o atkey_term_c_metal.o metal_backend.o \
+		metal_kernels.metallib
+	$(METAL_CXX) cps_recursive_company_main.o llama_company_metal.o \
+		atkey_term_c_metal.o metal_backend.o \
+		-framework Foundation -framework Metal \
+		-framework MetalPerformanceShaders -lm -o $@
+
 .PHONY: testcompany
 testcompany: test_llama_company.c llama_company.c llama_company.h atkey_term_c.c atkey_term_c.h run.c
 	$(CC) -std=c11 -O2 -Wall -Wextra -Werror -DATKEY_REFERENCE_TEST_API \
