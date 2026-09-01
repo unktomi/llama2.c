@@ -828,7 +828,7 @@ def main() -> None:
         },
         "validation": {
             "states": len(states),
-            "matched_local_qk_equivalence_classes": len(pair_partition),
+            "matched_local_qk_pair_blocks": len(pair_partition),
             "future_action_words": len(words),
             "primitive_actions": len(primitives),
             "depth_two_actions": len(composites),
@@ -849,7 +849,7 @@ def main() -> None:
             "maximum_third_order_eight_corner_expansion_absolute_defect": third_expansion_maximum,
         },
         "partition_refinement": {
-            "starting_equivalence": "44 bit-identical layer-0 directed-QK controller/attractor pairs from the independently checked base artifact",
+            "starting_partition": "44 matched controller/attractor pair blocks whose within-pair layer-0 directed-QK tensors are bit-identical in the independently checked base artifact; equality between different pair blocks is not assumed",
             "absolute_behavior": absolute_refinement,
             "third_then_fourth_order_behavior": moebius_refinement,
             "global_third_then_fourth_order_behavior": global_moebius_refinement,
