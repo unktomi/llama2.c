@@ -1,0 +1,190 @@
+{
+  "schema_version": 1,
+  "artifact": "recursive_dependent_polynomial_company",
+  "model": "Stories15M",
+  "evaluator_commit": "95f5f12839ea26830fb8dafce1e62875a71cd139",
+  "input_sha256": {
+    "polynomial_trace": "7793d10157999ddd2edcb27e2b92d2c8899f9b4c1640b3dac31877b98375889a",
+    "recursive_trace": "b253a0cf95b877bed2a250aa9a213eebc592b44796fc8cf420fb644070adef39"
+  },
+  "term": {
+    "roots": 176,
+    "family_widths": [
+      12,
+      8
+    ],
+    "demand_nodes_by_depth": {
+      "0": 176,
+      "1": 2112
+    },
+    "complete_branches": 16896,
+    "company_rows": 19352,
+    "terminal_width": 83
+  },
+  "one_shot_company": {
+    "learned_fillers": 57,
+    "family_filler_calls": 57,
+    "maximum_calls_per_filler": 1,
+    "family_scalar_reads": 15210144,
+    "backend": "metal"
+  },
+  "parent_observation_parity": {
+    "reference": "independent earlier CPU polynomial company",
+    "compared_coordinates": 19008,
+    "maximum_absolute_defect": 2.789999999963655e-05,
+    "maximum_relative_defect": 2.3007000000019318e-05
+  },
+  "integrity": {
+    "unique_complete_branches": 16896,
+    "nonfinite_coordinates": 0,
+    "probabilities_used": false,
+    "scalar_reward_used": false,
+    "complete_paths_flattened": false
+  },
+  "selection_boundary": {
+    "whole_completion_order_defined": false,
+    "reason": "The model-derived nested codata is retained. No canonical terminal algebra ordering complete branches has been measured."
+  },
+  "sample_terminal_observations": [
+    {
+      "root": "exploration/near/animal-flower-lives::x",
+      "path_tokens": [
+        12080,
+        29889
+      ],
+      "text": "\n<s>\nThe animal near the flower lives.",
+      "top_terminal_candidates": [
+        {
+          "token": 739,
+          "piece": " It",
+          "contrast": 6.60629177
+        },
+        {
+          "token": 450,
+          "piece": " The",
+          "contrast": 5.20262146
+        },
+        {
+          "token": 2688,
+          "piece": " They",
+          "contrast": 3.44647598
+        },
+        {
+          "token": 7569,
+          "piece": " Every",
+          "contrast": 3.07948875
+        },
+        {
+          "token": 512,
+          "piece": " In",
+          "contrast": 1.70075035
+        }
+      ]
+    },
+    {
+      "root": "exploration/near/animal-flower-lives::x",
+      "path_tokens": [
+        12080,
+        29892
+      ],
+      "text": "\n<s>\nThe animal near the flower lives,",
+      "top_terminal_candidates": [
+        {
+          "token": 372,
+          "piece": " it",
+          "contrast": 5.79304171
+        },
+        {
+          "token": 278,
+          "piece": " the",
+          "contrast": 5.46371269
+        },
+        {
+          "token": 411,
+          "piece": " with",
+          "contrast": 4.96909332
+        },
+        {
+          "token": 471,
+          "piece": " was",
+          "contrast": 4.6267724
+        },
+        {
+          "token": 2978,
+          "piece": " near",
+          "contrast": 3.17362547
+        }
+      ]
+    },
+    {
+      "root": "exploration/near/animal-flower-lives::x",
+      "path_tokens": [
+        12080,
+        25970
+      ],
+      "text": "\n<s>\nThe animal near the flower lives quietly",
+      "top_terminal_candidates": [
+        {
+          "token": 29889,
+          "piece": ".",
+          "contrast": 6.82588482
+        },
+        {
+          "token": 29892,
+          "piece": ",",
+          "contrast": 4.60384655
+        },
+        {
+          "token": 491,
+          "piece": " by",
+          "contrast": 2.28403091
+        },
+        {
+          "token": 2978,
+          "piece": " near",
+          "contrast": 1.72536707
+        },
+        {
+          "token": 411,
+          "piece": " with",
+          "contrast": 1.23654985
+        }
+      ]
+    },
+    {
+      "root": "exploration/near/animal-flower-lives::x",
+      "path_tokens": [
+        12080,
+        5683
+      ],
+      "text": "\n<s>\nThe animal near the flower lives late",
+      "top_terminal_candidates": [
+        {
+          "token": 29889,
+          "piece": ".",
+          "contrast": 8.32923889
+        },
+        {
+          "token": 29892,
+          "piece": ",",
+          "contrast": 6.28201103
+        },
+        {
+          "token": 411,
+          "piece": " with",
+          "contrast": 2.71791101
+        },
+        {
+          "token": 491,
+          "piece": " by",
+          "contrast": 2.34590507
+        },
+        {
+          "token": 471,
+          "piece": " was",
+          "contrast": 0.7083323
+        }
+      ]
+    }
+  ]
+}
