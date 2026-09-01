@@ -2,10 +2,10 @@
   "schema_version": 1,
   "artifact": "recursive_dependent_polynomial_company",
   "model": "Stories15M",
-  "evaluator_commit": "95f5f12839ea26830fb8dafce1e62875a71cd139",
+  "evaluator_commit": "b910bcb",
   "input_sha256": {
     "polynomial_trace": "7793d10157999ddd2edcb27e2b92d2c8899f9b4c1640b3dac31877b98375889a",
-    "recursive_trace": "b253a0cf95b877bed2a250aa9a213eebc592b44796fc8cf420fb644070adef39"
+    "recursive_trace": "d773912d54ce40e0403b89c06857a827f16e74a8116a265260bd46739e3f9401"
   },
   "term": {
     "roots": 176,
@@ -41,9 +41,17 @@
     "scalar_reward_used": false,
     "complete_paths_flattened": false
   },
+  "codata_composition": {
+    "codata_constructed_before_observation": true,
+    "root_observer_runs": 1,
+    "composed_observations": 16896,
+    "continuation_bind_steps": 33792,
+    "edge_observation_defects": 0,
+    "terminal_observation_defects": 0
+  },
   "selection_boundary": {
     "whole_completion_order_defined": false,
-    "reason": "The model-derived nested codata is retained. No canonical terminal algebra ordering complete branches has been measured."
+    "reason": "The model-derived codata observations are now composed into one root-consumed term. No selection function has yet been applied to that composed value."
   },
   "sample_terminal_observations": [
     {
