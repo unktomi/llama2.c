@@ -158,6 +158,9 @@ GRAMMAR_EDGE_ANALYSIS ?= outputs/cps-stories15m-edge-company-analysis.json
 NUMBER_DEMAND_TRACES ?= work_traces/number_demand_cubes
 NUMBER_DEMAND_ANALYSIS ?= outputs/cps-stories15m-number-demand-analysis.json
 NUMBER_DEMAND_EVALUATOR_COMMIT ?= $(shell git rev-parse HEAD)
+POST_INJECTION_HOLE_TRACES ?= work_traces/post_injection_holes
+POST_INJECTION_HOLE_ANALYSIS ?= outputs/cps-stories15m-post-injection-hole-polynomial.json
+POST_INJECTION_HOLE_EVALUATOR_COMMIT ?= $(shell git rev-parse HEAD)
 
 .PHONY: grammarrelations
 grammarrelations: cpsgrammaractions
@@ -214,6 +217,16 @@ numberdemandcubes: cpsgrammarcube
 		--traces $(NUMBER_DEMAND_TRACES) \
 		--evaluator-commit $(NUMBER_DEMAND_EVALUATOR_COMMIT) \
 		--output $(NUMBER_DEMAND_ANALYSIS)
+
+.PHONY: postinjectionholes
+postinjectionholes: cpsgrammarcube
+	python3 gather_post_injection_holes.py \
+		--output $(POST_INJECTION_HOLE_TRACES)
+	python3 analyze_post_injection_holes.py \
+		--traces $(POST_INJECTION_HOLE_TRACES) \
+		--number-traces $(NUMBER_DEMAND_TRACES) \
+		--evaluator-commit $(POST_INJECTION_HOLE_EVALUATOR_COMMIT) \
+		--output $(POST_INJECTION_HOLE_ANALYSIS)
 
 .PHONY: longcontextprofiles
 longcontextprofiles: companyprobe
