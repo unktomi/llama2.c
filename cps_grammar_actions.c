@@ -14,9 +14,10 @@
  * continuation.  It also compares the actual joint point ab with the affine
  * torsor completion a + b - x, retains the vector change in that comparison
  * across every adjacent boundary, and reconstructs each QK change from its
- * two bilinear cross terms before removing them causally.  No logits,
- * classifier, scalar reward, parse tree, or per-layer scalar accumulation
- * occurs here.  Norms are diagnostics for the retained vectors, not scores.
+ * two separately retained bilinear cross terms before removing their sum
+ * causally.  No logits, classifier, scalar reward, parse tree, or per-layer
+ * scalar accumulation occurs here.  Norms are diagnostics for the retained
+ * vectors, not scores.
  */
 
 #define CPS_FIXED_POINTS_NO_MAIN
@@ -109,6 +110,8 @@ typedef struct {
     int root_width;
     double copied_prefix_l2;
     double measured_score_defect_l2;
+    double directed_a_query_b_key_l2;
+    double directed_b_query_a_key_l2;
     double analytic_cross_terms_l2;
     double score_reconstruction_l2_defect;
     double score_reconstruction_relative_defect;
@@ -120,6 +123,8 @@ typedef struct {
     double cross_removed_root_l2;
     double cross_removed_root_relative;
     float *measured_score_defect;
+    float *directed_a_query_b_key;
+    float *directed_b_query_a_key;
     float *analytic_cross_terms;
     float *score_reconstruction_defect;
     float *exact_delta_tau;
@@ -181,113 +186,129 @@ static GrammarOptions parse_grammar_options(int argc, char **argv) {
     return options;
 }
 
-static GrammarTerm build_grammar_term(
+/*
+ * Construct directly in caller-owned storage.  The final RMS map, identity
+ * continuation, and terminal pullback point into this GrammarTerm, so a
+ * self-referential value returned by copy would have dangling environments.
+ */
+static void build_grammar_term(
+    GrammarTerm *term,
     Transformer *transformer,
     int positions
 ) {
-    GrammarTerm term = {
+    *term = (GrammarTerm){
         .transformer = transformer,
         .layers = transformer->config.n_layers,
         .positions = positions,
         .dim = transformer->config.dim,
         .frontier_width = positions * transformer->config.dim
     };
-    term.runtimes = checked_calloc(
-        (size_t)term.layers,
-        sizeof(*term.runtimes)
+    term->runtimes = checked_calloc(
+        (size_t)term->layers,
+        sizeof(*term->runtimes)
     );
-    term.attention_maps = checked_calloc(
-        (size_t)term.layers,
-        sizeof(*term.attention_maps)
+    term->attention_maps = checked_calloc(
+        (size_t)term->layers,
+        sizeof(*term->attention_maps)
     );
-    term.ffn_maps = checked_calloc(
-        (size_t)term.layers,
-        sizeof(*term.ffn_maps)
+    term->ffn_maps = checked_calloc(
+        (size_t)term->layers,
+        sizeof(*term->ffn_maps)
     );
-    term.layer_maps = checked_calloc(
-        (size_t)term.layers,
-        sizeof(*term.layer_maps)
+    term->layer_maps = checked_calloc(
+        (size_t)term->layers,
+        sizeof(*term->layer_maps)
     );
-    for (int layer = 0; layer < term.layers; layer++) {
-        term.runtimes[layer] = (LayerRuntime){
+    for (int layer = 0; layer < term->layers; layer++) {
+        term->runtimes[layer] = (LayerRuntime){
             .transformer = transformer,
             .layer = layer,
             .positions = positions,
             .workspace = allocate_workspace(&transformer->config, positions)
         };
-        term.attention_maps[layer] = (FrontierMap){
+        term->attention_maps[layer] = (FrontierMap){
             .name = "attention_residual",
-            .input_width = term.frontier_width,
-            .output_width = term.frontier_width,
+            .input_width = term->frontier_width,
+            .output_width = term->frontier_width,
             .apply = attention_map_apply,
-            .environment = &term.runtimes[layer]
+            .environment = &term->runtimes[layer]
         };
-        term.ffn_maps[layer] = (FrontierMap){
+        term->ffn_maps[layer] = (FrontierMap){
             .name = "swiglu_residual",
-            .input_width = term.frontier_width,
-            .output_width = term.frontier_width,
+            .input_width = term->frontier_width,
+            .output_width = term->frontier_width,
             .apply = ffn_map_apply,
-            .environment = &term.runtimes[layer]
+            .environment = &term->runtimes[layer]
         };
-        term.layer_maps[layer] = (FrontierMap){
+        term->layer_maps[layer] = (FrontierMap){
             .name = "whole_layer",
-            .input_width = term.frontier_width,
-            .output_width = term.frontier_width,
+            .input_width = term->frontier_width,
+            .output_width = term->frontier_width,
             .apply = layer_map_apply,
-            .environment = &term.runtimes[layer]
+            .environment = &term->runtimes[layer]
         };
     }
-    term.final_rms_runtime = (FinalRmsRuntime){
+    term->final_rms_runtime = (FinalRmsRuntime){
         .transformer = transformer,
         .positions = positions
     };
-    term.final_rms_map = (FrontierMap){
+    term->final_rms_map = (FrontierMap){
         .name = "final_rms",
-        .input_width = term.frontier_width,
-        .output_width = term.frontier_width,
+        .input_width = term->frontier_width,
+        .output_width = term->frontier_width,
         .apply = final_rms_map_apply,
-        .environment = &term.final_rms_runtime
+        .environment = &term->final_rms_runtime
     };
-    term.root_identity = (Continuation){
-        .input_width = term.frontier_width,
-        .result_width = term.frontier_width,
+    term->root_identity = (Continuation){
+        .input_width = term->frontier_width,
+        .result_width = term->frontier_width,
         .apply = identity_continuation_apply,
-        .environment = &term.frontier_width
+        .environment = &term->frontier_width
     };
-    term.layer_suffixes = checked_calloc(
-        (size_t)term.layers + 1,
-        sizeof(*term.layer_suffixes)
+    term->layer_suffixes = checked_calloc(
+        (size_t)term->layers + 1,
+        sizeof(*term->layer_suffixes)
     );
-    term.post_attention_suffixes = checked_calloc(
-        (size_t)term.layers,
-        sizeof(*term.post_attention_suffixes)
+    term->post_attention_suffixes = checked_calloc(
+        (size_t)term->layers,
+        sizeof(*term->post_attention_suffixes)
     );
-    term.layer_pullbacks = checked_calloc(
-        (size_t)term.layers,
-        sizeof(*term.layer_pullbacks)
+    term->layer_pullbacks = checked_calloc(
+        (size_t)term->layers,
+        sizeof(*term->layer_pullbacks)
     );
-    term.ffn_pullbacks = checked_calloc(
-        (size_t)term.layers,
-        sizeof(*term.ffn_pullbacks)
+    term->ffn_pullbacks = checked_calloc(
+        (size_t)term->layers,
+        sizeof(*term->ffn_pullbacks)
     );
-    term.layer_suffixes[term.layers] = make_pullback(
-        &term.final_rms_pullback,
-        term.final_rms_map,
-        term.root_identity
+    term->layer_suffixes[term->layers] = make_pullback(
+        &term->final_rms_pullback,
+        term->final_rms_map,
+        term->root_identity
     );
-    for (int layer = term.layers - 1; layer >= 0; layer--) {
-        term.post_attention_suffixes[layer] = make_pullback(
-            &term.ffn_pullbacks[layer],
-            term.ffn_maps[layer],
-            term.layer_suffixes[layer + 1]
+    for (int layer = term->layers - 1; layer >= 0; layer--) {
+        term->post_attention_suffixes[layer] = make_pullback(
+            &term->ffn_pullbacks[layer],
+            term->ffn_maps[layer],
+            term->layer_suffixes[layer + 1]
         );
-        term.layer_suffixes[layer] = make_pullback(
-            &term.layer_pullbacks[layer],
-            term.layer_maps[layer],
-            term.layer_suffixes[layer + 1]
+        term->layer_suffixes[layer] = make_pullback(
+            &term->layer_pullbacks[layer],
+            term->layer_maps[layer],
+            term->layer_suffixes[layer + 1]
         );
     }
-    return term;
+
+    if (term->final_rms_map.environment != &term->final_rms_runtime ||
+        term->root_identity.environment != &term->frontier_width ||
+        term->layer_suffixes[term->layers].environment !=
+            &term->final_rms_pullback ||
+        term->final_rms_pullback.map.environment !=
+            &term->final_rms_runtime ||
+        term->final_rms_pullback.next.environment !=
+            &term->frontier_width) {
+        fail("grammatical term contains an unstable self-reference");
+    }
 }
 
 static void free_grammar_term(GrammarTerm *term) {
@@ -954,6 +975,14 @@ static QkCausalMeasurement measure_qk_causal(
             (size_t)score_width,
             sizeof(float)
         ),
+        .directed_a_query_b_key = checked_calloc(
+            (size_t)score_width,
+            sizeof(float)
+        ),
+        .directed_b_query_a_key = checked_calloc(
+            (size_t)score_width,
+            sizeof(float)
+        ),
         .analytic_cross_terms = checked_calloc(
             (size_t)score_width,
             sizeof(float)
@@ -1044,7 +1073,8 @@ static QkCausalMeasurement measure_qk_causal(
                  key_position++) {
                 int key_offset = key_position * kv_dim +
                     (head / kv_mul) * head_size;
-                double cross = 0.0;
+                double a_query_b_key = 0.0;
+                double b_query_a_key = 0.0;
                 for (int lane = 0; lane < head_size; lane++) {
                     double delta_a_q = (double)qa[query_offset + lane] -
                         qx[query_offset + lane];
@@ -1054,11 +1084,17 @@ static QkCausalMeasurement measure_qk_causal(
                         kx[key_offset + lane];
                     double delta_b_k = (double)kb[key_offset + lane] -
                         kx[key_offset + lane];
-                    cross += delta_a_q * delta_b_k +
-                        delta_b_q * delta_a_k;
+                    a_query_b_key += delta_a_q * delta_b_k;
+                    b_query_a_key += delta_b_q * delta_a_k;
                 }
-                measurement.analytic_cross_terms[row_offset + key_position] =
-                    (float)(cross * scale);
+                int score_index = row_offset + key_position;
+                measurement.directed_a_query_b_key[score_index] =
+                    (float)(a_query_b_key * scale);
+                measurement.directed_b_query_a_key[score_index] =
+                    (float)(b_query_a_key * scale);
+                measurement.analytic_cross_terms[score_index] =
+                    measurement.directed_a_query_b_key[score_index] +
+                    measurement.directed_b_query_a_key[score_index];
             }
         }
     }
@@ -1074,6 +1110,14 @@ static QkCausalMeasurement measure_qk_causal(
     }
     measurement.measured_score_defect_l2 = vector_l2(
         measurement.measured_score_defect,
+        score_width
+    );
+    measurement.directed_a_query_b_key_l2 = vector_l2(
+        measurement.directed_a_query_b_key,
+        score_width
+    );
+    measurement.directed_b_query_a_key_l2 = vector_l2(
+        measurement.directed_b_query_a_key,
         score_width
     );
     measurement.analytic_cross_terms_l2 = vector_l2(
@@ -1175,6 +1219,8 @@ static void free_qk_causal_measurement(QkCausalMeasurement *measurement) {
     free(measurement->exact_delta_tau);
     free(measurement->score_reconstruction_defect);
     free(measurement->analytic_cross_terms);
+    free(measurement->directed_b_query_a_key);
+    free(measurement->directed_a_query_b_key);
     free(measurement->measured_score_defect);
     memset(measurement, 0, sizeof(*measurement));
 }
@@ -1191,10 +1237,12 @@ static void write_qk_causal_measurement(
         "\"score_width\":%d,\"root_width\":%d,"
         "\"torsor_input\":\"s=a+b-x_at_qkv_boundary\","
         "\"measured_map_defect\":\"F(s)-(F(a)+F(b)-F(x))\","
-        "\"analytic_cross_terms\":"
+        "\"analytic_cross_terms_formula\":"
         "\"delta_a_Q_delta_b_Kt_plus_delta_b_Q_delta_a_Kt\","
         "\"copied_prefix_l2\":%.17g,"
         "\"measured_score_defect_l2\":%.17g,"
+        "\"directed_a_query_b_key_l2\":%.17g,"
+        "\"directed_b_query_a_key_l2\":%.17g,"
         "\"analytic_cross_terms_l2\":%.17g,"
         "\"score_reconstruction_l2_defect\":%.17g,"
         "\"score_reconstruction_relative_defect\":%.17g,"
@@ -1213,6 +1261,8 @@ static void write_qk_causal_measurement(
         measurement->root_width,
         measurement->copied_prefix_l2,
         measurement->measured_score_defect_l2,
+        measurement->directed_a_query_b_key_l2,
+        measurement->directed_b_query_a_key_l2,
         measurement->analytic_cross_terms_l2,
         measurement->score_reconstruction_l2_defect,
         measurement->score_reconstruction_relative_defect,
@@ -1227,6 +1277,18 @@ static void write_qk_causal_measurement(
     write_float_vector(
         trace,
         measurement->measured_score_defect,
+        measurement->score_width
+    );
+    fputs(",\"directed_a_query_b_key\":", trace);
+    write_float_vector(
+        trace,
+        measurement->directed_a_query_b_key,
+        measurement->score_width
+    );
+    fputs(",\"directed_b_query_a_key\":", trace);
+    write_float_vector(
+        trace,
+        measurement->directed_b_query_a_key,
         measurement->score_width
     );
     fputs(",\"analytic_cross_terms\":", trace);
@@ -1289,11 +1351,14 @@ static void report_qk_causal_measurement(
         trace_state
     );
     printf(
-        "  qk_causal layer=%d score=%.8g cross=%.8g "
+        "  qk_causal layer=%d score=%.8g aQ_bK=%.8g bQ_aK=%.8g "
+        "cross=%.8g "
         "reconstruction=%.8g relative=%.8g delta_tau=%.8g "
         "removed_root=%.8g remaining=%.8g\n",
         measurement.layer,
         measurement.measured_score_defect_l2,
+        measurement.directed_a_query_b_key_l2,
+        measurement.directed_b_query_a_key_l2,
         measurement.analytic_cross_terms_l2,
         measurement.score_reconstruction_l2_defect,
         measurement.score_reconstruction_relative_defect,
@@ -1516,7 +1581,8 @@ int main(int argc, char **argv) {
         &contexts[ACTION_ABX],
         &contexts[ACTION_BAX]
     );
-    GrammarTerm term = build_grammar_term(&transformer, positions);
+    GrammarTerm term = {0};
+    build_grammar_term(&term, &transformer, positions);
 
     FILE *trace = NULL;
     if (options.trace_path != NULL) {
@@ -1524,7 +1590,7 @@ int main(int argc, char **argv) {
         if (trace == NULL) fail("could not create grammatical action trace");
         fprintf(
             trace,
-            "{\"kind\":\"grammatical_action_meta\",\"schema_version\":2,"
+            "{\"kind\":\"grammatical_action_meta\",\"schema_version\":3,"
             "\"semantics\":\"exact_constructor_pullbacks\","
             "\"mixed_operator\":\"(U_a-I)(U_b-I)k\","
             "\"commutator_operator\":\"(U_aU_b-U_bU_a)k\","
@@ -1536,6 +1602,8 @@ int main(int argc, char **argv) {
             "\"constructors_commute_on_x\":%s,"
             "\"delta_tau\":\"tau_next_minus_tau_previous_as_vector\","
             "\"qk_causal_reconstruction\":true,"
+            "\"qk_directed_cross_terms_retained\":true,"
+            "\"stock_forward_hidden_parity\":true,"
             "\"norms_are_diagnostics_not_scores\":true}\n",
             grammar_root_scope_name(options.root_scope),
             positions,
@@ -1580,7 +1648,7 @@ int main(int argc, char **argv) {
     ActionTraceState trace_state = allocate_action_trace_state(
         action_root_width(&term, options.root_scope)
     );
-    double maximum_stage_output_defect = 0.0;
+    double maximum_chain_output_defect = 0.0;
     for (int layer = 0; layer < term.layers; layer++) {
         const float *layer_inputs[ACTION_CONTEXT_COUNT];
         const float *post_attention[ACTION_CONTEXT_COUNT];
@@ -1631,8 +1699,8 @@ int main(int argc, char **argv) {
             layer_inputs,
             post_attention
         );
-        if (attention_defect > maximum_stage_output_defect) {
-            maximum_stage_output_defect = attention_defect;
+        if (attention_defect > maximum_chain_output_defect) {
+            maximum_chain_output_defect = attention_defect;
         }
 
         FrontierMap ffn_stages[6];
@@ -1654,8 +1722,8 @@ int main(int argc, char **argv) {
             post_attention,
             layer_outputs
         );
-        if (ffn_defect > maximum_stage_output_defect) {
-            maximum_stage_output_defect = ffn_defect;
+        if (ffn_defect > maximum_chain_output_defect) {
+            maximum_chain_output_defect = ffn_defect;
         }
     }
 
@@ -1692,6 +1760,36 @@ int main(int argc, char **argv) {
         term.frontier_width
     );
 
+    double maximum_reference_hidden_defect = 0.0;
+    double maximum_reference_hidden_relative_defect = 0.0;
+    for (int role = 0; role < ACTION_CONTEXT_COUNT; role++) {
+        double relative_defect = 0.0;
+        double defect = check_reference_hidden_frontier(
+            &transformer,
+            &contexts[role],
+            final_outputs[role],
+            &relative_defect
+        );
+        if (defect > maximum_reference_hidden_defect) {
+            maximum_reference_hidden_defect = defect;
+        }
+        if (relative_defect > maximum_reference_hidden_relative_defect) {
+            maximum_reference_hidden_relative_defect = relative_defect;
+        }
+        if (trace != NULL) {
+            fprintf(
+                trace,
+                "{\"kind\":\"grammatical_action_reference_check\","
+                "\"role\":\"%s\",\"llama2c_hidden_l2_defect\":%.17g,"
+                "\"llama2c_hidden_relative_defect\":%.17g}\n",
+                action_role_name((ActionRole)role),
+                defect,
+                relative_defect
+            );
+            fflush(trace);
+        }
+    }
+
     double telescoping_maximum_absolute_defect = 0.0;
     double telescoping_l2_defect = write_action_telescoping_check(
         trace,
@@ -1700,10 +1798,14 @@ int main(int argc, char **argv) {
     );
 
     printf(
-        "boundaries=%d maximum_typed_stage_output_l2_defect=%.8g "
+        "boundaries=%d maximum_typed_chain_output_l2_defect=%.8g "
+        "maximum_llama2c_hidden_l2_defect=%.8g "
+        "maximum_llama2c_hidden_relative_defect=%.8g "
         "telescoping_l2_defect=%.8g telescoping_max_abs=%.8g\n",
         boundary_index,
-        maximum_stage_output_defect,
+        maximum_chain_output_defect,
+        maximum_reference_hidden_defect,
+        maximum_reference_hidden_relative_defect,
         telescoping_l2_defect,
         telescoping_maximum_absolute_defect
     );
@@ -1712,11 +1814,15 @@ int main(int argc, char **argv) {
             trace,
             "{\"kind\":\"grammatical_action_check\","
             "\"boundaries\":%d,"
-            "\"maximum_typed_stage_output_l2_defect\":%.17g,"
+            "\"maximum_typed_chain_output_l2_defect\":%.17g,"
+            "\"maximum_llama2c_hidden_l2_defect\":%.17g,"
+            "\"maximum_llama2c_hidden_relative_defect\":%.17g,"
             "\"telescoping_l2_defect\":%.17g,"
             "\"telescoping_maximum_absolute_defect\":%.17g}\n",
             boundary_index,
-            maximum_stage_output_defect,
+            maximum_chain_output_defect,
+            maximum_reference_hidden_defect,
+            maximum_reference_hidden_relative_defect,
             telescoping_l2_defect,
             telescoping_maximum_absolute_defect
         );

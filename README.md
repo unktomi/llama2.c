@@ -183,8 +183,10 @@ the literal mixed pullback—which is invariant under CPS reassociation—from t
 boundary-local torsor witness that locates where the learned term first makes
 the two edits jointly visible. Adjacent witness differences are retained as
 vectors, and the QK record reconstructs each score defect from its two
-bilinear cross terms before causally removing them and running the unchanged
-suffix. No logits or scalar semantic score are used.
+bilinear cross terms, retains the two query/key directions separately, then
+causally removes their sum and runs the unchanged suffix. The executable also
+checks all five complete hidden frontiers against stock `forward()`. No logits
+or scalar semantic score are used.
 See the
 [grammatical-action section](doc/cps-fixed-points.md#grammatical-action-continuations).
 

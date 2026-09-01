@@ -596,21 +596,33 @@ and `V` prefix has no bilinear defect.
 Each `grammatical_qk_causal` record independently retains:
 
 1. the score defect measured by running `F(s)`;
-2. the score vector reconstructed from the two analytic cross terms;
-3. their complete residual vector;
-4. the adjacent transition `delta_tau`;
-5. the same root observation calculated directly from the two QK outputs;
-6. the root residual after subtracting only the analytic cross terms from
+2. `delta_a_Q delta_b_K^T` and `delta_b_Q delta_a_K^T` as separate complete
+   score-table vectors;
+3. the score vector reconstructed from their sum;
+4. its complete residual vector;
+5. the adjacent transition `delta_tau`;
+6. the same root observation calculated directly from the two QK outputs;
+7. the root residual after subtracting only the analytic cross terms from
    `F(s)` and running the untouched suffix.
 
 For layer 0, the real-model results are:
 
-| Model and action square | Measured score defect | Reconstruction defect | QK `delta_tau` | Root after cross removal | Fraction remaining |
-|---|---:|---:|---:|---:|---:|
-| Stories15M dog/dogs × runs/run | 1.6305690 | 2.90e-6 | 3.8370042 | 9.72e-5 | 2.53e-5 |
-| Stories15M the/my × path/foot | 1.3331234 | 3.08e-6 | 3.6344222 | 1.01e-4 | 2.78e-5 |
-| Stories260K He/They × is/are | 2.1544336 | 1.74e-5 | 0.0484339 | 9.39e-6 | 1.94e-4 |
-| Stories15M dog/cat × runs/plays control | 1.0102196 | 3.41e-6 | 1.6753862 | 1.34e-4 | 8.00e-5 |
+| Model and action square | `aQ,bK` | `bQ,aK` | Measured score defect | Reconstruction defect | QK `delta_tau` | Fraction after removal |
+|---|---:|---:|---:|---:|---:|---:|
+| Stories15M dog/dogs × runs/run | 0 | 1.6305688 | 1.6305690 | 2.90e-6 | 3.8370042 | 2.53e-5 |
+| Stories15M the/my × path/foot | 0 | 1.3331223 | 1.3331234 | 3.08e-6 | 3.6344222 | 2.78e-5 |
+| Stories260K He/They × is/are | 0 | 2.1544359 | 2.1544336 | 1.74e-5 | 0.0484339 | 1.94e-4 |
+| Stories15M dog/cat × runs/plays control | 0 | 1.0102187 | 1.0102196 | 3.41e-6 | 1.6753862 | 8.00e-5 |
+
+In every retained rectangle, action `a` changes the earlier token and action
+`b` the later token. At layer 0 the causal mask therefore makes
+`delta_a_Q delta_b_K^T` exactly zero: an earlier query cannot inspect a later
+key. The entire first-layer cross term is the opposite direction, in which
+the later edited token queries the earlier edited token. This is useful typed
+structure for subsequent basis discovery, but it is generic causal
+directionality rather than evidence of grammar selectivity. At later layers
+both directed terms can be nonzero because earlier attention has transported
+the edits across positions.
 
 The copied `(X,V)` prefix defect is exactly zero in all retained records.  The
 direct QK root difference and independently recorded transition vector agree
@@ -628,6 +640,18 @@ is larger than either Stories15M grammatical example.  Norm magnitude is
 therefore not a Firthian score.  Selectivity must be tested in the retained
 vector directions and their action/continuation closure across many positive
 and controlled rectangles.
+
+The grammar executable constructs its self-referential continuation term
+directly in caller-owned storage. Its maps and pullbacks therefore retain
+valid environments rather than pointers into a returned local structure.
+Trace schema 3 also gives the analytic formula and tensor distinct JSON keys.
+All four retained traces were regenerated after these corrections; schema 2
+traces are superseded.
+For each of the five supplied terms, the executable runs stock `forward()`
+and compares every post-final-RMS token state with the complete-frontier term.
+Across the four retained runs the largest relative stock-forward defect is
+`1.04e-6`. This parity concerns hidden states; logits are still outside the
+root observer.
 
 ### Retained system cases
 
@@ -676,11 +700,12 @@ and `is/are`.  Its corresponding torsor-visible values are `1.12e-5`,
 `1.04e-5`, `1.05e-5`, and `4.84e-2`; the same QK boundary is visible despite
 the much smaller five-layer, width-64 model.
 
-All three runs report zero typed-stage output defect: the factored attention
-and FFN chains reproduce their monolithic maps for every supplied constructor
-term.  These finite cases support the operational boundary measurement.  They
-do not yet recover a global grammar, establish an exhaustive continuation
-eigenspace, or compile a faster inference schedule.  The next basis should be
-generated from many such retained action differences and their higher-order
-Möbius compositions, with closure checked on unseen actions before any
-transport rule is accepted.
+All four runs report zero typed-chain output defect: each complete factored
+attention or FFN chain reproduces its monolithic map for every supplied
+constructor term. This is chain-level parity, not an independently captured
+reference after each intermediate stage. These finite cases support the
+operational boundary measurement. They do not yet recover a global grammar,
+establish an exhaustive continuation eigenspace, or compile a faster inference
+schedule. The next basis should be generated from many such retained action
+differences and their higher-order Möbius compositions, with closure checked
+on unseen actions before any transport rule is accepted.
