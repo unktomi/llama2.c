@@ -197,6 +197,11 @@ continuation vectors with uncentered relation spans; it never converts their
 norms or residuals into a completion reward. The checked Stories15M result and
 its unseen-template confirmation are documented under
 [matched controller/attractor geometry](doc/cps-fixed-points.md#matched-controller-attractor-continuation-geometry).
+The same evaluator now retains three exact residual-block pullback generations.
+Their held-out descent test is negative: the sampled dictionaries saturate all
+available rows and do not yet yield a small pullback-closed quotient.  The
+documentation distinguishes that residual-block result from the still-open
+closure test for genuine grammatical context-extension actions.
 
 The preceding endpoint-observer experiment is retained only as
 `terminal-unembedding-observer-don't-do-this.c`. It selected final token

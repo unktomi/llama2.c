@@ -800,6 +800,72 @@ own observation and the observations are composed as a product.  This is
 finite evidence for the proposed continuation role of context, not yet a
 complete grammar or an inference rule.
 
+#### Recursive residual-block pullback closure
+
+The next experiment asks a narrower closure question without replacing the
+retained vectors by norms.  For each of the six attention residual maps and
+six SwiGLU residual maps `F`, let `k` be the exact suffix continuation from
+that block to the final post-RMS hidden state, and write
+
+```text
+C_F^g(x) = (U_a-I)(U_b-I)(k after F^g)(x).
+```
+
+The evaluator retains `C_F^0` through `C_F^3` as complete 288-dimensional
+vectors.  It independently constructs `make_pullback(F,k)` and verifies that
+its mixed observation is exactly `C_F^1`; the maximum composition defect over
+all 1,056 block/case pairs is `0` at recorded precision.  This is a check of
+the CPS term, not evidence of closure.
+
+At dictionary depth `d`, the scale-indexed function tables are
+
+```text
+X_d = [C_F^0, ..., C_F^(d-1)] over all twelve blocks,
+Y_d = [C_F^1, ..., C_F^d]     over all twelve blocks.
+```
+
+The analysis tests both ambient root coordinates and coordinates projected
+through a relation basis fitted only on the training split.  It separately
+measures representation, descent through the sampled-function quotient, and
+prediction of the complete shifted table on unseen templates and lexemes.
+The latter two tests prevent an underdetermined fit from being called an
+operator.
+
+For the controller confirmation split, the training-relation projection gives:
+
+| Depth | Function columns | Sampled rank | Fit descent | Held-out shifted table | Identity baseline | Exploration CV held-out mean |
+|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 432 | 36/36 rows | 0.71899 | 0.59165 | 1.01173 | 0.40918 |
+| 2 | 864 | 36/36 rows | 0.67192 | 0.51224 | 0.86152 | 0.39986 |
+| 3 | 1296 | 36/36 rows | 0.65174 | 0.75847 | 0.82096 | 0.56440 |
+
+All nine exploration folds likewise saturate their 16 available controller
+rows at every depth.  The attractor fits behave similarly: confirmation
+descent is `0.71201`, `0.67036`, and `0.64629`, while held-out error is
+`0.60894`, `0.63913`, and `0.77067`.  In ambient coordinates, controller
+held-out errors are `0.88144`, `0.85145`, and `0.92396`.  Although adding a
+second generation helps the projected controller fit modestly, the third
+generation reverses that improvement.  Descent remains large throughout.
+
+The sampled input tables have full row rank, so their approximately
+`1e-15` fit representation defects are interpolation artifacts, not evidence
+for a small quotient.  This finite dictionary therefore does **not** exhibit
+the predicted small, stable, pullback-closed continuation algebra.
+
+This is a clean negative result for the operation actually tested: repeatedly
+pulling the suffix through one endomorphic residual block.  It is not yet the
+stronger grammatical-action closure test
+
+```text
+U_a K_grammar subset K_grammar,
+```
+
+where `a` extends or transforms a grammatical context.  A residual block and
+a token/context action are not interchangeable.  Testing the stronger claim
+requires retaining the action of real context extensions on the recovered
+scale-indexed zip and increasing the number of independent diagrams enough
+that rank can stabilize below the number of sampled contexts.
+
 Absolute confirmation residuals for the all-transition controller span remain
 between about `0.81` and `0.96`; only their matched relative ordering is being
 tested.  Some margins are small.  More templates, lexical families, and other
