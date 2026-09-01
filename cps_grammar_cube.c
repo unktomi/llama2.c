@@ -49,6 +49,7 @@ typedef struct {
     const char *jet_path;
     const char *observer_path;
     int reference_token;
+    bool retain_local_jets;
 } CubeOptions;
 
 typedef struct {
@@ -72,15 +73,16 @@ static CubeOptions parse_cube_options(int argc, char **argv) {
         fprintf(
             stderr,
             "usage: %s CHECKPOINT TOKENIZER X AX BX ABX CX ACX BCX ABCX "
-            "OBSERVER_TSV [--reference-token ID] --jet-bin PATH "
-            "[--trace PATH]\n",
+            "OBSERVER_TSV [--reference-token ID] "
+            "[--jet-bin PATH | --terminal-only] [--trace PATH]\n",
             argv[0]
         );
         exit(EXIT_FAILURE);
     }
     CubeOptions options = {
         .observer_path = argv[11],
-        .reference_token = 1
+        .reference_token = 1,
+        .retain_local_jets = true
     };
     for (int index = 12; index < argc;) {
         if (strcmp(argv[index], "--reference-token") == 0 &&
@@ -102,12 +104,18 @@ static CubeOptions parse_cube_options(int argc, char **argv) {
                    index + 1 < argc) {
             options.trace_path = argv[index + 1];
             index += 2;
+        } else if (strcmp(argv[index], "--terminal-only") == 0) {
+            options.retain_local_jets = false;
+            index++;
         } else {
             fail("unrecognized cps_grammar_cube option");
         }
     }
-    if (options.jet_path == NULL) {
+    if (options.retain_local_jets && options.jet_path == NULL) {
         fail("three-action cube requires --jet-bin PATH");
+    }
+    if (!options.retain_local_jets && options.jet_path != NULL) {
+        fail("--terminal-only cannot be combined with --jet-bin");
     }
     if (options.trace_path == NULL) {
         fail("three-action cube requires --trace PATH");
@@ -358,6 +366,10 @@ static void retain_local_square_jet(
     const float *const states[SQUARE_CORNER_COUNT],
     int local_width
 ) {
+    if (writer->jet == NULL) {
+        writer->boundary_index++;
+        return;
+    }
     size_t value_count = (size_t)SQUARE_CORNER_COUNT * local_width;
     float *raw = checked_calloc(value_count, sizeof(*raw));
     float *mobius = checked_calloc(value_count, sizeof(*mobius));
@@ -744,8 +756,11 @@ int main(int argc, char **argv) {
 
     FILE *trace = fopen(options.trace_path, "wb");
     if (trace == NULL) fail("could not create grammatical cube trace");
-    FILE *jet = fopen(options.jet_path, "wb");
-    if (jet == NULL) fail("could not create grammatical cube jet binary");
+    FILE *jet = NULL;
+    if (options.retain_local_jets) {
+        jet = fopen(options.jet_path, "wb");
+        if (jet == NULL) fail("could not create grammatical cube jet binary");
+    }
     fprintf(
         trace,
         "{\"kind\":\"grammatical_cube_meta\",\"schema_version\":1,"
@@ -765,7 +780,9 @@ int main(int argc, char **argv) {
         if (index != 0) fputc(',', trace);
         fprintf(trace, "%d", observer.tokens[index]);
     }
-    fputs("] ,\"terminal_probabilities_used\":false,"
+    fprintf(trace, "] ,\"local_jets_retained\":%s,",
+        options.retain_local_jets ? "true" : "false");
+    fputs("\"terminal_probabilities_used\":false,"
           "\"scalar_completion_reward_used\":false,"
           "\"local_c_difference_defined\":false,"
           "\"local_c_reason\":\"C changes the position-indexed frontier type\","
@@ -891,7 +908,9 @@ int main(int argc, char **argv) {
         maximum_logit_contrast_relative_defect
     );
 
-    if (fclose(jet) != 0) fail("could not close grammatical cube jet binary");
+    if (jet != NULL && fclose(jet) != 0) {
+        fail("could not close grammatical cube jet binary");
+    }
     if (fclose(trace) != 0) {
         fail("could not close grammatical cube trace");
     }

@@ -150,6 +150,7 @@ GRAMMAR_BEHAVIOR_TRACES ?= work_traces/grammar_behaviors
 GRAMMAR_BEHAVIOR_ANALYSIS ?= outputs/cps-grammar-behaviors-analysis.json
 GRAMMAR_BEHAVIOR_EVALUATOR_COMMIT ?= $(shell git rev-parse HEAD)
 GRAMMAR_CUBE_TRACES ?= work_traces/grammar_cubes
+GRAMMAR_CUBE_COMPOSITE_TRACES ?= work_traces/grammar_cube_composites
 GRAMMAR_CUBE_ANALYSIS ?= outputs/cps-grammar-cubes-analysis.json
 GRAMMAR_CUBE_EVALUATOR_COMMIT ?= $(shell git rev-parse HEAD)
 
@@ -179,6 +180,13 @@ grammarcubes: cpsgrammarcube
 		--traces $(GRAMMAR_CUBE_TRACES) \
 		--evaluator-commit $(GRAMMAR_CUBE_EVALUATOR_COMMIT) \
 		--output $(GRAMMAR_CUBE_ANALYSIS)
+
+.PHONY: grammarcompositecubes
+grammarcompositecubes: cpsgrammarcube
+	python3 gather_grammar_cubes.py \
+		--extension-mode composed \
+		--terminal-only \
+		--output $(GRAMMAR_CUBE_COMPOSITE_TRACES)
 
 .PHONY: longcontextprofiles
 longcontextprofiles: companyprobe

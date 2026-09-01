@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Collect uniform three-action grammatical cubes from Stories15M.
 
-This scheduler appends one fixed primitive extension to all four corners of
-each A/B diagram and invokes the C evaluator on the resulting eight corners.
-It does not select observer coordinates from model outputs, assign a scalar
-score, or use the controller/attractor role while constructing a cube.
+This scheduler appends one fixed extension word to all four corners of each
+A/B diagram and invokes the C evaluator on the resulting eight corners.
+Primitive words retain every typed local jet.  Composed words can be retained
+terminal-only for successor-consistency analysis.  Neither mode selects
+observer coordinates from model outputs, assigns a scalar score, or uses the
+controller/attractor role while constructing a cube.
 """
 
 from __future__ import annotations
@@ -62,14 +64,14 @@ class CubeCase:
 class RunResult:
     case: CubeCase
     trace: Path
-    jet: Path
+    jet: Path | None
     status: str
     seconds: float
     summary: str
 
 
-def trace_complete(trace: Path, jet: Path) -> bool:
-    if not trace.is_file() or not jet.is_file():
+def trace_complete(trace: Path, jet: Path | None, terminal_only: bool) -> bool:
+    if not trace.is_file() or (jet is not None and not jet.is_file()):
         return False
     meta: dict[str, Any] | None = None
     check: dict[str, Any] | None = None
@@ -104,9 +106,17 @@ def trace_complete(trace: Path, jet: Path) -> bool:
         and meta.get("schema_version") == 1
         and check is not None
         and int(check.get("typed_boundaries", -1)) == 80
-        and local_rows == 160
+        and (
+            meta.get("local_jets_retained") is False
+            if terminal_only
+            else meta.get("local_jets_retained") in (None, True)
+        )
+        and local_rows == (0 if terminal_only else 160)
         and terminal_count == 1
-        and maximum_binary_end == jet.stat().st_size
+        and (
+            (jet is None and maximum_binary_end == 0)
+            or (jet is not None and maximum_binary_end == jet.stat().st_size)
+        )
     )
 
 
@@ -119,10 +129,11 @@ def run_case(
     reference_token: int,
     output: Path,
     force: bool,
+    terminal_only: bool,
 ) -> RunResult:
     trace = output / f"{case.stem}.jsonl"
-    jet = output / f"{case.stem}.f32"
-    if trace_complete(trace, jet) and not force:
+    jet = None if terminal_only else output / f"{case.stem}.f32"
+    if trace_complete(trace, jet, terminal_only) and not force:
         return RunResult(case, trace, jet, "skipped", 0.0, "existing cube")
     command = [
         str(program),
@@ -132,11 +143,12 @@ def run_case(
         str(observers),
         "--reference-token",
         str(reference_token),
-        "--jet-bin",
-        str(jet),
-        "--trace",
-        str(trace),
     ]
+    if terminal_only:
+        command.append("--terminal-only")
+    else:
+        command.extend(("--jet-bin", str(jet)))
+    command.extend(("--trace", str(trace)))
     started = time.monotonic()
     result = subprocess.run(
         command,
@@ -150,7 +162,7 @@ def run_case(
     summary = combined.splitlines()[-1] if combined else "no process output"
     status = (
         "completed"
-        if result.returncode == 0 and trace_complete(trace, jet)
+        if result.returncode == 0 and trace_complete(trace, jet, terminal_only)
         else "failed"
     )
     return RunResult(case, trace, jet, status, seconds, summary)
@@ -167,6 +179,17 @@ def arguments() -> argparse.Namespace:
     parser.add_argument("--reference-token", type=int, default=1)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--jobs", type=int, default=4)
+    parser.add_argument(
+        "--extension-mode",
+        choices=("primitive", "composed"),
+        default="primitive",
+        help="primitive retains depth-1 words; composed retains depth-2 words",
+    )
+    parser.add_argument(
+        "--terminal-only",
+        action="store_true",
+        help="retain terminal behavior and parity checks without local jet sidecars",
+    )
     parser.add_argument("--force", action="store_true")
     return parser.parse_args()
 
@@ -187,13 +210,18 @@ def main() -> None:
     if missing:
         raise SystemExit("missing required paths: " + ", ".join(missing))
     diagrams = expand_cases(read_manifest(args.manifest), "all")
+    factor_count = 1 if args.extension_mode == "primitive" else 2
     extensions = [
         word
         for word in expand_words(read_actions(args.actions))
-        if len(word.factors) == 1
+        if len(word.factors) == factor_count
     ]
-    if len(diagrams) != 88 or len(extensions) != 9:
-        raise SystemExit("expected 88 diagrams and nine primitive extensions")
+    expected_extensions = 9 if factor_count == 1 else 16
+    if len(diagrams) != 88 or len(extensions) != expected_extensions:
+        raise SystemExit(
+            f"expected 88 diagrams and {expected_extensions} "
+            f"{args.extension_mode} extensions"
+        )
     cases = [CubeCase(diagram, extension) for diagram in diagrams for extension in extensions]
     args.output.mkdir(parents=True, exist_ok=True)
     print(
@@ -215,6 +243,7 @@ def main() -> None:
                 args.reference_token,
                 args.output,
                 args.force,
+                args.terminal_only,
             ): case
             for case in cases
         }
@@ -245,6 +274,8 @@ def main() -> None:
         "diagram_count": len(diagrams),
         "extension_count": len(extensions),
         "cube_count": len(cases),
+        "extension_mode": args.extension_mode,
+        "terminal_only": args.terminal_only,
         "status_counts": dict(status_counts),
         "extensions": [
             {
@@ -264,7 +295,7 @@ def main() -> None:
                 "extension": result.case.extension.name,
                 "extension_family": result.case.extension.family,
                 "trace": result.trace.name,
-                "jet": result.jet.name,
+                "jet": None if result.jet is None else result.jet.name,
                 "status": result.status,
                 "seconds": result.seconds,
             }
