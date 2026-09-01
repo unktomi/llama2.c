@@ -1598,6 +1598,23 @@ at every demand node and terminal. Probabilities, path folds, and a
 whole-completion argmax are absent. Repeating `--family` extends the same term
 to further depths without changing the C evaluator.
 
+The numerical boundary now preserves that statement operationally rather than
+only in the trace schema. `llama_company_codata_construct` stops after the
+complete final-RMS hidden family. It returns a one-shot codata value whose
+`llama_company_codata_observe` method applies the output filler and invokes one
+supplied observer over the complete token-codata family. The recursive
+observer is assembled with the same continuation pattern as a pullback: the
+terminal codata is supplied to the innermost continuation, and each enclosing
+constructor continuation prepends its own edge observation before passing the
+value outward. The root callback is invoked through the codata interface once.
+
+For the retained depth-two term this produces 16,896 root-consumed composed
+observations through 33,792 continuation binds. Each composed edge coordinate
+and terminal vector is checked exactly against its independently retained
+operand. This composition still does not install a completion selection
+function. In particular, it does not replace the missing selection with a
+terminal coordinate, a likelihood sum, leximin, or nested local argmax.
+
 The retained Stories15M run uses all 176 A/C roots, the twelve-verb family,
 the eight post-verb family, and the 83-token grammatical observer family at
 the terminal boundary. Its exact finite term contains:

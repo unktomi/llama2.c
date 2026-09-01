@@ -158,22 +158,25 @@ static bool finite_family(
 }
 
 static bool copy_scale(
-    LlamaCompanyResult *result,
+    int row_count,
+    int dim,
+    int scale_count,
+    float *scales,
     int scale,
     const float *hidden
 ) {
-    if (result->scales == NULL) return true;
-    if (scale < 0 || scale >= result->scale_count) return false;
+    if (scales == NULL) return true;
+    if (scale < 0 || scale >= scale_count) return false;
     size_t rows_dim = 0;
     if (!checked_product(
-            (size_t)result->row_count,
-            (size_t)result->dim,
+            (size_t)row_count,
+            (size_t)dim,
             &rows_dim
         )) {
         return false;
     }
     memcpy(
-        result->scales + (size_t)scale * rows_dim,
+        scales + (size_t)scale * rows_dim,
         hidden,
         rows_dim * sizeof(float)
     );
@@ -187,14 +190,21 @@ void llama_company_result_free(LlamaCompanyResult *result) {
     memset(result, 0, sizeof(*result));
 }
 
-bool llama_company_evaluate(
+void llama_company_codata_free(LlamaCompanyCodata *codata) {
+    if (codata == NULL) return;
+    free(codata->final_hidden);
+    free(codata->scales);
+    memset(codata, 0, sizeof(*codata));
+}
+
+bool llama_company_codata_construct(
     AtkeyRuntime *runtime,
     const LlamaCompanyShape *shape,
     bool retain_scales,
-    LlamaCompanyResult *result
+    LlamaCompanyCodata *codata
 ) {
-    if (result == NULL) return false;
-    memset(result, 0, sizeof(*result));
+    if (codata == NULL) return false;
+    memset(codata, 0, sizeof(*codata));
 
     int maximum_context = 0;
     size_t context_member_count = 0;
@@ -232,10 +242,11 @@ bool llama_company_evaluate(
         return false;
     }
 
-    result->row_count = rows;
-    result->dim = dim;
-    result->vocab_size = vocab_size;
-    result->scale_count = layers + 1;
+    codata->runtime = runtime;
+    codata->row_count = rows;
+    codata->dim = dim;
+    codata->vocab_size = vocab_size;
+    codata->scale_count = layers + 1;
 
     if (retain_scales) {
         size_t scale_rows = 0;
@@ -246,8 +257,8 @@ bool llama_company_evaluate(
             free(context_members);
             return false;
         }
-        result->scales = company_calloc(scale_elements, sizeof(float));
-        if (result->scales == NULL) {
+        codata->scales = company_calloc(scale_elements, sizeof(float));
+        if (codata->scales == NULL) {
             free(context_offsets);
             free(context_members);
             return false;
@@ -291,7 +302,16 @@ bool llama_company_evaluate(
         dim
     );
     if (!finite_family(hidden, rows, dim, "embedding", -1)) goto failure;
-    if (!copy_scale(result, 0, hidden)) goto failure;
+    if (!copy_scale(
+            codata->row_count,
+            codata->dim,
+            codata->scale_count,
+            codata->scales,
+            0,
+            hidden
+        )) {
+        goto failure;
+    }
 
     for (int layer = 0; layer < layers; layer++) {
         atkey_rms_family_apply(
@@ -475,7 +495,16 @@ bool llama_company_evaluate(
         if (!finite_family(hidden, rows, dim, "ffn_residual", layer)) {
             goto failure;
         }
-        if (!copy_scale(result, layer + 1, hidden)) goto failure;
+        if (!copy_scale(
+                codata->row_count,
+                codata->dim,
+                codata->scale_count,
+                codata->scales,
+                layer + 1,
+                hidden
+            )) {
+            goto failure;
+        }
     }
 
     atkey_rms_family_apply(
@@ -490,21 +519,8 @@ bool llama_company_evaluate(
     if (!finite_family(normalized, rows, dim, "final_rms", -1)) {
         goto failure;
     }
-    result->logits = new_family(rows, vocab_size);
-    if (result->logits == NULL) goto failure;
-    atkey_matmul_family_apply(
-        runtime,
-        atkey_output_filler_id(runtime),
-        result->logits,
-        normalized,
-        rows,
-        atkey_output_weight(runtime),
-        dim,
-        vocab_size
-    );
-    if (!finite_family(result->logits, rows, vocab_size, "output", -1)) {
-        goto failure;
-    }
+    codata->final_hidden = normalized;
+    normalized = NULL;
 
     free(context_values);
     free(context_keys);
@@ -537,6 +553,111 @@ failure:
     free(hidden);
     free(context_members);
     free(context_offsets);
-    llama_company_result_free(result);
+    llama_company_codata_free(codata);
     return false;
+}
+
+bool llama_company_codata_observe(
+    LlamaCompanyCodata *codata,
+    LlamaCompanyObservationApply observation,
+    void *environment
+) {
+    if (codata == NULL || codata->runtime == NULL ||
+        codata->final_hidden == NULL || codata->row_count <= 0 ||
+        codata->dim <= 0 || codata->vocab_size <= 0 ||
+        codata->observed || observation == NULL) {
+        return false;
+    }
+    float *logits = new_family(codata->row_count, codata->vocab_size);
+    if (logits == NULL) return false;
+    atkey_matmul_family_apply(
+        codata->runtime,
+        atkey_output_filler_id(codata->runtime),
+        logits,
+        codata->final_hidden,
+        codata->row_count,
+        atkey_output_weight(codata->runtime),
+        codata->dim,
+        codata->vocab_size
+    );
+    if (!finite_family(
+            logits,
+            codata->row_count,
+            codata->vocab_size,
+            "output",
+            -1
+        )) {
+        free(logits);
+        return false;
+    }
+    codata->observed = true;
+    bool accepted = observation(
+        environment,
+        codata->row_count,
+        codata->vocab_size,
+        logits
+    );
+    free(logits);
+    return accepted;
+}
+
+typedef struct {
+    LlamaCompanyResult *result;
+} MaterializeObservation;
+
+static bool materialize_company_observation(
+    void *raw_environment,
+    int row_count,
+    int vocab_size,
+    const float *logits
+) {
+    MaterializeObservation *environment = raw_environment;
+    LlamaCompanyResult *result = environment->result;
+    result->logits = new_family(row_count, vocab_size);
+    if (result->logits == NULL) return false;
+    size_t elements = 0;
+    if (!checked_product((size_t)row_count, (size_t)vocab_size, &elements)) {
+        free(result->logits);
+        result->logits = NULL;
+        return false;
+    }
+    memcpy(result->logits, logits, elements * sizeof(*logits));
+    return true;
+}
+
+bool llama_company_evaluate(
+    AtkeyRuntime *runtime,
+    const LlamaCompanyShape *shape,
+    bool retain_scales,
+    LlamaCompanyResult *result
+) {
+    if (result == NULL) return false;
+    memset(result, 0, sizeof(*result));
+    LlamaCompanyCodata codata;
+    if (!llama_company_codata_construct(
+            runtime,
+            shape,
+            retain_scales,
+            &codata
+        )) {
+        return false;
+    }
+    result->row_count = codata.row_count;
+    result->dim = codata.dim;
+    result->vocab_size = codata.vocab_size;
+    result->scale_count = codata.scale_count;
+    result->scales = codata.scales;
+    codata.scales = NULL;
+    MaterializeObservation observation = {.result = result};
+    bool accepted = llama_company_codata_observe(
+        &codata,
+        materialize_company_observation,
+        &observation
+    );
+    llama_company_codata_free(&codata);
+    if (!accepted) {
+        llama_company_result_free(result);
+        return false;
+    }
+    return true;
 }

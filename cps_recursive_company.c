@@ -338,6 +338,20 @@ static int trie_child(
     return index;
 }
 
+static int trie_find_child(
+    const CompanyTrie *trie,
+    int parent,
+    int token
+) {
+    if (parent < 0 || parent >= trie->count) return -1;
+    for (int child = trie->nodes[parent].first_child;
+         child >= 0;
+         child = trie->nodes[child].next_sibling) {
+        if (trie->nodes[child].token == token) return child;
+    }
+    return -1;
+}
+
 static int trie_sequence(CompanyTrie *trie, const IntVector *sequence) {
     int parent = -1;
     for (int position = 0; position < sequence->count; position++) {
@@ -509,14 +523,16 @@ static void write_decoded_company(
 static void write_candidate_codata(
     FILE *file,
     AtkeyRuntime *runtime,
-    const LlamaCompanyResult *result,
+    int row_count,
+    int vocab_size,
+    const float *all_logits,
     int row,
     const TokenFamily *family,
     int reference_token,
     int previous_token
 ) {
-    if (row < 0 || row >= result->row_count) fail("observation row is invalid");
-    const float *logits = result->logits + (size_t)row * result->vocab_size;
+    if (row < 0 || row >= row_count) fail("observation row is invalid");
+    const float *logits = all_logits + (size_t)row * vocab_size;
     float reference = logits[reference_token];
     fputc('[', file);
     for (int index = 0; index < family->count; index++) {
@@ -527,6 +543,453 @@ static void write_candidate_codata(
         fprintf(file, ",\"contrast\":%.9g}", logits[token] - reference);
     }
     fputc(']', file);
+}
+
+/* A complete observation is built by continuation composition. A terminal
+ * codata observation is passed to the innermost continuation. Each parent
+ * continuation prepends exactly the edge observation it owns and passes the
+ * enlarged value outward. No edge observation is reduced to a path score. */
+typedef struct EdgeObservation EdgeObservation;
+struct EdgeObservation {
+    int depth;
+    int row;
+    int token;
+    float contrast;
+    const EdgeObservation *tail;
+};
+
+typedef struct {
+    int root;
+    int terminal_row;
+    const EdgeObservation *edges;
+} ComposedObservation;
+
+typedef void (*ComposedContinuationApply)(
+    void *environment,
+    const ComposedObservation *observation
+);
+
+typedef struct {
+    ComposedContinuationApply apply;
+    void *environment;
+} ComposedContinuation;
+
+typedef struct {
+    EdgeObservation edge;
+    ComposedContinuation next;
+    uint64_t *composition_steps;
+} ObservationBind;
+
+static void prepend_edge_observation(
+    void *raw_environment,
+    const ComposedObservation *suffix
+) {
+    ObservationBind *environment = raw_environment;
+    EdgeObservation edge = environment->edge;
+    edge.tail = suffix->edges;
+    ComposedObservation composed = *suffix;
+    composed.edges = &edge;
+    (*environment->composition_steps)++;
+    environment->next.apply(environment->next.environment, &composed);
+}
+
+typedef struct {
+    AtkeyRuntime *runtime;
+    const RootTable *roots;
+    const CompanyTrie *trie;
+    const DemandTable *demands;
+    const LeafTable *leaves;
+    const FamilyVector *families;
+    const TokenFamily *terminal;
+    const int *root_demands;
+    const size_t *calls_before;
+    const size_t *reads_before;
+    int filler_count;
+    int reference_token;
+    FILE *trace;
+    int row_count;
+    int vocab_size;
+    const float *logits;
+    uint64_t root_observer_runs;
+    uint64_t composition_steps;
+    uint64_t composed_observations;
+    uint64_t total_calls;
+    uint64_t maximum_calls;
+    uint64_t total_reads;
+} RecursiveObservationTerm;
+
+static int child_demand_index(
+    const RecursiveObservationTerm *term,
+    int parent_demand,
+    int token
+) {
+    for (int index = 0; index < term->demands->count; index++) {
+        const DemandRecord *candidate = &term->demands->values[index];
+        if (candidate->parent_demand == parent_demand &&
+            candidate->incoming_token == token) {
+            return index;
+        }
+    }
+    return -1;
+}
+
+static int child_leaf_index(
+    const RecursiveObservationTerm *term,
+    int parent_demand,
+    int token
+) {
+    for (int index = 0; index < term->leaves->count; index++) {
+        const LeafRecord *candidate = &term->leaves->values[index];
+        if (candidate->parent_demand == parent_demand &&
+            candidate->incoming_token == token) {
+            return index;
+        }
+    }
+    return -1;
+}
+
+static void write_composed_observation(
+    void *raw_environment,
+    const ComposedObservation *observation
+) {
+    RecursiveObservationTerm *term = raw_environment;
+    int depth = term->families->count;
+    int *path = checked_calloc((size_t)depth, sizeof(*path));
+    float *contrasts = checked_calloc((size_t)depth, sizeof(*contrasts));
+    int *rows = checked_calloc((size_t)depth, sizeof(*rows));
+    for (int index = 0; index < depth; index++) {
+        path[index] = -1;
+        rows[index] = -1;
+    }
+    for (const EdgeObservation *edge = observation->edges;
+         edge != NULL;
+         edge = edge->tail) {
+        if (edge->depth < 0 || edge->depth >= depth ||
+            path[edge->depth] != -1) {
+            fail("composed observation has an invalid edge spine");
+        }
+        path[edge->depth] = edge->token;
+        contrasts[edge->depth] = edge->contrast;
+        rows[edge->depth] = edge->row;
+    }
+    for (int index = 0; index < depth; index++) {
+        if (path[index] < 0 || rows[index] < 0) {
+            fail("composed observation lost an edge");
+        }
+    }
+
+    const RootRecord *root = &term->roots->values[observation->root];
+    fputs(
+        "{\"kind\":\"recursive_company_composed_observation\",\"root\":",
+        term->trace
+    );
+    json_string(term->trace, root->key);
+    fputs(",\"path_tokens\":", term->trace);
+    write_int_array(term->trace, path, depth);
+    fputs(",\"text\":", term->trace);
+    write_decoded_company(
+        term->trace,
+        term->runtime,
+        root,
+        path,
+        depth
+    );
+    fputs(",\"edge_observations\":[", term->trace);
+    int previous = root->prefix.values[root->prefix.count - 1];
+    for (int index = 0; index < depth; index++) {
+        if (index != 0) fputc(',', term->trace);
+        fprintf(
+            term->trace,
+            "{\"depth\":%d,\"row\":%d,\"token\":%d,\"piece\":",
+            index,
+            rows[index],
+            path[index]
+        );
+        json_string(
+            term->trace,
+            atkey_decode(term->runtime, previous, path[index])
+        );
+        fprintf(term->trace, ",\"contrast\":%.9g}", contrasts[index]);
+        previous = path[index];
+    }
+    fprintf(
+        term->trace,
+        "],\"terminal_row\":%d,\"terminal_candidates\":",
+        observation->terminal_row
+    );
+    write_candidate_codata(
+        term->trace,
+        term->runtime,
+        term->row_count,
+        term->vocab_size,
+        term->logits,
+        observation->terminal_row,
+        term->terminal,
+        term->reference_token,
+        previous
+    );
+    fputs("}\n", term->trace);
+    fflush(term->trace);
+    term->composed_observations++;
+    free(rows);
+    free(contrasts);
+    free(path);
+}
+
+static void observe_demand(
+    RecursiveObservationTerm *term,
+    int demand_index,
+    ComposedContinuation continuation
+) {
+    if (demand_index < 0 || demand_index >= term->demands->count) {
+        fail("composed observation received an invalid demand");
+    }
+    const DemandRecord *demand = &term->demands->values[demand_index];
+    const TokenFamily *family = &term->families->values[demand->depth];
+    const float *row_logits = term->logits +
+        (size_t)demand->row * term->vocab_size;
+    float reference = row_logits[term->reference_token];
+    for (int index = 0; index < family->count; index++) {
+        int token = family->tokens[index];
+        int child_row = trie_find_child(term->trie, demand->row, token);
+        if (child_row < 0) fail("composed observation lost a constructor edge");
+        ObservationBind bind = {
+            .edge = {
+                .depth = demand->depth,
+                .row = demand->row,
+                .token = token,
+                .contrast = row_logits[token] - reference,
+            },
+            .next = continuation,
+            .composition_steps = &term->composition_steps,
+        };
+        ComposedContinuation child_continuation = {
+            .apply = prepend_edge_observation,
+            .environment = &bind,
+        };
+        if (demand->depth + 1 == term->families->count) {
+            int leaf_index = child_leaf_index(term, demand_index, token);
+            if (leaf_index < 0 || leaf_index >= term->leaves->count) {
+                fail("composed observation lost its terminal codata");
+            }
+            const LeafRecord *leaf = &term->leaves->values[leaf_index];
+            if (leaf->row != child_row) {
+                fail("composed terminal edge has inconsistent causal row");
+            }
+            ComposedObservation terminal = {
+                .root = leaf->root,
+                .terminal_row = leaf->row,
+            };
+            child_continuation.apply(
+                child_continuation.environment,
+                &terminal
+            );
+        } else {
+            int child_demand = child_demand_index(term, demand_index, token);
+            if (child_demand < 0) {
+                fail("composed observation lost its child continuation");
+            }
+            if (term->demands->values[child_demand].row != child_row) {
+                fail("composed child edge has inconsistent causal row");
+            }
+            observe_demand(term, child_demand, child_continuation);
+        }
+    }
+}
+
+static bool observe_recursive_company(
+    void *raw_environment,
+    int row_count,
+    int vocab_size,
+    const float *logits
+) {
+    RecursiveObservationTerm *term = raw_environment;
+    if (term->root_observer_runs != 0 || row_count != term->trie->count ||
+        vocab_size != atkey_vocab_size(term->runtime) || logits == NULL) {
+        return false;
+    }
+    term->root_observer_runs++;
+    term->row_count = row_count;
+    term->vocab_size = vocab_size;
+    term->logits = logits;
+
+    for (int filler = 0; filler < term->filler_count; filler++) {
+        size_t calls = atkey_filler_calls(term->runtime, filler) -
+            term->calls_before[filler];
+        size_t reads = atkey_filler_scalar_reads(term->runtime, filler) -
+            term->reads_before[filler];
+        term->total_calls += calls;
+        term->total_reads += reads;
+        if (calls > term->maximum_calls) term->maximum_calls = calls;
+    }
+    if (term->maximum_calls != 1 ||
+        term->total_calls != (uint64_t)term->filler_count) {
+        return false;
+    }
+
+    fprintf(
+        term->trace,
+        "{\"kind\":\"recursive_company_meta\",\"schema_version\":1,"
+        "\"semantics\":\"dependent_polynomial_company_tree\","
+        "\"observation_semantics\":\"continuation_composed_codata\","
+        "\"roots\":%d,\"depth\":%d,\"company_rows\":%d,"
+        "\"demand_nodes\":%d,\"complete_branches\":%d,"
+        "\"reference_token\":%d,\"family_widths\":[",
+        term->roots->count,
+        term->families->count,
+        term->trie->count,
+        term->demands->count,
+        term->leaves->count,
+        term->reference_token
+    );
+    for (int depth = 0; depth < term->families->count; depth++) {
+        if (depth != 0) fputc(',', term->trace);
+        fprintf(term->trace, "%d", term->families->values[depth].count);
+    }
+    fprintf(
+        term->trace,
+        "],\"terminal_width\":%d,\"learned_fillers\":%d,"
+        "\"family_filler_calls\":%llu,\"maximum_calls_per_filler\":%llu,"
+        "\"family_scalar_reads\":%llu,\"backend\":",
+        term->terminal->count,
+        term->filler_count,
+        (unsigned long long)term->total_calls,
+        (unsigned long long)term->maximum_calls,
+        (unsigned long long)term->total_reads
+    );
+    json_string(term->trace, atkey_backend_name(term->runtime));
+    fputs(
+        ",\"codata_constructed_before_observation\":true,"
+        "\"root_observer_runs\":1,\"observations_composed\":true,"
+        "\"probabilities_used\":false,\"scalar_reward_used\":false,"
+        "\"whole_completion_argmax_used\":false,"
+        "\"complete_paths_flattened\":false}\n",
+        term->trace
+    );
+    fflush(term->trace);
+
+    /* Retain the individual edge records as an audit of the operands. They
+     * are emitted inside the same root observation, not by separately
+     * forcing the codata. */
+    int *path = checked_calloc(
+        (size_t)term->families->count,
+        sizeof(*path)
+    );
+    for (int index = 0; index < term->demands->count; index++) {
+        const DemandRecord *demand = &term->demands->values[index];
+        const RootRecord *root = &term->roots->values[demand->root];
+        fill_demand_path(term->demands, index, path, demand->depth);
+        fputs("{\"kind\":\"recursive_company_demand\",\"root\":", term->trace);
+        json_string(term->trace, root->key);
+        fprintf(
+            term->trace,
+            ",\"depth\":%d,\"row\":%d,\"path_tokens\":",
+            demand->depth,
+            demand->row
+        );
+        write_int_array(term->trace, path, demand->depth);
+        fputs(",\"text\":", term->trace);
+        write_decoded_company(
+            term->trace,
+            term->runtime,
+            root,
+            path,
+            demand->depth
+        );
+        fputs(",\"candidates\":", term->trace);
+        int previous = demand->depth == 0
+            ? root->prefix.values[root->prefix.count - 1]
+            : path[demand->depth - 1];
+        write_candidate_codata(
+            term->trace,
+            term->runtime,
+            row_count,
+            vocab_size,
+            logits,
+            demand->row,
+            &term->families->values[demand->depth],
+            term->reference_token,
+            previous
+        );
+        fputs("}\n", term->trace);
+        fflush(term->trace);
+    }
+
+    for (int index = 0; index < term->leaves->count; index++) {
+        const LeafRecord *leaf = &term->leaves->values[index];
+        const RootRecord *root = &term->roots->values[leaf->root];
+        const DemandRecord *parent =
+            &term->demands->values[leaf->parent_demand];
+        fill_demand_path(
+            term->demands,
+            leaf->parent_demand,
+            path,
+            parent->depth
+        );
+        path[parent->depth] = leaf->incoming_token;
+        fputs("{\"kind\":\"recursive_company_terminal\",\"root\":", term->trace);
+        json_string(term->trace, root->key);
+        fprintf(term->trace, ",\"row\":%d,\"path_tokens\":", leaf->row);
+        write_int_array(term->trace, path, term->families->count);
+        fputs(",\"text\":", term->trace);
+        write_decoded_company(
+            term->trace,
+            term->runtime,
+            root,
+            path,
+            term->families->count
+        );
+        fputs(",\"terminal_candidates\":", term->trace);
+        write_candidate_codata(
+            term->trace,
+            term->runtime,
+            row_count,
+            vocab_size,
+            logits,
+            leaf->row,
+            term->terminal,
+            term->reference_token,
+            leaf->incoming_token
+        );
+        fputs("}\n", term->trace);
+        fflush(term->trace);
+    }
+    free(path);
+
+    ComposedContinuation root_continuation = {
+        .apply = write_composed_observation,
+        .environment = term,
+    };
+    for (int root = 0; root < term->roots->count; root++) {
+        observe_demand(
+            term,
+            term->root_demands[root],
+            root_continuation
+        );
+    }
+    uint64_t expected_steps = (uint64_t)term->leaves->count *
+        (uint64_t)term->families->count;
+    if (term->composed_observations != (uint64_t)term->leaves->count ||
+        term->composition_steps != expected_steps) {
+        return false;
+    }
+    fprintf(
+        term->trace,
+        "{\"kind\":\"recursive_company_check\",\"roots\":%d,"
+        "\"depth\":%d,\"demand_nodes\":%d,\"complete_branches\":%d,"
+        "\"maximum_calls_per_filler\":%llu,\"root_observer_runs\":%llu,"
+        "\"composed_observations\":%llu,\"composition_steps\":%llu}\n",
+        term->roots->count,
+        term->families->count,
+        term->demands->count,
+        term->leaves->count,
+        (unsigned long long)term->maximum_calls,
+        (unsigned long long)term->root_observer_runs,
+        (unsigned long long)term->composed_observations,
+        (unsigned long long)term->composition_steps
+    );
+    fflush(term->trace);
+    return true;
 }
 
 static Options parse_options(int argc, char **argv) {
@@ -672,167 +1135,74 @@ int main(int argc, char **argv) {
         calls_before[filler] = atkey_filler_calls(runtime, filler);
         reads_before[filler] = atkey_filler_scalar_reads(runtime, filler);
     }
-    LlamaCompanyResult result;
-    if (!llama_company_evaluate(runtime, &shape, false, &result)) {
-        fail("causal company evaluation failed");
-    }
-    uint64_t total_calls = 0;
-    uint64_t maximum_calls = 0;
-    uint64_t total_reads = 0;
-    for (int filler = 0; filler < filler_count; filler++) {
-        size_t calls = atkey_filler_calls(runtime, filler) - calls_before[filler];
-        size_t reads =
-            atkey_filler_scalar_reads(runtime, filler) - reads_before[filler];
-        total_calls += calls;
-        total_reads += reads;
-        if (calls > maximum_calls) maximum_calls = calls;
-    }
-    if (maximum_calls != 1 || total_calls != (uint64_t)filler_count) {
-        fail("learned filler was not applied exactly once to the recursive company");
-    }
-
     FILE *trace = fopen(options.trace_path, "wb");
     if (trace == NULL) fail("could not create trace");
-    fprintf(
-        trace,
-        "{\"kind\":\"recursive_company_meta\",\"schema_version\":1,"
-        "\"semantics\":\"dependent_polynomial_company_tree\","
-        "\"roots\":%d,\"depth\":%d,\"company_rows\":%d,"
-        "\"demand_nodes\":%d,\"complete_branches\":%d,"
-        "\"reference_token\":%d,\"family_widths\":[",
-        roots.count,
-        options.families.count,
-        trie.count,
-        demands.count,
-        leaves.count,
-        options.reference_token
-    );
-    for (int depth = 0; depth < options.families.count; depth++) {
-        if (depth != 0) fputc(',', trace);
-        fprintf(trace, "%d", options.families.values[depth].count);
-    }
-    fprintf(
-        trace,
-        "],\"terminal_width\":%d,\"learned_fillers\":%d,"
-        "\"family_filler_calls\":%llu,\"maximum_calls_per_filler\":%llu,"
-        "\"family_scalar_reads\":%llu,\"backend\":",
-        terminal.count,
-        filler_count,
-        (unsigned long long)total_calls,
-        (unsigned long long)maximum_calls,
-        (unsigned long long)total_reads
-    );
-    json_string(trace, atkey_backend_name(runtime));
-    fputs(
-        ",\"probabilities_used\":false,\"scalar_reward_used\":false,"
-        "\"whole_completion_argmax_used\":false,"
-        "\"complete_paths_flattened\":false}\n",
-        trace
-    );
-    fflush(trace);
 
-    int *path = checked_calloc(
-        (size_t)options.families.count,
-        sizeof(*path)
+    int *root_demands = checked_calloc(
+        (size_t)roots.count,
+        sizeof(*root_demands)
     );
+    for (int root = 0; root < roots.count; root++) root_demands[root] = -1;
     for (int index = 0; index < demands.count; index++) {
         const DemandRecord *demand = &demands.values[index];
-        const RootRecord *root = &roots.values[demand->root];
-        fill_demand_path(&demands, index, path, demand->depth);
-        fputs("{\"kind\":\"recursive_company_demand\",\"root\":", trace);
-        json_string(trace, root->key);
-        fprintf(
-            trace,
-            ",\"depth\":%d,\"row\":%d,\"path_tokens\":",
-            demand->depth,
-            demand->row
-        );
-        write_int_array(trace, path, demand->depth);
-        fputs(",\"text\":", trace);
-        write_decoded_company(trace, runtime, root, path, demand->depth);
-        fputs(",\"candidates\":", trace);
-        int previous = demand->depth == 0
-            ? root->prefix.values[root->prefix.count - 1]
-            : path[demand->depth - 1];
-        write_candidate_codata(
-            trace,
-            runtime,
-            &result,
-            demand->row,
-            &options.families.values[demand->depth],
-            options.reference_token,
-            previous
-        );
-        fputs("}\n", trace);
-        fflush(trace);
+        if (demand->depth != 0) continue;
+        if (demand->root < 0 || demand->root >= roots.count ||
+            root_demands[demand->root] != -1) {
+            fail("recursive company has an invalid root demand");
+        }
+        root_demands[demand->root] = index;
+    }
+    for (int root = 0; root < roots.count; root++) {
+        if (root_demands[root] < 0) fail("recursive company lost a root demand");
     }
 
-    for (int index = 0; index < leaves.count; index++) {
-        const LeafRecord *leaf = &leaves.values[index];
-        const RootRecord *root = &roots.values[leaf->root];
-        const DemandRecord *parent = &demands.values[leaf->parent_demand];
-        fill_demand_path(
-            &demands,
-            leaf->parent_demand,
-            path,
-            parent->depth
-        );
-        path[parent->depth] = leaf->incoming_token;
-        fputs("{\"kind\":\"recursive_company_terminal\",\"root\":", trace);
-        json_string(trace, root->key);
-        fprintf(trace, ",\"row\":%d,\"path_tokens\":", leaf->row);
-        write_int_array(trace, path, options.families.count);
-        fputs(",\"text\":", trace);
-        write_decoded_company(
-            trace,
-            runtime,
-            root,
-            path,
-            options.families.count
-        );
-        fputs(",\"terminal_candidates\":", trace);
-        write_candidate_codata(
-            trace,
-            runtime,
-            &result,
-            leaf->row,
-            &terminal,
-            options.reference_token,
-            leaf->incoming_token
-        );
-        fputs("}\n", trace);
-        fflush(trace);
+    LlamaCompanyCodata codata;
+    if (!llama_company_codata_construct(runtime, &shape, false, &codata)) {
+        fail("causal company codata construction failed");
     }
-    fprintf(
-        trace,
-        "{\"kind\":\"recursive_company_check\",\"roots\":%d,"
-        "\"depth\":%d,\"demand_nodes\":%d,\"complete_branches\":%d,"
-        "\"maximum_calls_per_filler\":%llu}\n",
-        roots.count,
-        options.families.count,
-        demands.count,
-        leaves.count,
-        (unsigned long long)maximum_calls
-    );
-    fflush(trace);
+    RecursiveObservationTerm observation = {
+        .runtime = runtime,
+        .roots = &roots,
+        .trie = &trie,
+        .demands = &demands,
+        .leaves = &leaves,
+        .families = &options.families,
+        .terminal = &terminal,
+        .root_demands = root_demands,
+        .calls_before = calls_before,
+        .reads_before = reads_before,
+        .filler_count = filler_count,
+        .reference_token = options.reference_token,
+        .trace = trace,
+    };
+    if (!llama_company_codata_observe(
+            &codata,
+            observe_recursive_company,
+            &observation
+        )) {
+        fail("composed root observation failed");
+    }
     if (fclose(trace) != 0) fail("could not close trace");
 
     printf(
         "recursive_company roots=%d depth=%d rows=%d demands=%d leaves=%d "
-        "fillers=%d max_calls=%llu scalar_reads=%llu backend=%s\n",
+        "fillers=%d max_calls=%llu scalar_reads=%llu root_runs=%llu "
+        "composed=%llu backend=%s\n",
         roots.count,
         options.families.count,
         trie.count,
         demands.count,
         leaves.count,
         filler_count,
-        (unsigned long long)maximum_calls,
-        (unsigned long long)total_reads,
+        (unsigned long long)observation.maximum_calls,
+        (unsigned long long)observation.total_reads,
+        (unsigned long long)observation.root_observer_runs,
+        (unsigned long long)observation.composed_observations,
         atkey_backend_name(runtime)
     );
 
-    free(path);
-    llama_company_result_free(&result);
+    llama_company_codata_free(&codata);
+    free(root_demands);
     free(reads_before);
     free(calls_before);
     free(parents);

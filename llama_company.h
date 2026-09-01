@@ -29,6 +29,47 @@ typedef struct {
     float *scales;
 } LlamaCompanyResult;
 
+/*
+ * The causal company before its token codata is observed.  The transformer
+ * body and final RMS have already been composed, but the output filler has
+ * not been applied.  An observation consumes the complete row family in one
+ * call; the codata is intentionally one-shot.
+ */
+typedef struct {
+    AtkeyRuntime *runtime;
+    int row_count;
+    int dim;
+    int vocab_size;
+    int scale_count;
+    /* [row_count][dim], after final RMSNorm. */
+    float *final_hidden;
+    /* [scale_count][row_count][dim], optional. */
+    float *scales;
+    bool observed;
+} LlamaCompanyCodata;
+
+typedef bool (*LlamaCompanyObservationApply)(
+    void *environment,
+    int row_count,
+    int vocab_size,
+    const float *logits
+);
+
+bool llama_company_codata_construct(
+    AtkeyRuntime *runtime,
+    const LlamaCompanyShape *shape,
+    bool retain_scales,
+    LlamaCompanyCodata *codata
+);
+
+bool llama_company_codata_observe(
+    LlamaCompanyCodata *codata,
+    LlamaCompanyObservationApply observation,
+    void *environment
+);
+
+void llama_company_codata_free(LlamaCompanyCodata *codata);
+
 bool llama_company_evaluate(
     AtkeyRuntime *runtime,
     const LlamaCompanyShape *shape,

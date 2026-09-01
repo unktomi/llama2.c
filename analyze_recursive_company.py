@@ -110,6 +110,11 @@ def main() -> None:
     root_depth_counts: dict[str, Counter[int]] = defaultdict(Counter)
     root_leaf_counts: Counter[str] = Counter()
     terminal_paths: set[tuple[str, tuple[int, ...]]] = set()
+    composed_paths: set[tuple[str, tuple[int, ...]]] = set()
+    demand_codata: dict[tuple[str, tuple[int, ...]], dict[int, float]] = {}
+    terminal_codata: dict[
+        tuple[str, tuple[int, ...]], tuple[tuple[int, float], ...]
+    ] = {}
     terminal_family: tuple[int, ...] | None = None
     sample_terminals: list[dict[str, Any]] = []
     nonfinite_coordinates = 0
@@ -138,6 +143,9 @@ def main() -> None:
                 candidates = row["candidates"]
                 tokens = tuple(int(candidate["token"]) for candidate in candidates)
                 values = [float(candidate["contrast"]) for candidate in candidates]
+                demand_key = (root, path)
+                require(demand_key not in demand_codata, f"duplicate demand {demand_key}")
+                demand_codata[demand_key] = dict(zip(tokens, values))
                 nonfinite_coordinates += sum(not math.isfinite(value) for value in values)
                 if depth == 0:
                     expected = outer[(case, corner)]
@@ -178,6 +186,7 @@ def main() -> None:
                     terminal_family = tokens
                 require(tokens == terminal_family, "terminal family changes by branch")
                 values = [float(candidate["contrast"]) for candidate in candidates]
+                terminal_codata[key] = tuple(zip(tokens, values))
                 nonfinite_coordinates += sum(not math.isfinite(value) for value in values)
                 if len(sample_terminals) < 4:
                     ranked = sorted(
@@ -195,6 +204,38 @@ def main() -> None:
                             "top_terminal_candidates": ranked[:5],
                         }
                     )
+            elif kind == "recursive_company_composed_observation":
+                root = str(row["root"])
+                path = tuple(int(token) for token in row["path_tokens"])
+                require(len(path) == 2, "composed path depth differs")
+                key = (root, path)
+                require(key not in composed_paths, f"duplicate composed path {key}")
+                composed_paths.add(key)
+                edges = row["edge_observations"]
+                require(len(edges) == len(path), "composed edge count differs")
+                for depth, edge in enumerate(edges):
+                    require(int(edge["depth"]) == depth, "composed edge depth differs")
+                    require(int(edge["token"]) == path[depth], "composed edge token differs")
+                    demand_key = (root, path[:depth])
+                    require(demand_key in demand_codata, "composed edge has no demand")
+                    token = path[depth]
+                    require(
+                        token in demand_codata[demand_key],
+                        "composed edge token absent from demand codata",
+                    )
+                    require(
+                        float(edge["contrast"]) == demand_codata[demand_key][token],
+                        "composed edge observation differs from demand codata",
+                    )
+                require(key in terminal_codata, "composed path has no terminal codata")
+                composed_terminal = tuple(
+                    (int(candidate["token"]), float(candidate["contrast"]))
+                    for candidate in row["terminal_candidates"]
+                )
+                require(
+                    composed_terminal == terminal_codata[key],
+                    "composed terminal observation differs from terminal codata",
+                )
 
     require(meta is not None, "recursive trace has no meta")
     require(check is not None, "recursive trace has no check")
@@ -210,6 +251,16 @@ def main() -> None:
         "recursive run terminalized complete paths",
     )
     require(meta.get("complete_paths_flattened") is False, "paths were flattened")
+    require(
+        meta.get("observation_semantics") == "continuation_composed_codata",
+        "recursive codata observations were not continuation-composed",
+    )
+    require(
+        meta.get("codata_constructed_before_observation") is True,
+        "recursive codata was forced before its observer",
+    )
+    require(meta.get("root_observer_runs") == 1, "root observer did not run once")
+    require(meta.get("observations_composed") is True, "observations were not composed")
     require(meta.get("maximum_calls_per_filler") == 1, "recursive fillers repeated")
     require(check.get("maximum_calls_per_filler") == 1, "recursive check repeated fillers")
     require(depth_counts == Counter({0: 176, 1: 2112}), "recursive demand coverage differs")
@@ -219,6 +270,16 @@ def main() -> None:
         require(counts == Counter({0: 1, 1: 12}), f"demand shape differs for {root}")
         require(root_leaf_counts[root] == 96, f"terminal shape differs for {root}")
     require(len(terminal_paths) == 16896, "terminal path coverage differs")
+    require(composed_paths == terminal_paths, "composed path coverage differs")
+    require(check.get("root_observer_runs") == 1, "root check did not run once")
+    require(
+        check.get("composed_observations") == len(terminal_paths),
+        "composed observation count differs",
+    )
+    require(
+        check.get("composition_steps") == 2 * len(terminal_paths),
+        "continuation composition step count differs",
+    )
     require(nonfinite_coordinates == 0, "recursive trace contains non-finite codata")
     require(terminal_family is not None, "recursive trace has no terminal family")
 
@@ -259,11 +320,20 @@ def main() -> None:
             "scalar_reward_used": False,
             "complete_paths_flattened": False,
         },
+        "codata_composition": {
+            "codata_constructed_before_observation": True,
+            "root_observer_runs": int(check["root_observer_runs"]),
+            "composed_observations": int(check["composed_observations"]),
+            "continuation_bind_steps": int(check["composition_steps"]),
+            "edge_observation_defects": 0,
+            "terminal_observation_defects": 0,
+        },
         "selection_boundary": {
             "whole_completion_order_defined": False,
             "reason": (
-                "The model-derived nested codata is retained. No canonical "
-                "terminal algebra ordering complete branches has been measured."
+                "The model-derived codata observations are now composed into "
+                "one root-consumed term. No selection function has yet been "
+                "applied to that composed value."
             ),
         },
         "sample_terminal_observations": sample_terminals,
@@ -274,6 +344,7 @@ def main() -> None:
         "recursive_company_analysis "
         f"roots=176 demands={sum(depth_counts.values())} "
         f"leaves={len(terminal_paths)} nonfinite={nonfinite_coordinates} "
+        f"composed={len(composed_paths)} "
         f"max_parent_relative_defect={maximum_relative_parent_defect:.9g}"
     )
 

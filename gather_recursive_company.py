@@ -89,10 +89,17 @@ def trace_complete(path: Path, roots: int, widths: tuple[int, ...]) -> bool:
         and meta.get("demand_nodes") == demands
         and meta.get("complete_branches") == leaves
         and meta.get("maximum_calls_per_filler") == 1
+        and meta.get("observation_semantics") == "continuation_composed_codata"
+        and meta.get("codata_constructed_before_observation") is True
+        and meta.get("root_observer_runs") == 1
+        and meta.get("observations_composed") is True
         and check.get("kind") == "recursive_company_check"
         and check.get("demand_nodes") == demands
         and check.get("complete_branches") == leaves
         and check.get("maximum_calls_per_filler") == 1
+        and check.get("root_observer_runs") == 1
+        and check.get("composed_observations") == leaves
+        and check.get("composition_steps") == leaves * len(widths)
     )
 
 
