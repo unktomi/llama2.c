@@ -12,9 +12,11 @@
  *
  * together with their images under the mechanically composed suffix
  * continuation.  It also compares the actual joint point ab with the affine
- * torsor completion a + b - x.  No logits, classifier, scalar reward, parse
- * tree, or per-layer accumulation occurs here.  Norms are diagnostics for the
- * retained vectors, not scores.
+ * torsor completion a + b - x, retains the vector change in that comparison
+ * across every adjacent boundary, and reconstructs each QK change from its
+ * two bilinear cross terms before removing them causally.  No logits,
+ * classifier, scalar reward, parse tree, or per-layer scalar accumulation
+ * occurs here.  Norms are diagnostics for the retained vectors, not scores.
  */
 
 #define CPS_FIXED_POINTS_NO_MAIN
@@ -82,6 +84,48 @@ typedef struct {
     float *pullback_commutator;
     float *torsor_visible;
 } ActionMeasurement;
+
+typedef struct {
+    int root_width;
+    bool has_previous;
+    int previous_boundary_index;
+    int previous_layer;
+    const char *previous_phase;
+    const char *previous_boundary;
+    int last_from_boundary_index;
+    int last_to_boundary_index;
+    float *first_torsor_visible;
+    float *previous_torsor_visible;
+    float *last_delta_tau;
+    double *telescoping_sum;
+    int transition_count;
+} ActionTraceState;
+
+typedef struct {
+    int layer;
+    int qkv_boundary_index;
+    int qk_boundary_index;
+    int score_width;
+    int root_width;
+    double copied_prefix_l2;
+    double measured_score_defect_l2;
+    double analytic_cross_terms_l2;
+    double score_reconstruction_l2_defect;
+    double score_reconstruction_relative_defect;
+    double score_reconstruction_max_abs_defect;
+    double exact_delta_tau_l2;
+    double transition_delta_tau_l2;
+    double transition_identity_l2_defect;
+    double transition_identity_relative_defect;
+    double cross_removed_root_l2;
+    double cross_removed_root_relative;
+    float *measured_score_defect;
+    float *analytic_cross_terms;
+    float *score_reconstruction_defect;
+    float *exact_delta_tau;
+    float *transition_delta_tau;
+    float *cross_removed_root;
+} QkCausalMeasurement;
 
 static const char *action_role_name(ActionRole role) {
     switch (role) {
@@ -600,6 +644,159 @@ static void write_float_vector(FILE *trace, const float *values, int width) {
     fputc(']', trace);
 }
 
+static double vector_max_abs(const float *values, int width) {
+    double maximum = 0.0;
+    for (int index = 0; index < width; index++) {
+        double magnitude = fabs((double)values[index]);
+        if (magnitude > maximum) maximum = magnitude;
+    }
+    return maximum;
+}
+
+static ActionTraceState allocate_action_trace_state(int root_width) {
+    return (ActionTraceState){
+        .root_width = root_width,
+        .first_torsor_visible = checked_calloc(
+            (size_t)root_width,
+            sizeof(float)
+        ),
+        .previous_torsor_visible = checked_calloc(
+            (size_t)root_width,
+            sizeof(float)
+        ),
+        .last_delta_tau = checked_calloc(
+            (size_t)root_width,
+            sizeof(float)
+        ),
+        .telescoping_sum = checked_calloc(
+            (size_t)root_width,
+            sizeof(double)
+        )
+    };
+}
+
+static void free_action_trace_state(ActionTraceState *state) {
+    free(state->telescoping_sum);
+    free(state->last_delta_tau);
+    free(state->previous_torsor_visible);
+    free(state->first_torsor_visible);
+    memset(state, 0, sizeof(*state));
+}
+
+static double record_action_transition(
+    FILE *trace,
+    ActionTraceState *state,
+    const ActionMeasurement *measurement
+) {
+    if (measurement->root_width != state->root_width) {
+        fail("grammatical action root width changed between boundaries");
+    }
+    if (!state->has_previous) {
+        memcpy(
+            state->first_torsor_visible,
+            measurement->torsor_visible,
+            (size_t)state->root_width * sizeof(float)
+        );
+        memcpy(
+            state->previous_torsor_visible,
+            measurement->torsor_visible,
+            (size_t)state->root_width * sizeof(float)
+        );
+        state->previous_boundary_index = measurement->boundary_index;
+        state->previous_layer = measurement->layer;
+        state->previous_phase = measurement->phase;
+        state->previous_boundary = measurement->boundary;
+        state->has_previous = true;
+        return 0.0;
+    }
+
+    for (int index = 0; index < state->root_width; index++) {
+        state->last_delta_tau[index] = measurement->torsor_visible[index] -
+            state->previous_torsor_visible[index];
+        state->telescoping_sum[index] += state->last_delta_tau[index];
+    }
+    double delta_l2 = vector_l2(state->last_delta_tau, state->root_width);
+    state->last_from_boundary_index = state->previous_boundary_index;
+    state->last_to_boundary_index = measurement->boundary_index;
+    if (trace != NULL) {
+        fprintf(
+            trace,
+            "{\"kind\":\"grammatical_action_transition\","
+            "\"from_boundary_index\":%d,\"to_boundary_index\":%d,"
+            "\"from_layer\":%d,\"to_layer\":%d,\"from_phase\":",
+            state->previous_boundary_index,
+            measurement->boundary_index,
+            state->previous_layer,
+            measurement->layer
+        );
+        fprint_json_string(trace, state->previous_phase);
+        fputs(",\"to_phase\":", trace);
+        fprint_json_string(trace, measurement->phase);
+        fputs(",\"from_boundary\":", trace);
+        fprint_json_string(trace, state->previous_boundary);
+        fputs(",\"to_boundary\":", trace);
+        fprint_json_string(trace, measurement->boundary);
+        fprintf(
+            trace,
+            ",\"root_width\":%d,\"delta_tau_l2\":%.17g,"
+            "\"delta_tau_is_vector_difference_not_norm_difference\":true,"
+            "\"delta_tau\":",
+            state->root_width,
+            delta_l2
+        );
+        write_float_vector(trace, state->last_delta_tau, state->root_width);
+        fputs("}\n", trace);
+        fflush(trace);
+    }
+    memcpy(
+        state->previous_torsor_visible,
+        measurement->torsor_visible,
+        (size_t)state->root_width * sizeof(float)
+    );
+    state->previous_boundary_index = measurement->boundary_index;
+    state->previous_layer = measurement->layer;
+    state->previous_phase = measurement->phase;
+    state->previous_boundary = measurement->boundary;
+    state->transition_count++;
+    return delta_l2;
+}
+
+static double write_action_telescoping_check(
+    FILE *trace,
+    const ActionTraceState *state,
+    double *maximum_absolute_defect
+) {
+    float *residual = checked_calloc(
+        (size_t)state->root_width,
+        sizeof(float)
+    );
+    for (int index = 0; index < state->root_width; index++) {
+        double endpoint = (double)state->previous_torsor_visible[index] -
+            state->first_torsor_visible[index];
+        residual[index] = (float)(state->telescoping_sum[index] - endpoint);
+    }
+    double l2 = vector_l2(residual, state->root_width);
+    *maximum_absolute_defect = vector_max_abs(residual, state->root_width);
+    if (trace != NULL) {
+        fprintf(
+            trace,
+            "{\"kind\":\"grammatical_action_telescoping_check\","
+            "\"transition_count\":%d,\"root_width\":%d,"
+            "\"vector_l2_defect\":%.17g,"
+            "\"maximum_absolute_defect\":%.17g,\"residual\":",
+            state->transition_count,
+            state->root_width,
+            l2,
+            *maximum_absolute_defect
+        );
+        write_float_vector(trace, residual, state->root_width);
+        fputs("}\n", trace);
+        fflush(trace);
+    }
+    free(residual);
+    return l2;
+}
+
 static void write_action_measurement(
     FILE *trace,
     const ActionMeasurement *measurement
@@ -679,6 +876,7 @@ static void report_action_boundary(
     FILE *trace,
     const GrammarTerm *term,
     GrammarRootScope scope,
+    ActionTraceState *trace_state,
     int *boundary_index,
     int layer,
     const char *phase,
@@ -698,10 +896,16 @@ static void report_action_boundary(
         states,
         local_width
     );
+    write_action_measurement(trace, &measurement);
+    double delta_tau_l2 = record_action_transition(
+        trace,
+        trace_state,
+        &measurement
+    );
     printf(
         "boundary=%d layer=%d %-9s %-28s "
         "local_mixed=%.8g local_commutator=%.8g "
-        "torsor_visible=%.8g pullback_mixed=%.8g\n",
+        "torsor_visible=%.8g delta_tau=%.8g pullback_mixed=%.8g\n",
         *boundary_index,
         layer,
         phase,
@@ -709,12 +913,397 @@ static void report_action_boundary(
         measurement.local_mixed_l2,
         measurement.local_commutator_l2,
         measurement.torsor_visible_l2,
+        delta_tau_l2,
         measurement.pullback_mixed_l2
     );
     fflush(stdout);
-    write_action_measurement(trace, &measurement);
     free_action_measurement(&measurement);
     (*boundary_index)++;
+}
+
+static QkCausalMeasurement measure_qk_causal(
+    const GrammarTerm *term,
+    GrammarRootScope scope,
+    LayerRuntime *runtime,
+    FrontierMap qk_map,
+    Continuation qk_suffix,
+    int qkv_boundary_index,
+    int qk_boundary_index,
+    const float *const qkv_states[ACTION_CONTEXT_COUNT],
+    const float *const qk_states[ACTION_CONTEXT_COUNT],
+    const ActionTraceState *trace_state
+) {
+    int frontier_width = frontier_width_for(runtime);
+    int kv_frontier_width = kv_frontier_width_for(runtime);
+    int score_width = attention_table_width_for(runtime);
+    int output_prefix_width = frontier_width + kv_frontier_width;
+    int root_width = action_root_width(term, scope);
+    if (qk_map.input_width != qkv_state_width(runtime) ||
+        qk_map.output_width != score_state_width(runtime) ||
+        trace_state->last_from_boundary_index != qkv_boundary_index ||
+        trace_state->last_to_boundary_index != qk_boundary_index) {
+        fail("QK causal measurement boundary mismatch");
+    }
+    QkCausalMeasurement measurement = {
+        .layer = runtime->layer,
+        .qkv_boundary_index = qkv_boundary_index,
+        .qk_boundary_index = qk_boundary_index,
+        .score_width = score_width,
+        .root_width = root_width,
+        .measured_score_defect = checked_calloc(
+            (size_t)score_width,
+            sizeof(float)
+        ),
+        .analytic_cross_terms = checked_calloc(
+            (size_t)score_width,
+            sizeof(float)
+        ),
+        .score_reconstruction_defect = checked_calloc(
+            (size_t)score_width,
+            sizeof(float)
+        ),
+        .exact_delta_tau = checked_calloc(
+            (size_t)root_width,
+            sizeof(float)
+        ),
+        .transition_delta_tau = checked_calloc(
+            (size_t)root_width,
+            sizeof(float)
+        ),
+        .cross_removed_root = checked_calloc(
+            (size_t)root_width,
+            sizeof(float)
+        )
+    };
+
+    float *independent_input = checked_calloc(
+        (size_t)qk_map.input_width,
+        sizeof(float)
+    );
+    float *coupled_output = checked_calloc(
+        (size_t)qk_map.output_width,
+        sizeof(float)
+    );
+    float *affine_output = checked_calloc(
+        (size_t)qk_map.output_width,
+        sizeof(float)
+    );
+    float *cross_removed_output = checked_calloc(
+        (size_t)qk_map.output_width,
+        sizeof(float)
+    );
+    torsor_completion(
+        qkv_states[ACTION_X],
+        qkv_states[ACTION_AX],
+        qkv_states[ACTION_BX],
+        independent_input,
+        qk_map.input_width
+    );
+    qk_map.apply(qk_map.environment, independent_input, coupled_output);
+    torsor_completion(
+        qk_states[ACTION_X],
+        qk_states[ACTION_AX],
+        qk_states[ACTION_BX],
+        affine_output,
+        qk_map.output_width
+    );
+    memcpy(
+        cross_removed_output,
+        coupled_output,
+        (size_t)qk_map.output_width * sizeof(float)
+    );
+
+    double copied_prefix_square = 0.0;
+    for (int index = 0; index < output_prefix_width; index++) {
+        double defect = (double)coupled_output[index] - affine_output[index];
+        copied_prefix_square += defect * defect;
+    }
+    measurement.copied_prefix_l2 = sqrt(copied_prefix_square);
+
+    int dim = runtime->transformer->config.dim;
+    int kv_dim = dim * runtime->transformer->config.n_kv_heads /
+        runtime->transformer->config.n_heads;
+    int kv_mul = runtime->transformer->config.n_heads /
+        runtime->transformer->config.n_kv_heads;
+    int heads = runtime->transformer->config.n_heads;
+    int head_size = dim / heads;
+    int positions = runtime->positions;
+    const float *qx = qkv_states[ACTION_X] + frontier_width;
+    const float *qa = qkv_states[ACTION_AX] + frontier_width;
+    const float *qb = qkv_states[ACTION_BX] + frontier_width;
+    const float *kx = qx + frontier_width;
+    const float *ka = qa + frontier_width;
+    const float *kb = qb + frontier_width;
+    double scale = 1.0 / sqrt((double)head_size);
+    for (int position = 0; position < positions; position++) {
+        for (int head = 0; head < heads; head++) {
+            int query_offset = position * dim + head * head_size;
+            int row_offset = (position * heads + head) * positions;
+            for (int key_position = 0;
+                 key_position <= position;
+                 key_position++) {
+                int key_offset = key_position * kv_dim +
+                    (head / kv_mul) * head_size;
+                double cross = 0.0;
+                for (int lane = 0; lane < head_size; lane++) {
+                    double delta_a_q = (double)qa[query_offset + lane] -
+                        qx[query_offset + lane];
+                    double delta_b_q = (double)qb[query_offset + lane] -
+                        qx[query_offset + lane];
+                    double delta_a_k = (double)ka[key_offset + lane] -
+                        kx[key_offset + lane];
+                    double delta_b_k = (double)kb[key_offset + lane] -
+                        kx[key_offset + lane];
+                    cross += delta_a_q * delta_b_k +
+                        delta_b_q * delta_a_k;
+                }
+                measurement.analytic_cross_terms[row_offset + key_position] =
+                    (float)(cross * scale);
+            }
+        }
+    }
+    for (int index = 0; index < score_width; index++) {
+        measurement.measured_score_defect[index] =
+            coupled_output[output_prefix_width + index] -
+            affine_output[output_prefix_width + index];
+        measurement.score_reconstruction_defect[index] =
+            measurement.measured_score_defect[index] -
+            measurement.analytic_cross_terms[index];
+        cross_removed_output[output_prefix_width + index] -=
+            measurement.analytic_cross_terms[index];
+    }
+    measurement.measured_score_defect_l2 = vector_l2(
+        measurement.measured_score_defect,
+        score_width
+    );
+    measurement.analytic_cross_terms_l2 = vector_l2(
+        measurement.analytic_cross_terms,
+        score_width
+    );
+    measurement.score_reconstruction_l2_defect = vector_l2(
+        measurement.score_reconstruction_defect,
+        score_width
+    );
+    measurement.score_reconstruction_relative_defect =
+        measurement.measured_score_defect_l2 == 0.0 ? 0.0 :
+        measurement.score_reconstruction_l2_defect /
+            measurement.measured_score_defect_l2;
+    measurement.score_reconstruction_max_abs_defect = vector_max_abs(
+        measurement.score_reconstruction_defect,
+        score_width
+    );
+
+    float *whole_root = checked_calloc(
+        (size_t)term->frontier_width,
+        sizeof(float)
+    );
+    float *coupled_root = checked_calloc((size_t)root_width, sizeof(float));
+    float *affine_root = checked_calloc((size_t)root_width, sizeof(float));
+    float *removed_root = checked_calloc((size_t)root_width, sizeof(float));
+    apply_root_observation(
+        term,
+        scope,
+        qk_suffix,
+        coupled_output,
+        whole_root,
+        coupled_root
+    );
+    apply_root_observation(
+        term,
+        scope,
+        qk_suffix,
+        affine_output,
+        whole_root,
+        affine_root
+    );
+    apply_root_observation(
+        term,
+        scope,
+        qk_suffix,
+        cross_removed_output,
+        whole_root,
+        removed_root
+    );
+    for (int index = 0; index < root_width; index++) {
+        measurement.exact_delta_tau[index] =
+            coupled_root[index] - affine_root[index];
+        measurement.transition_delta_tau[index] =
+            trace_state->last_delta_tau[index];
+        measurement.cross_removed_root[index] =
+            removed_root[index] - affine_root[index];
+    }
+    measurement.exact_delta_tau_l2 = vector_l2(
+        measurement.exact_delta_tau,
+        root_width
+    );
+    measurement.transition_delta_tau_l2 = vector_l2(
+        measurement.transition_delta_tau,
+        root_width
+    );
+    measurement.transition_identity_l2_defect = difference_l2(
+        measurement.exact_delta_tau,
+        measurement.transition_delta_tau,
+        root_width
+    );
+    measurement.transition_identity_relative_defect =
+        measurement.exact_delta_tau_l2 == 0.0 ? 0.0 :
+        measurement.transition_identity_l2_defect /
+            measurement.exact_delta_tau_l2;
+    measurement.cross_removed_root_l2 = vector_l2(
+        measurement.cross_removed_root,
+        root_width
+    );
+    measurement.cross_removed_root_relative =
+        measurement.exact_delta_tau_l2 == 0.0 ? 0.0 :
+        measurement.cross_removed_root_l2 /
+            measurement.exact_delta_tau_l2;
+
+    free(removed_root);
+    free(affine_root);
+    free(coupled_root);
+    free(whole_root);
+    free(cross_removed_output);
+    free(affine_output);
+    free(coupled_output);
+    free(independent_input);
+    return measurement;
+}
+
+static void free_qk_causal_measurement(QkCausalMeasurement *measurement) {
+    free(measurement->cross_removed_root);
+    free(measurement->transition_delta_tau);
+    free(measurement->exact_delta_tau);
+    free(measurement->score_reconstruction_defect);
+    free(measurement->analytic_cross_terms);
+    free(measurement->measured_score_defect);
+    memset(measurement, 0, sizeof(*measurement));
+}
+
+static void write_qk_causal_measurement(
+    FILE *trace,
+    const QkCausalMeasurement *measurement
+) {
+    if (trace == NULL) return;
+    fprintf(
+        trace,
+        "{\"kind\":\"grammatical_qk_causal\",\"layer\":%d,"
+        "\"qkv_boundary_index\":%d,\"qk_boundary_index\":%d,"
+        "\"score_width\":%d,\"root_width\":%d,"
+        "\"torsor_input\":\"s=a+b-x_at_qkv_boundary\","
+        "\"measured_map_defect\":\"F(s)-(F(a)+F(b)-F(x))\","
+        "\"analytic_cross_terms\":"
+        "\"delta_a_Q_delta_b_Kt_plus_delta_b_Q_delta_a_Kt\","
+        "\"copied_prefix_l2\":%.17g,"
+        "\"measured_score_defect_l2\":%.17g,"
+        "\"analytic_cross_terms_l2\":%.17g,"
+        "\"score_reconstruction_l2_defect\":%.17g,"
+        "\"score_reconstruction_relative_defect\":%.17g,"
+        "\"score_reconstruction_max_abs_defect\":%.17g,"
+        "\"exact_delta_tau_l2\":%.17g,"
+        "\"transition_delta_tau_l2\":%.17g,"
+        "\"transition_identity_l2_defect\":%.17g,"
+        "\"transition_identity_relative_defect\":%.17g,"
+        "\"cross_removed_root_l2\":%.17g,"
+        "\"cross_removed_root_relative\":%.17g,"
+        "\"measured_score_defect\":",
+        measurement->layer,
+        measurement->qkv_boundary_index,
+        measurement->qk_boundary_index,
+        measurement->score_width,
+        measurement->root_width,
+        measurement->copied_prefix_l2,
+        measurement->measured_score_defect_l2,
+        measurement->analytic_cross_terms_l2,
+        measurement->score_reconstruction_l2_defect,
+        measurement->score_reconstruction_relative_defect,
+        measurement->score_reconstruction_max_abs_defect,
+        measurement->exact_delta_tau_l2,
+        measurement->transition_delta_tau_l2,
+        measurement->transition_identity_l2_defect,
+        measurement->transition_identity_relative_defect,
+        measurement->cross_removed_root_l2,
+        measurement->cross_removed_root_relative
+    );
+    write_float_vector(
+        trace,
+        measurement->measured_score_defect,
+        measurement->score_width
+    );
+    fputs(",\"analytic_cross_terms\":", trace);
+    write_float_vector(
+        trace,
+        measurement->analytic_cross_terms,
+        measurement->score_width
+    );
+    fputs(",\"score_reconstruction_defect\":", trace);
+    write_float_vector(
+        trace,
+        measurement->score_reconstruction_defect,
+        measurement->score_width
+    );
+    fputs(",\"exact_delta_tau\":", trace);
+    write_float_vector(
+        trace,
+        measurement->exact_delta_tau,
+        measurement->root_width
+    );
+    fputs(",\"transition_delta_tau\":", trace);
+    write_float_vector(
+        trace,
+        measurement->transition_delta_tau,
+        measurement->root_width
+    );
+    fputs(",\"cross_removed_root\":", trace);
+    write_float_vector(
+        trace,
+        measurement->cross_removed_root,
+        measurement->root_width
+    );
+    fputs("}\n", trace);
+    fflush(trace);
+}
+
+static void report_qk_causal_measurement(
+    FILE *trace,
+    const GrammarTerm *term,
+    GrammarRootScope scope,
+    LayerRuntime *runtime,
+    FrontierMap qk_map,
+    Continuation qk_suffix,
+    int qkv_boundary_index,
+    int qk_boundary_index,
+    const float *const qkv_states[ACTION_CONTEXT_COUNT],
+    const float *const qk_states[ACTION_CONTEXT_COUNT],
+    const ActionTraceState *trace_state
+) {
+    QkCausalMeasurement measurement = measure_qk_causal(
+        term,
+        scope,
+        runtime,
+        qk_map,
+        qk_suffix,
+        qkv_boundary_index,
+        qk_boundary_index,
+        qkv_states,
+        qk_states,
+        trace_state
+    );
+    printf(
+        "  qk_causal layer=%d score=%.8g cross=%.8g "
+        "reconstruction=%.8g relative=%.8g delta_tau=%.8g "
+        "removed_root=%.8g remaining=%.8g\n",
+        measurement.layer,
+        measurement.measured_score_defect_l2,
+        measurement.analytic_cross_terms_l2,
+        measurement.score_reconstruction_l2_defect,
+        measurement.score_reconstruction_relative_defect,
+        measurement.exact_delta_tau_l2,
+        measurement.cross_removed_root_l2,
+        measurement.cross_removed_root_relative
+    );
+    fflush(stdout);
+    write_qk_causal_measurement(trace, &measurement);
+    free_qk_causal_measurement(&measurement);
 }
 
 static void write_action_context(
@@ -792,6 +1381,7 @@ static double run_action_stage_chain(
     FILE *trace,
     const GrammarTerm *term,
     GrammarRootScope scope,
+    ActionTraceState *trace_state,
     int *boundary_index,
     int layer,
     const char *phase,
@@ -840,10 +1430,13 @@ static double run_action_stage_chain(
         for (int role = 0; role < ACTION_CONTEXT_COUNT; role++) {
             next_const[role] = next[role];
         }
+        int from_boundary_index = trace_state->previous_boundary_index;
+        int to_boundary_index = *boundary_index;
         report_action_boundary(
             trace,
             term,
             scope,
+            trace_state,
             boundary_index,
             layer,
             phase,
@@ -852,6 +1445,21 @@ static double run_action_stage_chain(
             next_const,
             maps[stage].output_width
         );
+        if (maps[stage].apply == qk_stage_apply) {
+            report_qk_causal_measurement(
+                trace,
+                term,
+                scope,
+                maps[stage].environment,
+                maps[stage],
+                suffixes[stage + 1],
+                from_boundary_index,
+                to_boundary_index,
+                current,
+                next_const,
+                trace_state
+            );
+        }
         if (current_owned) {
             for (int role = 0; role < ACTION_CONTEXT_COUNT; role++) {
                 free((void *)current[role]);
@@ -916,7 +1524,7 @@ int main(int argc, char **argv) {
         if (trace == NULL) fail("could not create grammatical action trace");
         fprintf(
             trace,
-            "{\"kind\":\"grammatical_action_meta\",\"schema_version\":1,"
+            "{\"kind\":\"grammatical_action_meta\",\"schema_version\":2,"
             "\"semantics\":\"exact_constructor_pullbacks\","
             "\"mixed_operator\":\"(U_a-I)(U_b-I)k\","
             "\"commutator_operator\":\"(U_aU_b-U_bU_a)k\","
@@ -926,6 +1534,8 @@ int main(int argc, char **argv) {
             "\"root_scope\":\"%s\",\"positions\":%d,\"dim\":%d,"
             "\"layers\":%d,\"factorized_token_square\":%s,"
             "\"constructors_commute_on_x\":%s,"
+            "\"delta_tau\":\"tau_next_minus_tau_previous_as_vector\","
+            "\"qk_causal_reconstruction\":true,"
             "\"norms_are_diagnostics_not_scores\":true}\n",
             grammar_root_scope_name(options.root_scope),
             positions,
@@ -967,6 +1577,9 @@ int main(int argc, char **argv) {
     }
 
     int boundary_index = 0;
+    ActionTraceState trace_state = allocate_action_trace_state(
+        action_root_width(&term, options.root_scope)
+    );
     double maximum_stage_output_defect = 0.0;
     for (int layer = 0; layer < term.layers; layer++) {
         const float *layer_inputs[ACTION_CONTEXT_COUNT];
@@ -988,6 +1601,7 @@ int main(int argc, char **argv) {
                 trace,
                 &term,
                 options.root_scope,
+                &trace_state,
                 &boundary_index,
                 layer,
                 "layer",
@@ -1007,6 +1621,7 @@ int main(int argc, char **argv) {
             trace,
             &term,
             options.root_scope,
+            &trace_state,
             &boundary_index,
             layer,
             "attention",
@@ -1029,6 +1644,7 @@ int main(int argc, char **argv) {
             trace,
             &term,
             options.root_scope,
+            &trace_state,
             &boundary_index,
             layer,
             "ffn",
@@ -1066,6 +1682,7 @@ int main(int argc, char **argv) {
         trace,
         &term,
         options.root_scope,
+        &trace_state,
         &boundary_index,
         term.layers,
         "root",
@@ -1075,19 +1692,33 @@ int main(int argc, char **argv) {
         term.frontier_width
     );
 
+    double telescoping_maximum_absolute_defect = 0.0;
+    double telescoping_l2_defect = write_action_telescoping_check(
+        trace,
+        &trace_state,
+        &telescoping_maximum_absolute_defect
+    );
+
     printf(
-        "boundaries=%d maximum_typed_stage_output_l2_defect=%.8g\n",
+        "boundaries=%d maximum_typed_stage_output_l2_defect=%.8g "
+        "telescoping_l2_defect=%.8g telescoping_max_abs=%.8g\n",
         boundary_index,
-        maximum_stage_output_defect
+        maximum_stage_output_defect,
+        telescoping_l2_defect,
+        telescoping_maximum_absolute_defect
     );
     if (trace != NULL) {
         fprintf(
             trace,
             "{\"kind\":\"grammatical_action_check\","
             "\"boundaries\":%d,"
-            "\"maximum_typed_stage_output_l2_defect\":%.17g}\n",
+            "\"maximum_typed_stage_output_l2_defect\":%.17g,"
+            "\"telescoping_l2_defect\":%.17g,"
+            "\"telescoping_maximum_absolute_defect\":%.17g}\n",
             boundary_index,
-            maximum_stage_output_defect
+            maximum_stage_output_defect,
+            telescoping_l2_defect,
+            telescoping_maximum_absolute_defect
         );
         if (fclose(trace) != 0) {
             fail("could not close grammatical action trace");
@@ -1099,6 +1730,7 @@ int main(int argc, char **argv) {
         free_frontiers(&captures[role]);
         free_context(&contexts[role]);
     }
+    free_action_trace_state(&trace_state);
     free_grammar_term(&term);
     free_tokenizer(&tokenizer);
     free_transformer(&transformer);

@@ -530,12 +530,104 @@ coupled the two distinctions in a way visible to the untouched suffix.  It is
 not a sum of completion probabilities and `h_independent` is not treated as a
 hidden-state origin.
 
-Every trace row contains all five vectors: local mixed, local commutator,
-pulled-back mixed, pulled-back commutator, and torsor-visible difference.  The
-root may be the complete final hidden frontier or only its last position.  It
-is always post-final-RMS hidden state, never logits.  The first implementation
-requires equally tokenized variants so every local subtraction is typed; it
-refuses padding.
+Every boundary trace row contains all five vectors: local mixed, local
+commutator, pulled-back mixed, pulled-back commutator, and torsor-visible
+difference.  The root may be the complete final hidden frontier or only its
+last position.  It is always post-final-RMS hidden state, never logits.  The
+first implementation requires equally tokenized variants so every local
+subtraction is typed; it refuses padding.
+
+### Exact transition attribution
+
+Let `F_l` map one recorded boundary to the next and let
+
+```text
+k_l = k_(l+1) . F_l
+s_l = a_l + b_l - x_l
+tau_l = k_l(ab_l) - k_l(s_l).
+```
+
+Since `s_(l+1) = F_l(a_l) + F_l(b_l) - F_l(x_l)`, direct cancellation gives
+
+```text
+delta_tau_l = tau_(l+1) - tau_l
+            = k_(l+1)(F_l(s_l)) - k_(l+1)(s_(l+1)).
+```
+
+Every `grammatical_action_transition` record contains this complete vector.
+It is the root-visible failure of that one typed map to preserve the sampled
+torsor parallelogram.  Its L2 norm is reported separately, but the norms do
+not telescope and are not attribution weights.  Only the vectors obey
+
+```text
+tau_last - tau_first = sum_l delta_tau_l.
+```
+
+The retained runs check this identity componentwise.  Maximum absolute
+float32 telescoping defects are between `1.12e-8` and `5.96e-8`.
+
+### QK bilinear reconstruction and causal removal
+
+At a QKV boundary, construct the actual torsor point
+
+```text
+s = a + b - x.
+```
+
+The typed QK map receives `(X,Q,K,V)` and returns `(X,V,scores)`.  For the Q
+and K components of `s`, define
+
+```text
+delta_a_Q = Q_a - Q_x       delta_a_K = K_a - K_x
+delta_b_Q = Q_b - Q_x       delta_b_K = K_b - K_x.
+```
+
+In real arithmetic the complete score-table defect is exactly
+
+```text
+Q_s K_s^T - (Q_a K_a^T + Q_b K_b^T - Q_x K_x^T)
+  = delta_a_Q delta_b_K^T + delta_b_Q delta_a_K^T,
+```
+
+including the head-size scale and causal mask.  This formula deliberately uses
+the synthesized `s`, not the almost-additive real `ab` state.  The copied `X`
+and `V` prefix has no bilinear defect.
+
+Each `grammatical_qk_causal` record independently retains:
+
+1. the score defect measured by running `F(s)`;
+2. the score vector reconstructed from the two analytic cross terms;
+3. their complete residual vector;
+4. the adjacent transition `delta_tau`;
+5. the same root observation calculated directly from the two QK outputs;
+6. the root residual after subtracting only the analytic cross terms from
+   `F(s)` and running the untouched suffix.
+
+For layer 0, the real-model results are:
+
+| Model and action square | Measured score defect | Reconstruction defect | QK `delta_tau` | Root after cross removal | Fraction remaining |
+|---|---:|---:|---:|---:|---:|
+| Stories15M dog/dogs × runs/run | 1.6305690 | 2.90e-6 | 3.8370042 | 9.72e-5 | 2.53e-5 |
+| Stories15M the/my × path/foot | 1.3331234 | 3.08e-6 | 3.6344222 | 1.01e-4 | 2.78e-5 |
+| Stories260K He/They × is/are | 2.1544336 | 1.74e-5 | 0.0484339 | 9.39e-6 | 1.94e-4 |
+| Stories15M dog/cat × runs/plays control | 1.0102196 | 3.41e-6 | 1.6753862 | 1.34e-4 | 8.00e-5 |
+
+The copied `(X,V)` prefix defect is exactly zero in all retained records.  The
+direct QK root difference and independently recorded transition vector agree
+to at worst `4.51e-7` across every layer in these runs.  Across every layer,
+the largest analytic score reconstruction relative defect is `2.44e-5`, and
+the largest fraction of a QK root increment remaining after cross removal is
+`1.94e-4`.
+
+This establishes the causal architectural result: the two bilinear QK cross
+terms account for essentially the entire root-visible QK transition, and
+removing only those terms returns the propagated effect to the prior numerical
+floor.  It does not establish grammar selectivity.  The all-grammatical
+dog/cat × runs/plays control obeys the same identity, and its final mixed norm
+is larger than either Stories15M grammatical example.  Norm magnitude is
+therefore not a Firthian score.  Selectivity must be tested in the retained
+vector directions and their action/continuation closure across many positive
+and controlled rectangles.
 
 ### Retained system cases
 

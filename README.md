@@ -181,7 +181,10 @@ mixed and commutator vectors at every typed attention/FFN boundary and pulls
 each observation through the exact remaining transformer. It also distinguishes
 the literal mixed pullback—which is invariant under CPS reassociation—from the
 boundary-local torsor witness that locates where the learned term first makes
-the two edits jointly visible. No logits or scalar semantic score are used.
+the two edits jointly visible. Adjacent witness differences are retained as
+vectors, and the QK record reconstructs each score defect from its two
+bilinear cross terms before causally removing them and running the unchanged
+suffix. No logits or scalar semantic score are used.
 See the
 [grammatical-action section](doc/cps-fixed-points.md#grammatical-action-continuations).
 
