@@ -311,11 +311,44 @@ def paired_differences(values: np.ndarray, held_states: list[StateSpec]) -> np.n
 
 def relative_frobenius(actual: np.ndarray, predicted: np.ndarray) -> float:
     norm = float(np.linalg.norm(actual))
-    require(norm > 0.0, "relative error target is zero")
-    return float(np.linalg.norm(predicted - actual) / norm)
+    error = float(np.linalg.norm(predicted - actual))
+    if norm == 0.0:
+        require(error == 0.0, "zero target has a nonzero prediction")
+        return 0.0
+    return error / norm
+
+
+def distinction_diagnostics(
+    actual: np.ndarray,
+    predicted: np.ndarray,
+) -> dict[str, float | bool | None]:
+    actual_norm = float(np.linalg.norm(actual))
+    predicted_norm = float(np.linalg.norm(predicted))
+    if actual_norm == 0.0:
+        return {
+            "future_distinction_relative_error": (
+                0.0 if predicted_norm == 0.0 else None
+            ),
+            "future_distinction_norm_ratio": None,
+            "future_distinction_cosine": None,
+            "future_distinction_target_is_zero": True,
+            "future_distinction_prediction_absolute_norm": predicted_norm,
+        }
+    cosine = 0.0
+    if predicted_norm > 0.0:
+        cosine = float(np.sum(predicted * actual)) / (predicted_norm * actual_norm)
+    return {
+        "future_distinction_relative_error": relative_frobenius(actual, predicted),
+        "future_distinction_norm_ratio": predicted_norm / actual_norm,
+        "future_distinction_cosine": cosine,
+        "future_distinction_target_is_zero": False,
+        "future_distinction_prediction_absolute_norm": predicted_norm,
+    }
 
 
 def rank_values(maximum: int) -> list[int]:
+    if maximum == 0:
+        return [0]
     return sorted({rank for rank in (*RANKS, maximum) if rank <= maximum})
 
 
@@ -334,14 +367,11 @@ def block_prediction_curve(
     u, singular, vh = np.linalg.svd(a, full_matrices=False)
     tolerance = float(max(a.shape) * np.finfo(np.float64).eps * singular[0])
     sampled_rank = int(np.count_nonzero(singular > tolerance))
-    require(sampled_rank > 0, "training Hankel block has zero rank")
     mean_prediction = np.repeat(np.mean(b, axis=0, keepdims=True), len(held_rows), axis=0)
     distances = np.sum((c[:, None, :] - a[None, :, :]) ** 2, axis=2)
     nearest = np.argmin(distances, axis=1)
     nearest_prediction = b[nearest]
     true_distinction = paired_differences(d, held_states)
-    true_distinction_norm = float(np.linalg.norm(true_distinction))
-    require(true_distinction_norm > 0.0, "held future distinctions are zero")
     curve: dict[str, Any] = {}
     for rank in rank_values(sampled_rank):
         row_coordinates = u[:, :rank] * singular[:rank]
@@ -349,25 +379,16 @@ def block_prediction_curve(
         held_row_coordinates = c @ vh[:rank].T
         predicted = held_row_coordinates @ held_loadings
         predicted_distinction = paired_differences(predicted, held_states)
-        predicted_norm = float(np.linalg.norm(predicted_distinction))
-        dot = float(np.sum(predicted_distinction * true_distinction))
-        cosine = 0.0 if predicted_norm == 0.0 else dot / (
-            predicted_norm * true_distinction_norm
-        )
         curve[str(rank)] = {
             "rank": rank,
             "held_block_relative_error": relative_frobenius(d, predicted),
-            "future_distinction_relative_error": relative_frobenius(
-                true_distinction,
-                predicted_distinction,
-            ),
-            "future_distinction_norm_ratio": predicted_norm / true_distinction_norm,
-            "future_distinction_cosine": cosine,
+            **distinction_diagnostics(true_distinction, predicted_distinction),
         }
     return {
         "training_shape": list(a.shape),
         "held_shape": list(d.shape),
         "training_rank": sampled_rank,
+        "training_rank_is_zero": sampled_rank == 0,
         "training_rank_saturated": sampled_rank == min(a.shape),
         "rank_tolerance": tolerance,
         "mean_baseline_relative_error": relative_frobenius(d, mean_prediction),
@@ -412,12 +433,22 @@ def summarize_curves(results: list[dict[str, Any]]) -> dict[str, Any]:
             "future_distinction_norm_ratio",
             "future_distinction_cosine",
         ):
-            values = [row[field] for row in available]
-            curve[key][field] = {
-                "minimum": min(values),
-                "mean": float(np.mean(values)),
-                "maximum": max(values),
-            }
+            values = [row[field] for row in available if row[field] is not None]
+            curve[key][field] = (
+                {
+                    "defined_splits": len(values),
+                    "minimum": min(values),
+                    "mean": float(np.mean(values)),
+                    "maximum": max(values),
+                }
+                if values
+                else {
+                    "defined_splits": 0,
+                    "minimum": None,
+                    "mean": None,
+                    "maximum": None,
+                }
+            )
     return {
         "split_count": len(results),
         "training_rank_range": [
@@ -496,40 +527,39 @@ def regression_curve(
     x_held = features[held]
     y_train = targets[train]
     y_held = targets[held]
-    u, singular, vh = np.linalg.svd(x_train, full_matrices=False)
-    tolerance = float(max(x_train.shape) * np.finfo(np.float64).eps * singular[0])
+    x_origin = np.mean(x_train, axis=0, keepdims=True)
+    y_origin = np.mean(y_train, axis=0, keepdims=True)
+    x_train_centered = x_train - x_origin
+    x_held_centered = x_held - x_origin
+    y_train_centered = y_train - y_origin
+    u, singular, vh = np.linalg.svd(x_train_centered, full_matrices=False)
+    tolerance = float(
+        max(x_train_centered.shape) * np.finfo(np.float64).eps * singular[0]
+    )
     sampled_rank = int(np.count_nonzero(singular > tolerance))
-    require(sampled_rank > 0, "jet feature matrix has zero rank")
     distances = np.sum((x_held[:, None, :] - x_train[None, :, :]) ** 2, axis=2)
     nearest = np.argmin(distances, axis=1)
     nearest_prediction = y_train[nearest]
     true_distinction = paired_differences(y_held, held_states)
-    true_distinction_norm = float(np.linalg.norm(true_distinction))
     curve: dict[str, Any] = {}
     for rank in rank_values(sampled_rank):
-        coordinates = (x_held @ vh[:rank].T) / singular[:rank]
-        predicted = coordinates @ u[:, :rank].T @ y_train
+        if rank == 0:
+            predicted = np.repeat(y_origin, len(y_held), axis=0)
+        else:
+            coordinates = (x_held_centered @ vh[:rank].T) / singular[:rank]
+            predicted = y_origin + coordinates @ u[:, :rank].T @ y_train_centered
         predicted_distinction = paired_differences(predicted, held_states)
-        predicted_norm = float(np.linalg.norm(predicted_distinction))
-        cosine = 0.0
-        if predicted_norm > 0.0 and true_distinction_norm > 0.0:
-            cosine = float(np.sum(predicted_distinction * true_distinction)) / (
-                predicted_norm * true_distinction_norm
-            )
         curve[str(rank)] = {
             "rank": rank,
             "held_target_relative_error": relative_frobenius(y_held, predicted),
-            "future_distinction_relative_error": relative_frobenius(
-                true_distinction,
-                predicted_distinction,
-            ),
-            "future_distinction_norm_ratio": predicted_norm / true_distinction_norm,
-            "future_distinction_cosine": cosine,
+            **distinction_diagnostics(true_distinction, predicted_distinction),
         }
     return {
         "feature_width": features.shape[1],
         "target_width": targets.shape[1],
+        "fit": "training-split affine map in centered coordinates",
         "training_rank": sampled_rank,
+        "training_rank_is_zero": sampled_rank == 0,
         "training_rank_saturated": sampled_rank == len(train),
         "nearest_source_relative_error": relative_frobenius(y_held, nearest_prediction),
         "nearest_source_distance": {
@@ -553,12 +583,22 @@ def summarize_regressions(results: list[dict[str, Any]]) -> dict[str, Any]:
             "future_distinction_norm_ratio",
             "future_distinction_cosine",
         ):
-            values = [row[field] for row in available]
-            curve[key][field] = {
-                "minimum": min(values),
-                "mean": float(np.mean(values)),
-                "maximum": max(values),
-            }
+            values = [row[field] for row in available if row[field] is not None]
+            curve[key][field] = (
+                {
+                    "defined_splits": len(values),
+                    "minimum": min(values),
+                    "mean": float(np.mean(values)),
+                    "maximum": max(values),
+                }
+                if values
+                else {
+                    "defined_splits": 0,
+                    "minimum": None,
+                    "mean": None,
+                    "maximum": None,
+                }
+            )
     return {
         "split_count": len(results),
         "training_rank_range": [
