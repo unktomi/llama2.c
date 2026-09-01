@@ -125,6 +125,13 @@ cpsaffinespectrum: cps_affine_spectrum.c cps_fixed_points.c run.c
 		cps_affine_spectrum.c -lm -framework Accelerate \
 		-o cps_affine_spectrum
 
+.PHONY: cpspullbackspectrum
+cpspullbackspectrum: cps_pullback_spectrum.c cps_affine_spectrum.c cps_fixed_points.c run.c
+	$(CC) -std=c11 -O3 -Wall -Wextra -Werror \
+		-Wno-sign-compare -Wno-unused-variable -Wno-unused-function \
+		cps_pullback_spectrum.c -lm -framework Accelerate \
+		-o cps_pullback_spectrum
+
 .PHONY: longcontextprofiles
 longcontextprofiles: companyprobe
 	python3 gather_company_traces.py
@@ -225,6 +232,7 @@ clean:
 	rm -f company_probe
 	rm -f cps_fixed_points
 	rm -f cps_affine_spectrum
+	rm -f cps_pullback_spectrum
 	rm -f exhaustive_scale_probe
 	rm -f scale_reward_audit
 	rm -f atkey_term.o

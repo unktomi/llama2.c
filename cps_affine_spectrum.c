@@ -901,6 +901,7 @@ static void analyze_fixed_displacements(
     free(displacements);
 }
 
+#ifndef CPS_AFFINE_SPECTRUM_NO_MAIN
 int main(int argc, char **argv) {
     if (argc < 3) {
         fprintf(
@@ -1102,3 +1103,4 @@ int main(int argc, char **argv) {
     free_transformer(&transformer);
     return EXIT_SUCCESS;
 }
+#endif

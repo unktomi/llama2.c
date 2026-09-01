@@ -309,3 +309,151 @@ contextual result: every nonzero individual displacement row has an
 enough that their global intersection is trivial. The next composition must
 retain this family of contextual subspaces instead of replacing it with that
 single intersection.
+
+## Root-reachable pullback spectrum
+
+`cps_pullback_spectrum.c` tests the larger continuation-space premise directly.
+For the selected endomorphism `F` and its mechanically generated suffix `k`,
+let `phi` be the coordinate continuations of the requested root frontier.  At
+dictionary depth `p` the program retains the actual block-Krylov family
+
+```text
+Psi_p = [1, phi, U_F phi, ..., U_F^(p-1) phi]
+U_F(g) = g . F.
+```
+
+For every real token context `x_i`, the mapped evaluation file stores all root
+points
+
+```text
+k(x_i), k(F(x_i)), ..., k(F^p(x_i)).
+```
+
+It flushes a complete row before advancing `samples_written`, can resume, and
+can grow its capacity without recomputing earlier rows.  The JSONL trace is
+also flushed after every decoded context.  No logits, token classifier, scalar
+reward, or supplied parse occurs in this term.
+
+The hidden states in these expressions remain points.  Linear algebra is
+performed on columns of scalar functions evaluated at those points.  The
+constant function is explicit, so translating the root hidden-state chart is
+an affine change of dictionary basis rather than a choice of a meaningful
+hidden-state zero.
+
+### When a sampled operator exists
+
+Write the fit evaluations as
+
+```text
+X[i,:] = Psi_p(x_i)
+Y[i,:] = U_F(Psi_p)(x_i).
+```
+
+If `X = U Sigma V^T`, two different conditions must be checked:
+
+```text
+representation defect = ||(I - U U^T) Y|| / ||Y||
+descent defect        = ||Y (I - V V^T)|| / ||Y||.
+```
+
+The first asks whether every pulled dictionary function can be represented by
+the original sampled functions.  The second asks whether a coefficient
+combination that is zero as a sampled function remains zero after pullback:
+
+```text
+kernel(X) subset kernel(Y).
+```
+
+Without the second condition, pullback does not descend to the sampled
+function quotient.  Diagonalizing a fitted coefficient matrix in that case
+does not produce continuation eigenfunctions.  This distinction rejected the
+initial whole-frontier fit: 9,217 functions on 640 fit contexts had a `0.6321`
+descent defect even though its representation residual was small.
+
+When both conditions are numerically supported, the operator on the sampled
+function-value basis is
+
+```text
+M = U^T Y V Sigma^-1.
+```
+
+For every right eigenvector `w`, the corresponding dictionary continuation has
+coefficients
+
+```text
+c = V Sigma^-1 w.
+```
+
+The program evaluates the defining equation on contexts excluded from the
+fit:
+
+```text
+Y_validation c = lambda X_validation c.
+```
+
+Every eigenvalue, its fit residual, its held-out residual, and the variation of
+the resulting function across held-out contexts is written to JSONL.  A mode
+that diagonalizes `M` but fails this equation is recorded, not accepted.
+
+`CPSKRY1` is the native-endian mapped evaluation format.  `CPSKOP1` version 2
+stores, in order: its header, all dictionary singular values, the retained
+right dictionary basis as logical rows, the column-major reduced operator,
+real and imaginary eigenvalues, column-major right eigenvectors, and singular
+values of `M-I`.
+
+### Stories15M sixteen-token result
+
+The retained system run used layer-0 attention, sixteen-token contexts, the
+last root position's complete 288-dimensional hidden state, three pullback
+generations, and no token projection:
+
+```bash
+make cpspullbackspectrum CC=clang
+./cps_pullback_spectrum ../llama2.c/test/stories15M.bin tokenizer.bin \
+  --corpus-dir ../llama2.c/work_traces/long_context_32 \
+  --evaluations outputs/cps-pullback-l0-attention-p16-s2048-d3.bin \
+  --spectrum outputs/cps-pullback-l0-attention-p16-s2048-d3-last-spectrum-v2.bin \
+  --positions 16 --samples 2048 --fit-samples 1792 \
+  --pullback-depth 3 --layer 0 --operation attention --root last \
+  --trace outputs/cps-pullback-l0-attention-p16-s2048-d3-last-resume.jsonl \
+  --resume
+```
+
+The first 1,024 rows were reused from the earlier persisted run.  The complete
+evaluation has 2,048 distinct contexts; the operator was fitted on 1,792 and
+checked on the remaining 256:
+
+```text
+dictionary columns:                 865
+sampled rank:                       865
+fit representation defect:       0.098371779
+fit descent defect:               0.000000402
+held-out dictionary defect:       0.23208011
+fitted fixed dimension:                    1
+```
+
+The fixed mode is the constant continuation: its held-out eigen-equation
+residual is `1.12e-14`.  The best genuinely varying nonconstant mode has
+`lambda = 0.7051078942`, held-out residual `0.30905124`, and held-out
+constant-variation ratio `0.61850862`.  It is not accurate enough to use as an
+exact transport rule.
+
+A controlled sweep on the same first 1,024 contexts (`896` fit, `128`
+held-out) was:
+
+| Dictionary depth | Columns | Fit representation | Fit descent | Held-out dictionary |
+|---:|---:|---:|---:|---:|
+| 1 | 289 | 0.52835 | 3.29e-7 | 0.87973 |
+| 2 | 577 | 0.15633 | 3.64e-7 | 0.52695 |
+| 3 | 865 | 0.02363 | 0.00231 | 0.89669 |
+
+The shallow third-depth fit appeared to have seven fixed directions, but all
+nonconstant ones failed held-out evaluation.  Doubling coverage restored full
+dictionary rank and reduced the fitted fixed space to the constant alone.
+Those six modes were sampling artifacts.
+
+This result does not establish that the complete continuation operator has no
+nonconstant eigenspaces.  It establishes the narrower, actionable fact that
+the depth-three coordinate-generated root-reachable space is not closed well
+enough to compile into exact fast inference.  No weight bypass or inference
+speedup is claimed from this run.

@@ -163,6 +163,16 @@ separate; their SVD is a rank/nullspace diagnostic, not a completion score.
 The checked Stories15M run and binary formats are described in the same
 [CPS fixed-points note](doc/cps-fixed-points.md#torsor-safe-affine-continuation-arrangement).
 
+`cps_pullback_spectrum.c` goes beyond affine fixed covectors by generating the
+root-reachable continuation family `1, k, U_F k, ...`, constructing the
+induced sampled pullback operator, and checking every eigen-equation again on
+held-out TinyStories contexts. It separately measures representability and
+whether pullback descends through the sampled-function quotient; this prevents
+an underdetermined fit from being reported as an eigenspace. The sixteen-token
+Stories15M run, resumable mapped formats, full equations, and negative
+depth-three closure result are documented in the
+[root-reachable spectrum section](doc/cps-fixed-points.md#root-reachable-pullback-spectrum).
+
 The preceding endpoint-observer experiment is retained only as
 `terminal-unembedding-observer-don't-do-this.c`. It selected final token
 coordinates before discovering the transformer's own continuation structure,
