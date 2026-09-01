@@ -74,6 +74,8 @@ typedef struct {
 
 typedef struct {
     LayerCapture *layers;
+    StageBuffer final_rms;
+    StageBuffer logits;
 } ContextCapture;
 
 typedef struct {
@@ -84,8 +86,16 @@ typedef struct {
 
 typedef struct {
     const char *trace_path;
+    const char *continuation_matrix_path;
     int observe_position;
 } Options;
+
+typedef struct {
+    bool enabled;
+    int layer;
+    Stage stage;
+    const float *values;
+} TangentInjection;
 
 typedef struct {
     double edit_a_norm;
@@ -137,6 +147,14 @@ typedef struct {
     double pseudoinverse[4];
 } SymmetricBasis;
 
+typedef struct {
+    int token;
+    float value;
+    double magnitude;
+} RankedObservation;
+
+enum { OBSERVATION_PREVIEW_COUNT = 8 };
+
 static void fail(const char *message) {
     fprintf(stderr, "%s\n", message);
     exit(EXIT_FAILURE);
@@ -163,7 +181,8 @@ static void usage(const char *program) {
     fprintf(
         stderr,
         "usage: %s CHECKPOINT TOKENIZER TEXT00 TEXT10 TEXT01 TEXT11 "
-        "[--observe-position N] [--trace PATH]\n"
+        "[--observe-position N] [--trace PATH] "
+        "[--continuation-matrix PATH]\n"
         "\n"
         "TEXT10 applies edit A to TEXT00, TEXT01 applies edit B, and "
         "TEXT11 applies both. The four token sequences must have equal "
@@ -180,6 +199,10 @@ static Options parse_options(int argc, char **argv) {
     while (index < argc) {
         if (strcmp(argv[index], "--trace") == 0 && index + 1 < argc) {
             options.trace_path = argv[index + 1];
+            index += 2;
+        } else if (strcmp(argv[index], "--continuation-matrix") == 0 &&
+                   index + 1 < argc) {
+            options.continuation_matrix_path = argv[index + 1];
             index += 2;
         } else if (strcmp(argv[index], "--observe-position") == 0 &&
                    index + 1 < argc) {
@@ -279,6 +302,16 @@ static ContextCapture allocate_capture(
             );
         }
     }
+    capture.final_rms.width = config->dim;
+    capture.final_rms.values = checked_calloc(
+        (size_t)config->dim,
+        sizeof(*capture.final_rms.values)
+    );
+    capture.logits.width = config->vocab_size;
+    capture.logits.values = checked_calloc(
+        (size_t)config->vocab_size,
+        sizeof(*capture.logits.values)
+    );
     return capture;
 }
 
@@ -290,7 +323,11 @@ static void free_capture(ContextCapture *capture, int layers) {
         }
     }
     free(capture->layers);
+    free(capture->final_rms.values);
+    free(capture->logits.values);
     capture->layers = NULL;
+    capture->final_rms.values = NULL;
+    capture->logits.values = NULL;
 }
 
 static void retain_stage(
@@ -341,6 +378,100 @@ static void softmax_jvp(
     for (int index = 0; index < size; index++) {
         score_tangent[index] = probability[index] *
             (score_tangent[index] - expected_tangent);
+    }
+}
+
+static void capture_final_observation(
+    Transformer *transformer,
+    ContextCapture *capture
+) {
+    Config *config = &transformer->config;
+    RunState *state = &transformer->state;
+    TransformerWeights *weights = &transformer->weights;
+    rmsnorm(
+        capture->final_rms.values,
+        state->x,
+        weights->rms_final_weight,
+        config->dim
+    );
+    matmul(
+        capture->logits.values,
+        capture->final_rms.values,
+        weights->wcls,
+        config->dim,
+        config->vocab_size
+    );
+}
+
+static void compute_final_observation_tangent(
+    Transformer *transformer,
+    const RunState *tangent_state,
+    float *final_rms_tangent,
+    float *logit_tangent
+) {
+    Config *config = &transformer->config;
+    RunState *state = &transformer->state;
+    TransformerWeights *weights = &transformer->weights;
+    rmsnorm_jvp(
+        final_rms_tangent,
+        state->x,
+        tangent_state->x,
+        weights->rms_final_weight,
+        config->dim
+    );
+    matmul(
+        logit_tangent,
+        final_rms_tangent,
+        weights->wcls,
+        config->dim,
+        config->vocab_size
+    );
+}
+
+static void capture_final_observation_with_tangents(
+    Transformer *transformer,
+    RunState tangent_states[2],
+    ContextCapture *base_capture,
+    ContextCapture tangent_captures[2]
+) {
+    capture_final_observation(transformer, base_capture);
+    for (int direction = 0; direction < 2; direction++) {
+        compute_final_observation_tangent(
+            transformer,
+            &tangent_states[direction],
+            tangent_captures[direction].final_rms.values,
+            tangent_captures[direction].logits.values
+        );
+    }
+}
+
+static const float *injection_values(
+    const TangentInjection injections[2],
+    int direction,
+    int layer,
+    Stage stage
+) {
+    if (injections == NULL || !injections[direction].enabled ||
+        injections[direction].layer != layer ||
+        injections[direction].stage != stage) {
+        return NULL;
+    }
+    return injections[direction].values;
+}
+
+static void apply_dense_injection(
+    const TangentInjection injections[2],
+    int direction,
+    int layer,
+    Stage stage,
+    float *target,
+    int width
+) {
+    const float *values = injection_values(
+        injections, direction, layer, stage
+    );
+    if (values != NULL) {
+        memcpy(target, values, (size_t)width * sizeof(*target));
     }
 }
 
@@ -572,6 +703,7 @@ static void forward_capture_with_tangents(
     int token,
     const int edit_tokens[2],
     int position,
+    const TangentInjection injections[2],
     LayerCapture *captures,
     LayerCapture *tangent_captures[2]
 ) {
@@ -604,6 +736,14 @@ static void forward_capture_with_tangents(
             tangent_layer_captures[direction] =
                 tangent_captures[direction] == NULL ? NULL :
                 &tangent_captures[direction][layer];
+            apply_dense_injection(
+                injections,
+                direction,
+                layer,
+                STAGE_LAYER_INPUT,
+                tangent_states[direction].x,
+                dim
+            );
         }
         if (capture != NULL) {
             retain_stage(capture, STAGE_LAYER_INPUT, state->x, dim);
@@ -628,6 +768,14 @@ static void forward_capture_with_tangents(
                 state->x,
                 tangent_states[direction].x,
                 attention_weight,
+                dim
+            );
+            apply_dense_injection(
+                injections,
+                direction,
+                layer,
+                STAGE_ATTENTION_RMS,
+                tangent_states[direction].xb,
                 dim
             );
         }
@@ -713,6 +861,16 @@ static void forward_capture_with_tangents(
                 }
             }
         }
+        for (int direction = 0; direction < 2; direction++) {
+            apply_dense_injection(
+                injections,
+                direction,
+                layer,
+                STAGE_QUERY,
+                tangent_states[direction].q,
+                dim
+            );
+        }
         if (capture != NULL) {
             retain_stage(capture, STAGE_QUERY, state->q, dim);
         }
@@ -761,6 +919,21 @@ static void forward_capture_with_tangents(
                         score_tangent[direction] * score_scale;
                 }
             }
+            for (int direction = 0; direction < 2; direction++) {
+                const float *score_injection = injection_values(
+                    injections,
+                    direction,
+                    layer,
+                    STAGE_ATTENTION_SCORES
+                );
+                if (score_injection != NULL) {
+                    memcpy(
+                        tangent_attention[direction],
+                        score_injection + (size_t)head * (position + 1),
+                        (size_t)(position + 1) * sizeof(float)
+                    );
+                }
+            }
             if (capture != NULL) {
                 memcpy(
                     capture->stages[STAGE_ATTENTION_SCORES].values +
@@ -788,6 +961,20 @@ static void forward_capture_with_tangents(
                     attention,
                     position + 1
                 );
+                const float *probability_injection = injection_values(
+                    injections,
+                    direction,
+                    layer,
+                    STAGE_ATTENTION_PROBABILITIES
+                );
+                if (probability_injection != NULL) {
+                    memcpy(
+                        tangent_attention[direction],
+                        probability_injection +
+                            (size_t)head * (position + 1),
+                        (size_t)(position + 1) * sizeof(float)
+                    );
+                }
             }
             if (capture != NULL) {
                 memcpy(
@@ -842,6 +1029,16 @@ static void forward_capture_with_tangents(
                 }
             }
         }
+        for (int direction = 0; direction < 2; direction++) {
+            apply_dense_injection(
+                injections,
+                direction,
+                layer,
+                STAGE_ATTENTION_VALUE_SUM,
+                tangent_states[direction].xb,
+                dim
+            );
+        }
         if (capture != NULL) {
             if (capture->stages[STAGE_ATTENTION_SCORES].width != score_width) {
                 fail("attention score width changed");
@@ -869,6 +1066,14 @@ static void forward_capture_with_tangents(
                 dim,
                 dim
             );
+            apply_dense_injection(
+                injections,
+                direction,
+                layer,
+                STAGE_ATTENTION_UPDATE,
+                tangent_states[direction].xb2,
+                dim
+            );
         }
         if (capture != NULL) {
             retain_stage(capture, STAGE_ATTENTION_UPDATE, state->xb2, dim);
@@ -889,6 +1094,16 @@ static void forward_capture_with_tangents(
                 tangent_states[direction].x[lane] +=
                     tangent_states[direction].xb2[lane];
             }
+        }
+        for (int direction = 0; direction < 2; direction++) {
+            apply_dense_injection(
+                injections,
+                direction,
+                layer,
+                STAGE_POST_ATTENTION,
+                tangent_states[direction].x,
+                dim
+            );
         }
         if (capture != NULL) {
             retain_stage(capture, STAGE_POST_ATTENTION, state->x, dim);
@@ -913,6 +1128,14 @@ static void forward_capture_with_tangents(
                 state->x,
                 tangent_states[direction].x,
                 ffn_weight,
+                dim
+            );
+            apply_dense_injection(
+                injections,
+                direction,
+                layer,
+                STAGE_FFN_RMS,
+                tangent_states[direction].xb,
                 dim
             );
         }
@@ -942,11 +1165,27 @@ static void forward_capture_with_tangents(
                 dim,
                 hidden_dim
             );
+            apply_dense_injection(
+                injections,
+                direction,
+                layer,
+                STAGE_W1,
+                tangent_states[direction].hb,
+                hidden_dim
+            );
             matmul(
                 tangent_states[direction].hb2,
                 tangent_states[direction].xb,
                 w3,
                 dim,
+                hidden_dim
+            );
+            apply_dense_injection(
+                injections,
+                direction,
+                layer,
+                STAGE_W3,
+                tangent_states[direction].hb2,
                 hidden_dim
             );
         }
@@ -971,6 +1210,10 @@ static void forward_capture_with_tangents(
             }
         }
 
+        const float *silu_injections[2] = {
+            injection_values(injections, 0, layer, STAGE_SILU),
+            injection_values(injections, 1, layer, STAGE_SILU)
+        };
         for (int lane = 0; lane < hidden_dim; lane++) {
             float first = state->hb[lane];
             float second = state->hb2[lane];
@@ -984,6 +1227,9 @@ static void forward_capture_with_tangents(
             for (int direction = 0; direction < 2; direction++) {
                 float silu_tangent = silu_slope *
                     tangent_states[direction].hb[lane];
+                if (silu_injections[direction] != NULL) {
+                    silu_tangent = silu_injections[direction][lane];
+                }
                 if (tangent_layer_captures[direction] != NULL) {
                     tangent_layer_captures[direction]
                         ->stages[STAGE_SILU].values[lane] = silu_tangent;
@@ -993,6 +1239,16 @@ static void forward_capture_with_tangents(
                     silu * tangent_states[direction].hb2[lane];
             }
             state->hb[lane] = silu * second;
+        }
+        for (int direction = 0; direction < 2; direction++) {
+            apply_dense_injection(
+                injections,
+                direction,
+                layer,
+                STAGE_SWIGLU_PRODUCT,
+                tangent_states[direction].hb,
+                hidden_dim
+            );
         }
         if (capture != NULL) {
             retain_stage(
@@ -1023,6 +1279,14 @@ static void forward_capture_with_tangents(
                 hidden_dim,
                 dim
             );
+            apply_dense_injection(
+                injections,
+                direction,
+                layer,
+                STAGE_FFN_UPDATE,
+                tangent_states[direction].xb,
+                dim
+            );
         }
         if (capture != NULL) {
             retain_stage(capture, STAGE_FFN_UPDATE, state->xb, dim);
@@ -1043,6 +1307,16 @@ static void forward_capture_with_tangents(
                 tangent_states[direction].x[lane] +=
                     tangent_states[direction].xb[lane];
             }
+        }
+        for (int direction = 0; direction < 2; direction++) {
+            apply_dense_injection(
+                injections,
+                direction,
+                layer,
+                STAGE_LAYER_OUTPUT,
+                tangent_states[direction].x,
+                dim
+            );
         }
         if (capture != NULL) {
             retain_stage(capture, STAGE_LAYER_OUTPUT, state->x, dim);
@@ -1106,10 +1380,17 @@ static void capture_context_with_tangents(
             base_context->tokens[position],
             edit_tokens,
             position,
+            NULL,
             base_layers,
             tangent_layers
         );
     }
+    capture_final_observation_with_tangents(
+        transformer,
+        tangent_states,
+        base_capture,
+        tangent_capture
+    );
 }
 
 static void capture_context(
@@ -1130,6 +1411,74 @@ static void capture_context(
             context->tokens[position],
             position,
             position == observe_position ? capture->layers : NULL
+        );
+    }
+    capture_final_observation(transformer, capture);
+}
+
+static void reset_continuation_caches(
+    Transformer *transformer,
+    RunState tangent_states[2]
+) {
+    Config *config = &transformer->config;
+    int kv_dim = config->dim * config->n_kv_heads / config->n_heads;
+    size_t cache_count =
+        (size_t)config->n_layers * config->seq_len * kv_dim;
+    memset(transformer->state.key_cache, 0, cache_count * sizeof(float));
+    memset(transformer->state.value_cache, 0, cache_count * sizeof(float));
+    for (int direction = 0; direction < 2; direction++) {
+        memset(
+            tangent_states[direction].key_cache,
+            0,
+            cache_count * sizeof(float)
+        );
+        memset(
+            tangent_states[direction].value_cache,
+            0,
+            cache_count * sizeof(float)
+        );
+    }
+}
+
+static void evaluate_continuation_pair(
+    Transformer *transformer,
+    RunState tangent_states[2],
+    const EncodedContext *base_context,
+    int observe_position,
+    const TangentInjection injections[2],
+    float *final_rms_tangents[2],
+    float *logit_tangents[2]
+) {
+    reset_continuation_caches(transformer, tangent_states);
+    for (int position = 0; position < observe_position; position++) {
+        forward_capture_boundaries(
+            transformer,
+            base_context->tokens[position],
+            position,
+            NULL
+        );
+    }
+    int edit_tokens[2] = {
+        base_context->tokens[observe_position],
+        base_context->tokens[observe_position]
+    };
+    LayerCapture *tangent_captures[2] = {NULL, NULL};
+    forward_capture_with_tangents(
+        transformer,
+        tangent_states,
+        base_context->tokens[observe_position],
+        edit_tokens,
+        observe_position,
+        injections,
+        NULL,
+        tangent_captures
+    );
+    for (int direction = 0; direction < 2; direction++) {
+        compute_final_observation_tangent(
+            transformer,
+            &tangent_states[direction],
+            final_rms_tangents[direction],
+            logit_tangents[direction]
         );
     }
 }
@@ -1553,6 +1902,162 @@ static void write_context_record(
     fflush(trace);
 }
 
+static double numerical_l2(const float *values, int width) {
+    double square = 0.0;
+    for (int index = 0; index < width; index++) {
+        double value = values[index];
+        square += value * value;
+    }
+    return sqrt(square);
+}
+
+static void rank_observation(
+    RankedObservation ranked[OBSERVATION_PREVIEW_COUNT],
+    int token,
+    float value
+) {
+    double magnitude = fabs((double)value);
+    int insertion = OBSERVATION_PREVIEW_COUNT;
+    for (int index = 0; index < OBSERVATION_PREVIEW_COUNT; index++) {
+        if (ranked[index].token < 0 || magnitude > ranked[index].magnitude) {
+            insertion = index;
+            break;
+        }
+    }
+    if (insertion == OBSERVATION_PREVIEW_COUNT) return;
+    for (int index = OBSERVATION_PREVIEW_COUNT - 1;
+         index > insertion;
+         index--) {
+        ranked[index] = ranked[index - 1];
+    }
+    ranked[insertion] = (RankedObservation){
+        .token = token,
+        .value = value,
+        .magnitude = magnitude
+    };
+}
+
+static void write_observation_matrix_meta(
+    FILE *trace,
+    const char *matrix_path,
+    int rows,
+    int columns
+) {
+    if (trace == NULL) return;
+    fputs("{\"kind\":\"observation_matrix\",\"path\":", trace);
+    if (matrix_path == NULL) {
+        fputs("null", trace);
+    } else {
+        fprint_json_string(trace, matrix_path);
+    }
+    fprintf(
+        trace,
+        ",\"dtype\":\"native_float32\",\"layout\":\"row_major\","
+        "\"rows\":%d,\"columns\":%d}\n",
+        rows,
+        columns
+    );
+    fflush(trace);
+}
+
+static void write_observation_row(
+    FILE *trace,
+    FILE *matrix,
+    Tokenizer *tokenizer,
+    int previous_token,
+    int matrix_row,
+    const char *label,
+    int layer,
+    const char *stage,
+    double source_norm,
+    const float *values,
+    int width
+) {
+    if (matrix != NULL) {
+        size_t written = fwrite(values, sizeof(*values), (size_t)width, matrix);
+        if (written != (size_t)width || fflush(matrix) != 0) {
+            fail("could not append continuation observation matrix row");
+        }
+    }
+    RankedObservation ranked[OBSERVATION_PREVIEW_COUNT];
+    for (int index = 0; index < OBSERVATION_PREVIEW_COUNT; index++) {
+        ranked[index] = (RankedObservation){.token = -1};
+    }
+    for (int token = 0; token < width; token++) {
+        rank_observation(ranked, token, values[token]);
+    }
+    double l2 = numerical_l2(values, width);
+    double max_abs = ranked[0].token < 0 ? 0.0 : ranked[0].magnitude;
+    if (trace != NULL) {
+        fputs("{\"kind\":\"continuation_observation\",\"label\":", trace);
+        fprint_json_string(trace, label);
+        fprintf(
+            trace,
+            ",\"matrix_row\":%d,\"layer\":%d,\"stage\":",
+            matrix == NULL ? -1 : matrix_row,
+            layer
+        );
+        if (stage == NULL) {
+            fputs("null", trace);
+        } else {
+            fprint_json_string(trace, stage);
+        }
+        fputs(",\"source_numerical_l2\":", trace);
+        if (source_norm < 0.0) {
+            fputs("null", trace);
+        } else {
+            fprintf(trace, "%.17g", source_norm);
+        }
+        fprintf(
+            trace,
+            ",\"numerical_l2\":%.17g,\"max_abs\":%.17g,"
+            "\"preview_order\":\"absolute_magnitude\",\"top\":[",
+            l2,
+            max_abs
+        );
+        for (int index = 0; index < OBSERVATION_PREVIEW_COUNT; index++) {
+            if (ranked[index].token < 0) break;
+            if (index != 0) fputc(',', trace);
+            int token = ranked[index].token;
+            fprintf(trace, "{\"token\":%d,\"piece\":", token);
+            fprint_json_string(
+                trace,
+                decode(tokenizer, previous_token, token)
+            );
+            fprintf(trace, ",\"value\":%.9g}", ranked[index].value);
+        }
+        fputs("]}\n", trace);
+        fflush(trace);
+    }
+}
+
+static void write_endpoint_stats(
+    FILE *trace,
+    const char *stage,
+    const CornerStats *finite,
+    const DirectionStats *tangent
+) {
+    if (trace == NULL) return;
+    fprintf(
+        trace,
+        "{\"kind\":\"endpoint_stage\",\"stage\":\"%s\","
+        "\"finite_edit_a_norm\":%.17g,"
+        "\"finite_edit_b_norm\":%.17g,"
+        "\"finite_interaction_norm\":%.17g,"
+        "\"tangent_edit_a_norm\":%.17g,"
+        "\"tangent_edit_b_norm\":%.17g,"
+        "\"tangent_edit_cosine\":%.17g}\n",
+        stage,
+        finite->edit_a_norm,
+        finite->edit_b_norm,
+        finite->interaction_norm,
+        tangent->edit_a_norm,
+        tangent->edit_b_norm,
+        tangent->edit_cosine
+    );
+    fflush(trace);
+}
+
 static void write_stage_record(
     FILE *trace,
     int layer,
@@ -1875,6 +2380,236 @@ static void print_factor_piece(
     putchar('\n');
 }
 
+static void fill_stage_interaction(
+    ContextCapture captures[4],
+    int layer,
+    Stage stage,
+    float *interaction
+) {
+    int width = captures[0].layers[layer].stages[stage].width;
+    for (int lane = 0; lane < width; lane++) {
+        interaction[lane] =
+            captures[3].layers[layer].stages[stage].values[lane] -
+            captures[1].layers[layer].stages[stage].values[lane] -
+            captures[2].layers[layer].stages[stage].values[lane] +
+            captures[0].layers[layer].stages[stage].values[lane];
+    }
+}
+
+static void write_endpoint_observations(
+    FILE *trace,
+    FILE *matrix,
+    Tokenizer *tokenizer,
+    int previous_token,
+    ContextCapture captures[4],
+    ContextCapture tangent_captures[2],
+    int *matrix_row
+) {
+    const float *finite_rms[4];
+    const float *finite_logits[4];
+    for (int context = 0; context < 4; context++) {
+        finite_rms[context] = captures[context].final_rms.values;
+        finite_logits[context] = captures[context].logits.values;
+    }
+    CornerStats rms_corners = measure_corners(
+        finite_rms, captures[0].final_rms.width
+    );
+    CornerStats logit_corners = measure_corners(
+        finite_logits, captures[0].logits.width
+    );
+    DirectionStats rms_tangents = measure_directions(
+        tangent_captures[0].final_rms.values,
+        tangent_captures[1].final_rms.values,
+        tangent_captures[0].final_rms.width
+    );
+    DirectionStats logit_tangents = measure_directions(
+        tangent_captures[0].logits.values,
+        tangent_captures[1].logits.values,
+        tangent_captures[0].logits.width
+    );
+    write_endpoint_stats(trace, "final_rms", &rms_corners, &rms_tangents);
+    write_endpoint_stats(trace, "logits", &logit_corners, &logit_tangents);
+    printf(
+        "endpoint final_rms interaction=%.8g logits_interaction=%.8g\n",
+        rms_corners.interaction_norm,
+        logit_corners.interaction_norm
+    );
+
+    int vocab_size = captures[0].logits.width;
+    const char *context_labels[4] = {
+        "context_00_logits",
+        "context_10_logits",
+        "context_01_logits",
+        "context_11_logits"
+    };
+    for (int context = 0; context < 4; context++) {
+        write_observation_row(
+            trace,
+            matrix,
+            tokenizer,
+            previous_token,
+            (*matrix_row)++,
+            context_labels[context],
+            -1,
+            NULL,
+            -1.0,
+            finite_logits[context],
+            vocab_size
+        );
+    }
+    float *interaction = checked_calloc(
+        (size_t)vocab_size,
+        sizeof(*interaction)
+    );
+    for (int token = 0; token < vocab_size; token++) {
+        interaction[token] = finite_logits[3][token] -
+            finite_logits[1][token] - finite_logits[2][token] +
+            finite_logits[0][token];
+    }
+    write_observation_row(
+        trace,
+        matrix,
+        tokenizer,
+        previous_token,
+        (*matrix_row)++,
+        "finite_logit_interaction",
+        -1,
+        NULL,
+        -1.0,
+        interaction,
+        vocab_size
+    );
+    free(interaction);
+    write_observation_row(
+        trace,
+        matrix,
+        tokenizer,
+        previous_token,
+        (*matrix_row)++,
+        "embedding_edit_a_logit_jvp",
+        -1,
+        NULL,
+        -1.0,
+        tangent_captures[0].logits.values,
+        vocab_size
+    );
+    write_observation_row(
+        trace,
+        matrix,
+        tokenizer,
+        previous_token,
+        (*matrix_row)++,
+        "embedding_edit_b_logit_jvp",
+        -1,
+        NULL,
+        -1.0,
+        tangent_captures[1].logits.values,
+        vocab_size
+    );
+}
+
+static void write_all_stage_continuations(
+    FILE *trace,
+    FILE *matrix,
+    Tokenizer *tokenizer,
+    Transformer *transformer,
+    RunState tangent_states[2],
+    const EncodedContext *base_context,
+    int observe_position,
+    ContextCapture captures[4],
+    int *matrix_row
+) {
+    Config *config = &transformer->config;
+    int maximum_width = config->hidden_dim;
+    int score_width = config->n_heads * (observe_position + 1);
+    if (config->dim > maximum_width) maximum_width = config->dim;
+    if (score_width > maximum_width) maximum_width = score_width;
+    float *seeds[2] = {
+        checked_calloc((size_t)maximum_width, sizeof(float)),
+        checked_calloc((size_t)maximum_width, sizeof(float))
+    };
+    float *final_rms_tangents[2] = {
+        checked_calloc((size_t)config->dim, sizeof(float)),
+        checked_calloc((size_t)config->dim, sizeof(float))
+    };
+    float *logit_tangents[2] = {
+        checked_calloc((size_t)config->vocab_size, sizeof(float)),
+        checked_calloc((size_t)config->vocab_size, sizeof(float))
+    };
+    int target_count = config->n_layers * STAGE_COUNT;
+    int previous_token = base_context->tokens[observe_position];
+
+    for (int target = 0; target < target_count; target += 2) {
+        TangentInjection injections[2] = {0};
+        int layers[2] = {-1, -1};
+        Stage stages[2] = {STAGE_LAYER_INPUT, STAGE_LAYER_INPUT};
+        int widths[2] = {0, 0};
+        int active = target + 1 < target_count ? 2 : 1;
+        for (int direction = 0; direction < active; direction++) {
+            int index = target + direction;
+            layers[direction] = index / STAGE_COUNT;
+            stages[direction] = (Stage)(index % STAGE_COUNT);
+            widths[direction] = captures[0].layers[layers[direction]]
+                .stages[stages[direction]].width;
+            fill_stage_interaction(
+                captures,
+                layers[direction],
+                stages[direction],
+                seeds[direction]
+            );
+            injections[direction] = (TangentInjection){
+                .enabled = true,
+                .layer = layers[direction],
+                .stage = stages[direction],
+                .values = seeds[direction]
+            };
+        }
+        evaluate_continuation_pair(
+            transformer,
+            tangent_states,
+            base_context,
+            observe_position,
+            injections,
+            final_rms_tangents,
+            logit_tangents
+        );
+        for (int direction = 0; direction < active; direction++) {
+            double source_norm = numerical_l2(
+                seeds[direction], widths[direction]
+            );
+            double observation_norm = numerical_l2(
+                logit_tangents[direction], config->vocab_size
+            );
+            printf(
+                "continuation layer=%d stage=%-24s source=%.8g "
+                "logits=%.8g\n",
+                layers[direction],
+                stage_names[stages[direction]],
+                source_norm,
+                observation_norm
+            );
+            write_observation_row(
+                trace,
+                matrix,
+                tokenizer,
+                previous_token,
+                (*matrix_row)++,
+                "linearized_stage_interaction",
+                layers[direction],
+                stage_names[stages[direction]],
+                source_norm,
+                logit_tangents[direction],
+                config->vocab_size
+            );
+        }
+    }
+    for (int direction = 0; direction < 2; direction++) {
+        free(seeds[direction]);
+        free(final_rms_tangents[direction]);
+        free(logit_tangents[direction]);
+    }
+}
+
 int main(int argc, char **argv) {
     Options options = parse_options(argc, argv);
     Transformer transformer;
@@ -1913,10 +2648,18 @@ int main(int argc, char **argv) {
         trace = fopen(options.trace_path, "wb");
         if (trace == NULL) fail("could not create trace file");
     }
+    FILE *continuation_matrix = NULL;
+    if (options.continuation_matrix_path != NULL) {
+        continuation_matrix = fopen(options.continuation_matrix_path, "wb");
+        if (continuation_matrix == NULL) {
+            fail("could not create continuation observation matrix");
+        }
+    }
+    int expected_matrix_rows = 7 + transformer.config.n_layers * STAGE_COUNT;
     if (trace != NULL) {
         fprintf(
             trace,
-            "{\"kind\":\"meta\",\"schema_version\":1,"
+            "{\"kind\":\"meta\",\"schema_version\":2,"
             "\"tangent_base_context\":0,"
             "\"tangent_seed\":\"embedding_arrows\","
             "\"layers\":%d,\"dim\":%d,"
@@ -1936,6 +2679,12 @@ int main(int argc, char **argv) {
         for (int context = 0; context < 4; context++) {
             write_context_record(trace, &tokenizer, &contexts[context], context);
         }
+        write_observation_matrix_meta(
+            trace,
+            options.continuation_matrix_path,
+            expected_matrix_rows,
+            transformer.config.vocab_size
+        );
     }
 
     printf(
@@ -2080,6 +2829,35 @@ int main(int argc, char **argv) {
         fflush(stdout);
     }
 
+    int matrix_row = 0;
+    int previous_token = contexts[0].tokens[observe_position];
+    write_endpoint_observations(
+        trace,
+        continuation_matrix,
+        &tokenizer,
+        previous_token,
+        captures,
+        tangent_captures,
+        &matrix_row
+    );
+    write_all_stage_continuations(
+        trace,
+        continuation_matrix,
+        &tokenizer,
+        &transformer,
+        tangent_states,
+        &contexts[0],
+        observe_position,
+        captures,
+        &matrix_row
+    );
+    if (matrix_row != expected_matrix_rows) {
+        fail("continuation observation matrix row count changed");
+    }
+
+    if (continuation_matrix != NULL && fclose(continuation_matrix) != 0) {
+        fail("could not close continuation observation matrix");
+    }
     if (trace != NULL && fclose(trace) != 0) fail("could not close trace file");
     for (int context = 0; context < 4; context++) {
         free_capture(&captures[context], transformer.config.n_layers);

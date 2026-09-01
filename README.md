@@ -152,7 +152,10 @@ reference-layer boundary. It keeps finite four-corner coupling separate from
 an analytic two-direction JVP through RMSNorm, attention (including tangent
 K/V caches and softmax), and SwiGLU. The resulting JSONL distinguishes finite
 `secant_transition` records from actual `tangent_transition` records; neither
-is used as a completion reward. See
+is used as a completion reward. Each boundary interaction is also composed
+through the remaining frozen layers, final RMSNorm, and the complete learned
+unembedding. An optional row-major float32 matrix retains every vocabulary
+coordinate instead of reducing them to a scalar. See
 [doc/semantic-fixed-points.md](doc/semantic-fixed-points.md).
 
 ### Quarantined failed approaches

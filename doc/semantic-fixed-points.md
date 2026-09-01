@@ -98,6 +98,58 @@ full-layer eigenmode or as information created from nothing.
 corner arrows. It is labeled separately because `D^+ D_out` is a finite
 secant transport, not `D^+ J_F D`.
 
+## Composed learned continuations
+
+The hidden-state measurements above are not enough to decide whether an
+interaction matters to the model. The diagnostic therefore retains the actual
+remainder of the frozen model as the continuation. For boundary `s`, define
+
+```text
+C_s = unembedding . final_rms . every operation after s.
+```
+
+No unembedding is applied at `s`. It happens once, in its trained location at
+the end. For each captured boundary, the finite interaction `omega_s` is
+installed as a tangent at that exact boundary and the program computes
+
+```text
+r_s = J(C_s) omega_s.
+```
+
+Every coordinate is retained. For vocabulary coordinate `t`,
+
+```text
+r_s[t] = e_t^T J(C_s) omega_s
+       = (J(C_s)^T e_t)^T omega_s.
+```
+
+Thus a row simultaneously evaluates the interaction against every learned
+token-coordinate continuation. This is the continuation pullback pairing
+without materializing 32,000 reverse vectors. If the row is zero, every final
+token observation locally discards that interaction. A nonzero coordinate is
+a concrete learned observation that still sees it.
+
+The injected arrow is the captured observed-token component at that boundary.
+Earlier-token K/V entries remain at the `text00` base point. Consequently these
+rows answer whether that particular noun-position interaction is visible; they
+do not pretend to be a full-sequence-state decomposition. The exact four-run
+endpoint interaction below includes the complete causal contexts.
+
+These rows are local continuation responses to one boundary interaction. They
+are not additive attributions and must not be summed across boundaries:
+nonlinear later operations can generate additional mixed terms. The exact
+finite endpoint comparison is recorded separately as
+
+```text
+logits11 - logits10 - logits01 + logits00.
+```
+
+`continuation_observation` records contain numerical norms and the largest
+coordinates only for browsing. The complete vectors are appended immediately
+to the optional `--continuation-matrix` file as native float32 rows. The
+`observation_matrix` trace record declares its dimensions, and each observation
+record identifies its row. Neither norms nor previews are inference rewards.
+
 ## Run
 
 The carpet/foot example does not align under the bundled 32k tokenizer, so the
@@ -110,7 +162,8 @@ make semanticfixedpoints CC=clang
   "The cat walked across my path." \
   "The cat walked across the foot." \
   "The cat walked across my foot." \
-  --trace outputs/semantic-fixed-the-my-path-foot.jsonl
+  --trace outputs/semantic-fixed-the-my-path-foot.jsonl \
+  --continuation-matrix outputs/semantic-fixed-the-my-path-foot.f32
 ```
 
 For this checkpoint, all four strings contain eight tokens. Edit A is
@@ -126,8 +179,19 @@ at the layer-0 noun input, A has norm zero and B has norm 0.48417742. At the
 QK scores, their derivative norms are 4.2651102 and 12.495343. A reached the
 noun through the retained determiner key.
 
-The program deliberately omits final RMSNorm, the token classifier, and all
-completion rewards. It also makes no one-shot physical-weight-read claim: the
-extra model executions and JVP matmuls are measurement work. A continuation
-pullback/Koopman trace is a separate next calculation needed to decide which
-of these numerical couplings remain observationally visible.
+At the trained endpoint, the exact finite interaction has norm 47.845243 in
+the final normalized hidden state and 451.96218 across the complete logit
+vector. It is therefore visible to the model's learned observations. Every
+nonzero captured stage interaction also has a nonzero composed continuation
+response. For example, the layer-0 QK interaction produces a logit JVP norm of
+17.837256, while the layer-0 output interaction produces 61.446237. The first
+three layer-0 boundaries have source norms below `5e-7` and should be read as
+floating-point cancellation of their theoretically zero interaction.
+
+The checked matrix has 97 rows and 32,000 columns: four context logits, the
+exact finite logit interaction, two embedding-edit JVPs, and 90 composed stage
+interaction responses. It occupies 12,416,000 bytes.
+
+The program still makes no one-shot physical-weight-read claim: the replayed
+JVPs are explicit measurement work. It also does not reduce the vocabulary
+observations to a completion score.
