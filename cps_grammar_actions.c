@@ -41,6 +41,7 @@ typedef struct {
     const char *trace_path;
     GrammarRootScope root_scope;
     int pullback_depth;
+    bool behavior_only;
 } GrammarOptions;
 
 typedef struct {
@@ -172,7 +173,8 @@ static GrammarOptions parse_grammar_options(int argc, char **argv) {
         fprintf(
             stderr,
             "usage: %s CHECKPOINT TOKENIZER X AX BX ABX BAX "
-            "[--root all|last] [--pullback-depth N] [--trace PATH]\n",
+            "[--root all|last] [--pullback-depth N] [--behavior-only] "
+            "[--trace PATH]\n",
             argv[0]
         );
         exit(EXIT_FAILURE);
@@ -202,6 +204,9 @@ static GrammarOptions parse_grammar_options(int argc, char **argv) {
                    index + 1 < argc) {
             options.trace_path = argv[index + 1];
             index += 2;
+        } else if (strcmp(argv[index], "--behavior-only") == 0) {
+            options.behavior_only = true;
+            index++;
         } else {
             fail("unrecognized cps_grammar_actions option");
         }
@@ -1648,6 +1653,145 @@ static void write_action_context(
     fflush(trace);
 }
 
+static void run_behavior_only(
+    FILE *trace,
+    const GrammarTerm *term,
+    GrammarRootScope scope,
+    Transformer *transformer,
+    EncodedContext contexts[ACTION_CONTEXT_COUNT],
+    ContextFrontiers captures[ACTION_CONTEXT_COUNT]
+) {
+    int root_width = action_root_width(term, scope);
+    float *final_outputs[ACTION_CONTEXT_COUNT];
+    float *roots[ACTION_CONTEXT_COUNT];
+    float *whole_root = checked_calloc(
+        (size_t)term->frontier_width,
+        sizeof(*whole_root)
+    );
+    for (int role = 0; role < ACTION_CONTEXT_COUNT; role++) {
+        final_outputs[role] = checked_calloc(
+            (size_t)term->frontier_width,
+            sizeof(*final_outputs[role])
+        );
+        roots[role] = checked_calloc(
+            (size_t)root_width,
+            sizeof(*roots[role])
+        );
+        term->final_rms_map.apply(
+            term->final_rms_map.environment,
+            layer_frontier(&captures[role], term->layers),
+            final_outputs[role]
+        );
+        apply_root_observation(
+            term,
+            scope,
+            term->root_identity,
+            final_outputs[role],
+            whole_root,
+            roots[role]
+        );
+    }
+
+    float *mixed = checked_calloc((size_t)root_width, sizeof(*mixed));
+    float *commutator = checked_calloc(
+        (size_t)root_width,
+        sizeof(*commutator)
+    );
+    affine_mixed(
+        roots[ACTION_X],
+        roots[ACTION_AX],
+        roots[ACTION_BX],
+        roots[ACTION_ABX],
+        mixed,
+        root_width
+    );
+    subtract_vectors(
+        roots[ACTION_ABX],
+        roots[ACTION_BAX],
+        commutator,
+        root_width
+    );
+    if (trace != NULL) {
+        fprintf(
+            trace,
+            "{\"kind\":\"grammatical_behavior_root\","
+            "\"root_width\":%d,\"mixed_l2\":%.17g,"
+            "\"commutator_l2\":%.17g,\"corners\":{",
+            root_width,
+            vector_l2(mixed, root_width),
+            vector_l2(commutator, root_width)
+        );
+        for (int role = 0; role < ACTION_CONTEXT_COUNT; role++) {
+            if (role != 0) fputc(',', trace);
+            fprint_json_string(trace, action_role_name((ActionRole)role));
+            fputc(':', trace);
+            write_float_vector(trace, roots[role], root_width);
+        }
+        fputs("},\"mixed\":", trace);
+        write_float_vector(trace, mixed, root_width);
+        fputs(",\"commutator\":", trace);
+        write_float_vector(trace, commutator, root_width);
+        fputs("}\n", trace);
+        fflush(trace);
+    }
+
+    double maximum_reference_hidden_defect = 0.0;
+    double maximum_reference_hidden_relative_defect = 0.0;
+    for (int role = 0; role < ACTION_CONTEXT_COUNT; role++) {
+        double relative_defect = 0.0;
+        double defect = check_reference_hidden_frontier(
+            transformer,
+            &contexts[role],
+            final_outputs[role],
+            &relative_defect
+        );
+        if (defect > maximum_reference_hidden_defect) {
+            maximum_reference_hidden_defect = defect;
+        }
+        if (relative_defect > maximum_reference_hidden_relative_defect) {
+            maximum_reference_hidden_relative_defect = relative_defect;
+        }
+        if (trace != NULL) {
+            fprintf(
+                trace,
+                "{\"kind\":\"grammatical_behavior_reference_check\","
+                "\"role\":\"%s\",\"llama2c_hidden_l2_defect\":%.17g,"
+                "\"llama2c_hidden_relative_defect\":%.17g}\n",
+                action_role_name((ActionRole)role),
+                defect,
+                relative_defect
+            );
+            fflush(trace);
+        }
+    }
+    printf(
+        "behavior_root mixed=%.8g commutator=%.8g "
+        "maximum_llama2c_hidden_relative_defect=%.8g\n",
+        vector_l2(mixed, root_width),
+        vector_l2(commutator, root_width),
+        maximum_reference_hidden_relative_defect
+    );
+    if (trace != NULL) {
+        fprintf(
+            trace,
+            "{\"kind\":\"grammatical_behavior_check\","
+            "\"maximum_llama2c_hidden_l2_defect\":%.17g,"
+            "\"maximum_llama2c_hidden_relative_defect\":%.17g}\n",
+            maximum_reference_hidden_defect,
+            maximum_reference_hidden_relative_defect
+        );
+        fflush(trace);
+    }
+
+    free(commutator);
+    free(mixed);
+    for (int role = 0; role < ACTION_CONTEXT_COUNT; role++) {
+        free(roots[role]);
+        free(final_outputs[role]);
+    }
+    free(whole_root);
+}
+
 static bool token_sequences_equal(
     const EncodedContext *left,
     const EncodedContext *right
@@ -1841,33 +1985,57 @@ int main(int argc, char **argv) {
     if (options.trace_path != NULL) {
         trace = fopen(options.trace_path, "wb");
         if (trace == NULL) fail("could not create grammatical action trace");
-        fprintf(
-            trace,
-            "{\"kind\":\"grammatical_action_meta\",\"schema_version\":5,"
-            "\"semantics\":\"exact_constructor_pullbacks\","
-            "\"mixed_operator\":\"(U_a-I)(U_b-I)k\","
-            "\"commutator_operator\":\"(U_aU_b-U_bU_a)k\","
-            "\"constructor_order\":{\"abx\":\"b_after_a_on_x\","
-            "\"bax\":\"a_after_b_on_x\"},"
-            "\"root_observer\":\"post_final_rms_hidden\","
-            "\"root_scope\":\"%s\",\"positions\":%d,\"dim\":%d,"
-            "\"layers\":%d,\"factorized_token_square\":%s,"
-            "\"constructors_commute_on_x\":%s,"
-            "\"delta_tau\":\"tau_next_minus_tau_previous_as_vector\","
-            "\"qk_causal_reconstruction\":true,"
-            "\"qk_directed_cross_terms_retained\":true,"
-            "\"block_pullback_pairs_retained\":true,"
-            "\"block_pullback_depth\":%d,"
-            "\"stock_forward_hidden_parity\":true,"
-            "\"norms_are_diagnostics_not_scores\":true}\n",
-            grammar_root_scope_name(options.root_scope),
-            positions,
-            term.dim,
-            term.layers,
-            factorized_square ? "true" : "false",
-            constructors_commute ? "true" : "false",
-            options.pullback_depth
-        );
+        if (options.behavior_only) {
+            fprintf(
+                trace,
+                "{\"kind\":\"grammatical_behavior_meta\","
+                "\"schema_version\":1,"
+                "\"semantics\":\"future_company_root_behavior\","
+                "\"mixed_operator\":\"(U_a-I)(U_b-I)k\","
+                "\"root_observer\":\"post_final_rms_hidden\","
+                "\"root_scope\":\"%s\",\"positions\":%d,\"dim\":%d,"
+                "\"layers\":%d,\"factorized_token_square\":%s,"
+                "\"constructors_commute_on_x\":%s,"
+                "\"corner_roots_retained\":true,"
+                "\"stock_forward_hidden_parity\":true,"
+                "\"norms_are_diagnostics_not_scores\":true}\n",
+                grammar_root_scope_name(options.root_scope),
+                positions,
+                term.dim,
+                term.layers,
+                factorized_square ? "true" : "false",
+                constructors_commute ? "true" : "false"
+            );
+        } else {
+            fprintf(
+                trace,
+                "{\"kind\":\"grammatical_action_meta\","
+                "\"schema_version\":5,"
+                "\"semantics\":\"exact_constructor_pullbacks\","
+                "\"mixed_operator\":\"(U_a-I)(U_b-I)k\","
+                "\"commutator_operator\":\"(U_aU_b-U_bU_a)k\","
+                "\"constructor_order\":{\"abx\":\"b_after_a_on_x\","
+                "\"bax\":\"a_after_b_on_x\"},"
+                "\"root_observer\":\"post_final_rms_hidden\","
+                "\"root_scope\":\"%s\",\"positions\":%d,\"dim\":%d,"
+                "\"layers\":%d,\"factorized_token_square\":%s,"
+                "\"constructors_commute_on_x\":%s,"
+                "\"delta_tau\":\"tau_next_minus_tau_previous_as_vector\","
+                "\"qk_causal_reconstruction\":true,"
+                "\"qk_directed_cross_terms_retained\":true,"
+                "\"block_pullback_pairs_retained\":true,"
+                "\"block_pullback_depth\":%d,"
+                "\"stock_forward_hidden_parity\":true,"
+                "\"norms_are_diagnostics_not_scores\":true}\n",
+                grammar_root_scope_name(options.root_scope),
+                positions,
+                term.dim,
+                term.layers,
+                factorized_square ? "true" : "false",
+                constructors_commute ? "true" : "false",
+                options.pullback_depth
+            );
+        }
         fflush(trace);
         for (int role = 0; role < ACTION_CONTEXT_COUNT; role++) {
             write_action_context(
@@ -1898,6 +2066,27 @@ int main(int argc, char **argv) {
             term.runtimes,
             &captures[role]
         );
+    }
+    if (options.behavior_only) {
+        run_behavior_only(
+            trace,
+            &term,
+            options.root_scope,
+            &transformer,
+            contexts,
+            captures
+        );
+        if (trace != NULL && fclose(trace) != 0) {
+            fail("could not close grammatical behavior trace");
+        }
+        for (int role = 0; role < ACTION_CONTEXT_COUNT; role++) {
+            free_frontiers(&captures[role]);
+            free_context(&contexts[role]);
+        }
+        free_grammar_term(&term);
+        free_tokenizer(&tokenizer);
+        free_transformer(&transformer);
+        return EXIT_SUCCESS;
     }
 
     int boundary_index = 0;

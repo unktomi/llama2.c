@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "description": "Label-free future-company actions applied identically to all four corners of each grammatical interaction square. Complete-sentence suffixes compose by concatenation; the duplicate identity measures execution reproducibility rather than adding an observation.",
+  "identity": {
+    "name": "epsilon",
+    "text": ""
+  },
+  "repeat_controls": [
+    {
+      "name": "epsilon_repeat",
+      "text": "",
+      "repeats": "epsilon"
+    }
+  ],
+  "composition_depth": 2,
+  "primitives": [
+    {
+      "name": "plural_pronoun",
+      "family": "number_sensitive",
+      "text": " They were happy.",
+      "compose": true
+    },
+    {
+      "name": "singular_pronoun",
+      "family": "number_sensitive",
+      "text": " It was happy.",
+      "compose": true
+    },
+    {
+      "name": "neutral_witness",
+      "family": "number_neutral",
+      "text": " Everyone watched quietly.",
+      "compose": true
+    },
+    {
+      "name": "causal_clause",
+      "family": "clause_extension",
+      "text": " Because it was late, everyone left.",
+      "compose": true
+    },
+    {
+      "name": "plural_attachment",
+      "family": "attachment",
+      "text": " Near them, the teacher smiled.",
+      "compose": false
+    },
+    {
+      "name": "singular_attachment",
+      "family": "attachment",
+      "text": " Near it, the teacher smiled.",
+      "compose": false
+    },
+    {
+      "name": "dog_np",
+      "family": "lexical_np",
+      "text": " The dog watched.",
+      "compose": false
+    },
+    {
+      "name": "child_np",
+      "family": "lexical_np",
+      "text": " The child watched.",
+      "compose": false
+    },
+    {
+      "name": "park_modifier",
+      "family": "modifier",
+      "text": " In the park, everyone waited.",
+      "compose": false
+    }
+  ]
+}
