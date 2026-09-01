@@ -147,16 +147,19 @@ per-token and per-layer observations through the Stories260K model's full
 probe is a measurement tool around the numerical reference path, not the
 Atkey evaluator itself.
 
-`semantic_fixed_points.c` traces a two-edit grammatical square through every
-reference-layer boundary. It keeps finite four-corner coupling separate from
-an analytic two-direction JVP through RMSNorm, attention (including tangent
-K/V caches and softmax), and SwiGLU. The resulting JSONL distinguishes finite
-`secant_transition` records from actual `tangent_transition` records; neither
-is used as a completion reward. Each boundary interaction is also composed
-through the remaining frozen layers, final RMSNorm, and the complete learned
-unembedding. An optional row-major float32 matrix retains every vocabulary
-coordinate instead of reducing them to a scalar. See
-[doc/semantic-fixed-points.md](doc/semantic-fixed-points.md).
+`cps_fixed_points.c` factors attention and SwiGLU into typed numerical maps,
+starts with identity on the complete final hidden frontier, and constructs
+every earlier observation solely by `pullback(F,k) = k . F`. A four-context
+constructor square then reveals the first operation at which two edits become
+jointly visible to the untouched suffix. It uses neither a linguistic parse,
+terminal logits, nor a scalar reward. See
+[doc/cps-fixed-points.md](doc/cps-fixed-points.md).
+
+The preceding endpoint-observer experiment is retained only as
+`terminal-unembedding-observer-don't-do-this.c`. It selected final token
+coordinates before discovering the transformer's own continuation structure,
+so it is no longer an active build target. Its historical notes are in
+[doc/terminal-unembedding-observer-don't-do-this.md](doc/terminal-unembedding-observer-don't-do-this.md).
 
 ### Quarantined failed approaches
 

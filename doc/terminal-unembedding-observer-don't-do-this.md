@@ -1,6 +1,13 @@
-# Contextual coupling and fixed-mode trace
+# Terminal-unembedding observer (quarantined)
 
-`semantic_fixed_points.c` asks where two concrete grammatical edits first
+This was the endpoint-projection detour. It chose the learned unembedding's
+token coordinates as the continuation family before discovering the
+continuations carried by the transformer term itself. The measurements below
+remain reproducible historical diagnostics, but this program is no longer an
+active build target and is not evidence about the requested fixed
+continuation space.
+
+`terminal-unembedding-observer-don't-do-this.c` asked where two concrete grammatical edits first
 meet in the frozen transformer and how their actual directional derivatives
 are transported afterward. It is a diagnostic around the reference kernels,
 not a completion scorer or an alternative inference policy.
@@ -150,14 +157,15 @@ to the optional `--continuation-matrix` file as native float32 rows. The
 `observation_matrix` trace record declares its dimensions, and each observation
 record identifies its row. Neither norms nor previews are inference rewards.
 
-## Run
+## Historical run (target removed)
 
 The carpet/foot example does not align under the bundled 32k tokenizer, so the
 checked trace uses the one-token noun alternatives `path` and `foot`:
 
 ```bash
-make semanticfixedpoints CC=clang
-./semantic_fixed_points ../llama2.c/test/stories15M.bin tokenizer.bin \
+clang -std=c11 -O3 terminal-unembedding-observer-don't-do-this.c -lm \
+  -o /tmp/terminal-unembedding-observer
+/tmp/terminal-unembedding-observer ../llama2.c/test/stories15M.bin tokenizer.bin \
   "The cat walked across the path." \
   "The cat walked across my path." \
   "The cat walked across the foot." \

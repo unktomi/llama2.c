@@ -1,5 +1,14 @@
 /*
- * Contextual fixed-mode diagnostic for the frozen llama2.c transformer.
+ * QUARANTINED: terminal-unembedding observations are not the continuation
+ * space requested by the experiment.
+ *
+ * This diagnostic prematurely chose the model's final token coordinates as
+ * observations and pulled finite/JVP interactions toward that endpoint.  It
+ * is retained because its kernel instrumentation is reproducible, but it is
+ * not an active build target and must not be presented as discovering the
+ * transformer's higher-scale contexts or fixed continuations.
+ *
+ * Historical contextual fixed-mode diagnostic for frozen llama2.c.
  *
  * Four equal-tokenized texts form a semantic square:
  *
