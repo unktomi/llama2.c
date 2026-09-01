@@ -20,6 +20,7 @@ __pycache__/
 /company_probe
 /company_probe_san
 /cps_grammar_actions
+/cps_grammar_cube
 /semantic_fixed_points
 /exhaustive_scale_probe
 /forced_phrase_probe

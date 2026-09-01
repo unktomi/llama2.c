@@ -138,6 +138,12 @@ cpsgrammaractions: cps_grammar_actions.c cps_fixed_points.c run.c
 		-Wno-sign-compare -Wno-unused-variable -Wno-unused-function \
 		cps_grammar_actions.c -lm -o cps_grammar_actions
 
+.PHONY: cpsgrammarcube
+cpsgrammarcube: cps_grammar_cube.c cps_grammar_actions.c cps_fixed_points.c run.c
+	$(CC) -std=c11 -O3 -Wall -Wextra -Werror \
+		-Wno-sign-compare -Wno-unused-variable -Wno-unused-function \
+		cps_grammar_cube.c -lm -o cps_grammar_cube
+
 GRAMMAR_RELATION_TRACES ?= work_traces/grammar_relations
 GRAMMAR_RELATION_ANALYSIS ?= outputs/cps-grammar-relations-analysis.json
 GRAMMAR_BEHAVIOR_TRACES ?= work_traces/grammar_behaviors
@@ -264,6 +270,7 @@ clean:
 	rm -f cps_affine_spectrum
 	rm -f cps_pullback_spectrum
 	rm -f cps_grammar_actions
+	rm -f cps_grammar_cube
 	rm -f exhaustive_scale_probe
 	rm -f scale_reward_audit
 	rm -f atkey_term.o

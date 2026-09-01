@@ -1950,6 +1950,7 @@ static double run_action_stage_chain(
     return output_defect;
 }
 
+#ifndef CPS_GRAMMAR_ACTIONS_NO_MAIN
 int main(int argc, char **argv) {
     GrammarOptions options = parse_grammar_options(argc, argv);
     Transformer transformer;
@@ -2328,3 +2329,4 @@ int main(int argc, char **argv) {
     free_transformer(&transformer);
     return EXIT_SUCCESS;
 }
+#endif
