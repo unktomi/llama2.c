@@ -132,6 +132,12 @@ cpspullbackspectrum: cps_pullback_spectrum.c cps_affine_spectrum.c cps_fixed_poi
 		cps_pullback_spectrum.c -lm -framework Accelerate \
 		-o cps_pullback_spectrum
 
+.PHONY: cpsgrammaractions
+cpsgrammaractions: cps_grammar_actions.c cps_fixed_points.c run.c
+	$(CC) -std=c11 -O3 -Wall -Wextra -Werror \
+		-Wno-sign-compare -Wno-unused-variable -Wno-unused-function \
+		cps_grammar_actions.c -lm -o cps_grammar_actions
+
 .PHONY: longcontextprofiles
 longcontextprofiles: companyprobe
 	python3 gather_company_traces.py
@@ -233,6 +239,7 @@ clean:
 	rm -f cps_fixed_points
 	rm -f cps_affine_spectrum
 	rm -f cps_pullback_spectrum
+	rm -f cps_grammar_actions
 	rm -f exhaustive_scale_probe
 	rm -f scale_reward_audit
 	rm -f atkey_term.o

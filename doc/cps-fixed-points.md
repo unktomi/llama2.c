@@ -457,3 +457,138 @@ nonconstant eigenspaces.  It establishes the narrower, actionable fact that
 the depth-three coordinate-generated root-reachable space is not closed well
 enough to compile into exact fast inference.  No weight bypass or inference
 speedup is claimed from this run.
+
+## Grammatical-action continuations
+
+`cps_grammar_actions.c` supplies semantic coordinates from grammatical
+constructor actions rather than from arbitrary hidden-state coordinates.  Its
+five command-line terms are ordered as
+
+```text
+x, a(x), b(x), b(a(x)), a(b(x)).
+```
+
+Thus `abx` means “apply `a`, then `b`.”  With pullback
+`U_a(k) = k . a`, the two literal root observations are
+
+```text
+(U_a - I)(U_b - I)k(x)
+    = k(abx) - k(ax) - k(bx) + k(x)
+
+(U_a U_b - U_b U_a)k(x)
+    = k(abx) - k(bax).
+```
+
+The first detects symmetric coupling such as agreement even when the second
+is zero.  The second detects order-sensitive actions.  Both complete vectors
+are retained.  Their L2 norms are emitted only to make the trace browsable;
+they are never added or used as rewards.
+
+### Separating root effect from the interaction boundary
+
+There are three different quantities in each boundary record and they must
+not be conflated.
+
+For boundary states `h_x`, `h_a`, `h_b`, `h_ab`, and `h_ba`, the local mixed
+vector is
+
+```text
+m = h_ab - h_a - h_b + h_x.
+```
+
+It locates where an initially factorized constructor square stops being an
+affine parallelogram in the transformer's typed state.  The local commutator
+is `h_ab - h_ba`.
+
+The literal pulled-back mixed observation applies the exact remaining suffix
+to each real point separately:
+
+```text
+k(h_ab) - k(h_a) - k(h_b) + k(h_x).
+```
+
+Because every `h` is the actual state of its term, this vector is invariant as
+the same transformer computation is reassociated into CPS.  It establishes
+the eventual root-visible joint effect; it cannot by itself locate the first
+join.
+
+The boundary-local root-visible witness instead constructs the torsor point
+
+```text
+h_independent = h_a + h_b - h_x
+```
+
+and retains
+
+```text
+k(h_ab) - k(h_independent).
+```
+
+This is zero up to floating-point cancellation while `h_ab` is still the
+independent torsor completion, then becomes nonzero when a kernel has actually
+coupled the two distinctions in a way visible to the untouched suffix.  It is
+not a sum of completion probabilities and `h_independent` is not treated as a
+hidden-state origin.
+
+Every trace row contains all five vectors: local mixed, local commutator,
+pulled-back mixed, pulled-back commutator, and torsor-visible difference.  The
+root may be the complete final hidden frontier or only its last position.  It
+is always post-final-RMS hidden state, never logits.  The first implementation
+requires equally tokenized variants so every local subtraction is typed; it
+refuses padding.
+
+### Retained system cases
+
+The Stories15M agreement case is:
+
+```bash
+make cpsgrammaractions CC=clang
+./cps_grammar_actions ../llama2.c/test/stories15M.bin tokenizer.bin \
+  "The dog runs." "The dogs runs." "The dog run." \
+  "The dogs run." "The dogs run." --root last \
+  --trace outputs/cps-grammar-agreement-dog-runs-15m.jsonl
+```
+
+The constructor edits commute exactly, so every commutator vector is zero.
+The last-position mixed root effect has L2 norm `13.616778`.  At the first
+three boundaries, the root-visible torsor difference remains at the numerical
+floor:
+
+| Boundary | Local mixed L2 | Torsor-visible L2 |
+|---|---:|---:|
+| token embedding | 5.54e-9 | 9.52e-5 |
+| attention RMS pair | 1.82e-7 | 9.25e-5 |
+| Q/K/V projection | 2.54e-7 | 1.11e-4 |
+| QK contraction | 1.630569 | 3.836970 |
+
+The QK contraction is therefore the first substantial join in this typed
+term, roughly `3.5e4` times the preceding root-visible cancellation level.
+Softmax and value contraction transform the joint relation; later layers act
+on already contextualized states.
+
+The earlier possessive/noun square gives the same layer-0 boundary:
+
+```text
+The cat walked across the path.
+The cat walked across my path.
+The cat walked across the foot.
+The cat walked across my foot.
+```
+
+Its embedding, RMS, QKV, and QK torsor-visible norms are respectively
+`1.04e-4`, `9.62e-5`, `1.21e-4`, and `3.6344`.  The complete last-position
+mixed root norm is `14.473706`.
+
+An independently token-aligned Stories260K agreement square uses `He/They`
+and `is/are`.  Its corresponding torsor-visible values are `1.12e-5`,
+`1.04e-5`, `1.05e-5`, and `4.84e-2`; the same QK boundary is visible despite
+the much smaller five-layer, width-64 model.
+
+All three runs report zero typed-stage output defect: the factored attention
+and FFN chains reproduce their monolithic maps for every supplied constructor
+term.  These finite cases support the operational boundary measurement.  They
+do not yet recover a global grammar, establish an exhaustive continuation
+eigenspace, or compile a faster inference schedule.  The next basis should be
+generated from many such retained action differences and their higher-order
+Möbius compositions, with closure checked on unseen actions before any
+transport rule is accepted.

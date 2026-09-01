@@ -173,6 +173,18 @@ Stories15M run, resumable mapped formats, full equations, and negative
 depth-three closure result are documented in the
 [root-reachable spectrum section](doc/cps-fixed-points.md#root-reachable-pullback-spectrum).
 
+`cps_grammar_actions.c` provides action-derived observations to replace the
+blind coordinate-generated dictionary with explicit grammatical constructor
+actions supplied on the command line.
+For `x`, `a(x)`, `b(x)`, `b(a(x))`, and `a(b(x))`, it retains the complete
+mixed and commutator vectors at every typed attention/FFN boundary and pulls
+each observation through the exact remaining transformer. It also distinguishes
+the literal mixed pullback—which is invariant under CPS reassociation—from the
+boundary-local torsor witness that locates where the learned term first makes
+the two edits jointly visible. No logits or scalar semantic score are used.
+See the
+[grammatical-action section](doc/cps-fixed-points.md#grammatical-action-continuations).
+
 The preceding endpoint-observer experiment is retained only as
 `terminal-unembedding-observer-don't-do-this.c`. It selected final token
 coordinates before discovering the transformer's own continuation structure,
