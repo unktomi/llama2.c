@@ -155,6 +155,14 @@ jointly visible to the untouched suffix. It uses neither a linguistic parse,
 terminal logits, nor a scalar reward. See
 [doc/cps-fixed-points.md](doc/cps-fixed-points.md).
 
+`cps_affine_spectrum.c` retains complete paired root observations for many
+real constructor contexts. Fixed spaces are calculated from torsor
+displacements, while the point pairs carry an explicit implicit-homogeneous
+coordinate for later affine matrix-pencil work. The mapped rows remain
+separate; their SVD is a rank/nullspace diagnostic, not a completion score.
+The checked Stories15M run and binary formats are described in the same
+[CPS fixed-points note](doc/cps-fixed-points.md#torsor-safe-affine-continuation-arrangement).
+
 The preceding endpoint-observer experiment is retained only as
 `terminal-unembedding-observer-don't-do-this.c`. It selected final token
 coordinates before discovering the transformer's own continuation structure,

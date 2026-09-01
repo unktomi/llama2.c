@@ -118,6 +118,13 @@ cpsfixedpoints: cps_fixed_points.c run.c
 		-Wno-sign-compare -Wno-unused-variable -Wno-unused-function \
 		cps_fixed_points.c -lm -o cps_fixed_points
 
+.PHONY: cpsaffinespectrum
+cpsaffinespectrum: cps_affine_spectrum.c cps_fixed_points.c run.c
+	$(CC) -std=c11 -O3 -Wall -Wextra -Werror \
+		-Wno-sign-compare -Wno-unused-variable -Wno-unused-function \
+		cps_affine_spectrum.c -lm -framework Accelerate \
+		-o cps_affine_spectrum
+
 .PHONY: longcontextprofiles
 longcontextprofiles: companyprobe
 	python3 gather_company_traces.py
@@ -217,6 +224,7 @@ clean:
 	rm -f forced_phrase_probe
 	rm -f company_probe
 	rm -f cps_fixed_points
+	rm -f cps_affine_spectrum
 	rm -f exhaustive_scale_probe
 	rm -f scale_reward_audit
 	rm -f atkey_term.o

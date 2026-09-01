@@ -1628,6 +1628,7 @@ static double check_reference_hidden_frontier(
     return defect;
 }
 
+#ifndef CPS_FIXED_POINTS_NO_MAIN
 int main(int argc, char **argv) {
     Options options = parse_options(argc, argv);
     Transformer transformer;
@@ -2042,3 +2043,4 @@ int main(int argc, char **argv) {
     free_transformer(&transformer);
     return EXIT_SUCCESS;
 }
+#endif

@@ -218,3 +218,94 @@ tokens. It does not yet discover a closed basis for the full continuation
 space, infer a global grammar, or perform non-greedy completion. Those require
 sampling more constructor alternatives and retaining the resulting pullback
 incidence/fixed subspaces; the present trace is the smallest nontrivial case.
+
+## Torsor-safe affine continuation arrangement
+
+`cps_affine_spectrum.c` expands the four-context experiment without turning
+hidden-state points into vectors. It reads real prompt text recursively from a
+corpus directory, tokenizes it, and takes distinct fixed-width constructor
+windows. No token category or constituency label is supplied.
+
+For an endomorphic operation `F` and the exact suffix continuation `k`, sample
+`i` retains both root points
+
+```text
+after_i  = k(F(x_i))
+bypass_i = k(x_i).
+```
+
+The mapped pair file declares an implicit homogeneous coordinate. The program
+never pseudoinverts either matrix of points. Its fixed calculation uses only
+the torsor displacement
+
+```text
+d_i = after_i - bypass_i.
+```
+
+Each row represents one contextual fixed hyperplane:
+
+```text
+E_i = { c | d_i c = 0 }.
+```
+
+For a family `I` of contexts, the simultaneous fixed covectors are
+
+```text
+E_I = kernel(stack(d_i, i in I)).
+```
+
+The constant affine observation is stored as a separate one-dimensional mode.
+It is not represented by selecting zero in the hidden-state torsor.
+
+The pair file is updated after every completed sample and supports `--resume`.
+Its complete row arrangement is the semantic artifact: contexts are not added
+to produce a reward. The companion basis file contains the complete SVD of the
+stacked displacement matrix for rank/nullspace calculation and numerical
+browsing. Singular ordering uses the model's float32 coordinate metric; it is
+not an inference score or a replacement for the individual contextual rows.
+
+Both binary files are native-endian and self-describing. `CPSAFF1` contains
+its header followed by one row per context:
+
+```text
+[after_0 ... after_(r-1), bypass_0 ... bypass_(r-1)].
+```
+
+Its header records `samples_written`, so an interrupted deterministic corpus
+scan can continue with `--resume`. `CPSBAS2` contains its header, every
+singular value, and the complete `r * r` right-singular basis in row-major
+order. The header separately records exact displacement nullity and the
+one-dimensional affine constant.
+
+On macOS this target uses Accelerate LAPACK:
+
+```bash
+make cpsaffinespectrum CC=clang
+./cps_affine_spectrum ../llama2.c/test/stories15M.bin tokenizer.bin \
+  --corpus-dir ../llama2.c/work_traces/long_context_32 \
+  --positions 3 --samples 928 --layer 0 --operation attention \
+  --matrix outputs/cps-affine-l0-attention-p3-s928.bin \
+  --basis outputs/cps-affine-l0-attention-p3-s928-basis.bin \
+  --trace outputs/cps-affine-l0-attention-p3-s928.jsonl
+```
+
+This run uses a root frontier of `3 * 288 = 864` coordinates. All 928 decoded
+windows are distinct and come from retained TinyStories prompts. The
+displacement matrix has numerical rank 864:
+
+```text
+largest singular value:       3129.1079
+smallest singular value:         1.2354311
+float32 rank tolerance:           0.3461614
+global covector nullity:          0
+affine constant dimension:        1
+```
+
+Therefore no nonconstant affine combination of the 864 exact suffix-coordinate
+continuations is fixed by layer-0 attention across every sampled context. Only
+the affine constant is globally fixed. This does **not** collapse the
+contextual result: every nonzero individual displacement row has an
+863-dimensional covector kernel. Rather, those hyperplanes vary with context
+enough that their global intersection is trivial. The next composition must
+retain this family of contextual subspaces instead of replacing it with that
+single intersection.
