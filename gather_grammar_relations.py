@@ -78,18 +78,29 @@ def render_terms(
     return x, ax, bx, abx, abx
 
 
-def trace_complete(path: Path) -> bool:
+def trace_complete(path: Path, pullback_depth: int) -> bool:
     if not path.is_file():
         return False
+    meta: dict[str, Any] | None = None
     last_row: dict[str, Any] | None = None
     try:
         with path.open(encoding="utf-8") as source:
             for line in source:
                 if line.strip():
-                    last_row = json.loads(line)
+                    row = json.loads(line)
+                    if meta is None:
+                        meta = row
+                    last_row = row
     except (OSError, json.JSONDecodeError):
         return False
-    return last_row is not None and last_row.get("kind") == "grammatical_action_check"
+    return (
+        meta is not None
+        and meta.get("kind") == "grammatical_action_meta"
+        and meta.get("schema_version") == 5
+        and meta.get("block_pullback_depth") == pullback_depth
+        and last_row is not None
+        and last_row.get("kind") == "grammatical_action_check"
+    )
 
 
 def expand_cases(manifest: dict[str, Any], phase: str) -> list[ActionCase]:
@@ -126,10 +137,11 @@ def run_case(
     model: Path,
     tokenizer: Path,
     output: Path,
+    pullback_depth: int,
     force: bool,
 ) -> RunResult:
     trace = output / case.trace_name
-    if trace_complete(trace) and not force:
+    if trace_complete(trace, pullback_depth) and not force:
         return RunResult(case, trace, "skipped", 0.0, "existing trace")
     command = [
         str(program),
@@ -138,6 +150,8 @@ def run_case(
         *case.terms,
         "--root",
         "last",
+        "--pullback-depth",
+        str(pullback_depth),
         "--trace",
         str(trace),
     ]
@@ -154,7 +168,7 @@ def run_case(
     summary = combined.splitlines()[-1] if combined else "no process output"
     status = (
         "completed"
-        if result.returncode == 0 and trace_complete(trace)
+        if result.returncode == 0 and trace_complete(trace, pullback_depth)
         else "failed"
     )
     return RunResult(case, trace, status, seconds, summary)
@@ -173,6 +187,7 @@ def arguments() -> argparse.Namespace:
         default="all",
     )
     parser.add_argument("--jobs", type=int, default=4)
+    parser.add_argument("--pullback-depth", type=int, default=3)
     parser.add_argument("--force", action="store_true")
     return parser.parse_args()
 
@@ -181,6 +196,8 @@ def main() -> None:
     args = arguments()
     if args.jobs <= 0:
         raise SystemExit("--jobs must be positive")
+    if args.pullback_depth <= 0:
+        raise SystemExit("--pullback-depth must be positive")
     required = (args.manifest, args.program, args.model, args.tokenizer)
     missing = [str(path) for path in required if not path.exists()]
     if missing:
@@ -201,6 +218,7 @@ def main() -> None:
                 args.model,
                 args.tokenizer,
                 args.output,
+                args.pullback_depth,
                 args.force,
             ): case
             for case in cases
@@ -225,6 +243,7 @@ def main() -> None:
         "model": str(args.model.resolve()),
         "tokenizer": str(args.tokenizer.resolve()),
         "phase": args.phase,
+        "pullback_depth": args.pullback_depth,
         "cases": [
             {
                 "trace": result.case.trace_name,

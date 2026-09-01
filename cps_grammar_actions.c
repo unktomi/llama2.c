@@ -40,6 +40,7 @@ typedef enum {
 typedef struct {
     const char *trace_path;
     GrammarRootScope root_scope;
+    int pullback_depth;
 } GrammarOptions;
 
 typedef struct {
@@ -154,17 +155,32 @@ static const char *grammar_root_scope_name(GrammarRootScope scope) {
     return "invalid";
 }
 
+static int parse_positive_integer(const char *text, const char *name) {
+    errno = 0;
+    char *end = NULL;
+    long value = strtol(text, &end, 10);
+    if (errno != 0 || end == text || *end != '\0' || value <= 0 ||
+        value > INT_MAX) {
+        fprintf(stderr, "invalid %s: %s\n", name, text);
+        exit(EXIT_FAILURE);
+    }
+    return (int)value;
+}
+
 static GrammarOptions parse_grammar_options(int argc, char **argv) {
     if (argc < 8) {
         fprintf(
             stderr,
             "usage: %s CHECKPOINT TOKENIZER X AX BX ABX BAX "
-            "[--root all|last] [--trace PATH]\n",
+            "[--root all|last] [--pullback-depth N] [--trace PATH]\n",
             argv[0]
         );
         exit(EXIT_FAILURE);
     }
-    GrammarOptions options = {.root_scope = GRAMMAR_ROOT_LAST};
+    GrammarOptions options = {
+        .root_scope = GRAMMAR_ROOT_LAST,
+        .pullback_depth = 1
+    };
     for (int index = 8; index < argc;) {
         if (strcmp(argv[index], "--root") == 0 && index + 1 < argc) {
             if (strcmp(argv[index + 1], "all") == 0) {
@@ -174,6 +190,13 @@ static GrammarOptions parse_grammar_options(int argc, char **argv) {
             } else {
                 fail("grammatical root scope must be all or last");
             }
+            index += 2;
+        } else if (strcmp(argv[index], "--pullback-depth") == 0 &&
+                   index + 1 < argc) {
+            options.pullback_depth = parse_positive_integer(
+                argv[index + 1],
+                "pullback depth"
+            );
             index += 2;
         } else if (strcmp(argv[index], "--trace") == 0 &&
                    index + 1 < argc) {
@@ -663,6 +686,236 @@ static void write_float_vector(FILE *trace, const float *values, int width) {
         fprintf(trace, "%.9g", values[index]);
     }
     fputc(']', trace);
+}
+
+static double vector_max_abs(const float *values, int width);
+
+static void evaluate_mixed_continuation(
+    const GrammarTerm *term,
+    GrammarRootScope scope,
+    Continuation continuation,
+    const float *const states[ACTION_CONTEXT_COUNT],
+    float *mixed
+) {
+    int root_width = action_root_width(term, scope);
+    float *whole_root = checked_calloc(
+        (size_t)term->frontier_width,
+        sizeof(*whole_root)
+    );
+    float *roots[4];
+    for (int role = ACTION_X; role <= ACTION_ABX; role++) {
+        roots[role] = checked_calloc((size_t)root_width, sizeof(float));
+        apply_root_observation(
+            term,
+            scope,
+            continuation,
+            states[role],
+            whole_root,
+            roots[role]
+        );
+    }
+    affine_mixed(
+        roots[ACTION_X],
+        roots[ACTION_AX],
+        roots[ACTION_BX],
+        roots[ACTION_ABX],
+        mixed,
+        root_width
+    );
+    for (int role = ACTION_X; role <= ACTION_ABX; role++) {
+        free(roots[role]);
+    }
+    free(whole_root);
+}
+
+/*
+ * Retain the grammatical continuation orbit k, U_F k, ..., U_F^p k.
+ * Each generation evaluates D_ab k after another real application of F.
+ * `composed` independently evaluates the first pullback D_ab (k . F) by
+ * constructing make_pullback(F,k); this checks the recursive orbit at depth 1.
+ */
+static double report_block_pullback(
+    FILE *trace,
+    const GrammarTerm *term,
+    GrammarRootScope scope,
+    int layer,
+    const char *block,
+    FrontierMap map,
+    Continuation suffix,
+    const float *const inputs[ACTION_CONTEXT_COUNT],
+    const float *const mapped[ACTION_CONTEXT_COUNT],
+    int pullback_depth
+) {
+    if (map.input_width != map.output_width ||
+        map.output_width != suffix.input_width) {
+        fail("grammatical block pullback is not endomorphic");
+    }
+    int root_width = action_root_width(term, scope);
+    if ((size_t)pullback_depth + 1U > SIZE_MAX / (size_t)root_width) {
+        fail("grammatical pullback generation size overflow");
+    }
+    size_t generation_values =
+        ((size_t)pullback_depth + 1U) * (size_t)root_width;
+    float *generations = checked_calloc(
+        generation_values,
+        sizeof(*generations)
+    );
+    float *composed = checked_calloc((size_t)root_width, sizeof(float));
+    float *composition_defect = checked_calloc(
+        (size_t)root_width,
+        sizeof(float)
+    );
+    const float *current[ACTION_CONTEXT_COUNT];
+    for (int role = 0; role < ACTION_CONTEXT_COUNT; role++) {
+        current[role] = inputs[role];
+    }
+    bool current_owned = false;
+    for (int generation = 0; generation <= pullback_depth; generation++) {
+        evaluate_mixed_continuation(
+            term,
+            scope,
+            suffix,
+            current,
+            generations + (size_t)generation * root_width
+        );
+        if (generation == pullback_depth) break;
+        const float *next[ACTION_CONTEXT_COUNT];
+        bool next_owned = generation != 0;
+        if (generation == 0) {
+            for (int role = 0; role < ACTION_CONTEXT_COUNT; role++) {
+                next[role] = mapped[role];
+            }
+        } else {
+            for (int role = 0; role < ACTION_CONTEXT_COUNT; role++) {
+                float *mapped_state = checked_calloc(
+                    (size_t)map.output_width,
+                    sizeof(float)
+                );
+                map.apply(map.environment, current[role], mapped_state);
+                next[role] = mapped_state;
+            }
+        }
+        if (current_owned) {
+            for (int role = 0; role < ACTION_CONTEXT_COUNT; role++) {
+                free((void *)current[role]);
+            }
+        }
+        for (int role = 0; role < ACTION_CONTEXT_COUNT; role++) {
+            current[role] = next[role];
+        }
+        current_owned = next_owned;
+    }
+    if (current_owned) {
+        for (int role = 0; role < ACTION_CONTEXT_COUNT; role++) {
+            free((void *)current[role]);
+        }
+    }
+    const float *unpulled = generations;
+    const float *pulled = generations + root_width;
+    PullbackEnvironment pullback_environment = {0};
+    Continuation pullback = make_pullback(
+        &pullback_environment,
+        map,
+        suffix
+    );
+    evaluate_mixed_continuation(
+        term,
+        scope,
+        pullback,
+        inputs,
+        composed
+    );
+    subtract_vectors(
+        composed,
+        pulled,
+        composition_defect,
+        root_width
+    );
+    double defect_l2 = vector_l2(composition_defect, root_width);
+    double pulled_l2 = vector_l2(pulled, root_width);
+    double relative_defect = pulled_l2 == 0.0 ? defect_l2 :
+        defect_l2 / pulled_l2;
+    double maximum_absolute_defect = vector_max_abs(
+        composition_defect,
+        root_width
+    );
+    printf(
+        "  block_pullback layer=%d block=%s depth=%d unpulled=%.8g "
+        "pulled=%.8g final=%.8g composition=%.8g relative=%.8g\n",
+        layer,
+        block,
+        pullback_depth,
+        vector_l2(unpulled, root_width),
+        pulled_l2,
+        vector_l2(
+            generations + (size_t)pullback_depth * root_width,
+            root_width
+        ),
+        defect_l2,
+        relative_defect
+    );
+    fflush(stdout);
+    if (trace != NULL) {
+        fprintf(
+            trace,
+            "{\"kind\":\"grammatical_block_pullback\","
+            "\"layer\":%d,\"block\":",
+            layer
+        );
+        fprint_json_string(trace, block);
+        fputs(",\"map\":", trace);
+        fprint_json_string(trace, map.name);
+        fprintf(
+            trace,
+            ",\"operator\":\"U_F(k)=k_after_F\","
+            "\"action\":\"(U_a-I)(U_b-I)\","
+            "\"root_width\":%d,\"recorded_pullback_depth\":%d,"
+            "\"unpulled_mixed_l2\":%.17g,"
+            "\"pulled_mixed_l2\":%.17g,"
+            "\"composition_l2_defect\":%.17g,"
+            "\"composition_relative_defect\":%.17g,"
+            "\"composition_maximum_absolute_defect\":%.17g,"
+            "\"mixed_generation_l2\":[",
+            root_width,
+            pullback_depth,
+            vector_l2(unpulled, root_width),
+            pulled_l2,
+            defect_l2,
+            relative_defect,
+            maximum_absolute_defect
+        );
+        for (int generation = 0; generation <= pullback_depth; generation++) {
+            if (generation != 0) fputc(',', trace);
+            fprintf(
+                trace,
+                "%.17g",
+                vector_l2(
+                    generations + (size_t)generation * root_width,
+                    root_width
+                )
+            );
+        }
+        fputs("],\"mixed_generations\":[", trace);
+        for (int generation = 0; generation <= pullback_depth; generation++) {
+            if (generation != 0) fputc(',', trace);
+            write_float_vector(
+                trace,
+                generations + (size_t)generation * root_width,
+                root_width
+            );
+        }
+        fputs("],\"composed_pullback_mixed\":", trace);
+        write_float_vector(trace, composed, root_width);
+        fputs(",\"composition_defect\":", trace);
+        write_float_vector(trace, composition_defect, root_width);
+        fputs("}\n", trace);
+        fflush(trace);
+    }
+    free_pullback(&pullback_environment);
+    free(composition_defect);
+    free(composed);
+    free(generations);
+    return defect_l2;
 }
 
 static double vector_max_abs(const float *values, int width) {
@@ -1590,7 +1843,7 @@ int main(int argc, char **argv) {
         if (trace == NULL) fail("could not create grammatical action trace");
         fprintf(
             trace,
-            "{\"kind\":\"grammatical_action_meta\",\"schema_version\":3,"
+            "{\"kind\":\"grammatical_action_meta\",\"schema_version\":5,"
             "\"semantics\":\"exact_constructor_pullbacks\","
             "\"mixed_operator\":\"(U_a-I)(U_b-I)k\","
             "\"commutator_operator\":\"(U_aU_b-U_bU_a)k\","
@@ -1603,6 +1856,8 @@ int main(int argc, char **argv) {
             "\"delta_tau\":\"tau_next_minus_tau_previous_as_vector\","
             "\"qk_causal_reconstruction\":true,"
             "\"qk_directed_cross_terms_retained\":true,"
+            "\"block_pullback_pairs_retained\":true,"
+            "\"block_pullback_depth\":%d,"
             "\"stock_forward_hidden_parity\":true,"
             "\"norms_are_diagnostics_not_scores\":true}\n",
             grammar_root_scope_name(options.root_scope),
@@ -1610,7 +1865,8 @@ int main(int argc, char **argv) {
             term.dim,
             term.layers,
             factorized_square ? "true" : "false",
-            constructors_commute ? "true" : "false"
+            constructors_commute ? "true" : "false",
+            options.pullback_depth
         );
         fflush(trace);
         for (int role = 0; role < ACTION_CONTEXT_COUNT; role++) {
@@ -1649,6 +1905,7 @@ int main(int argc, char **argv) {
         action_root_width(&term, options.root_scope)
     );
     double maximum_chain_output_defect = 0.0;
+    double maximum_block_pullback_composition_defect = 0.0;
     for (int layer = 0; layer < term.layers; layer++) {
         const float *layer_inputs[ACTION_CONTEXT_COUNT];
         const float *post_attention[ACTION_CONTEXT_COUNT];
@@ -1680,6 +1937,24 @@ int main(int argc, char **argv) {
             );
         }
 
+        double attention_pullback_defect = report_block_pullback(
+            trace,
+            &term,
+            options.root_scope,
+            layer,
+            "attention",
+            term.attention_maps[layer],
+            term.post_attention_suffixes[layer],
+            layer_inputs,
+            post_attention,
+            options.pullback_depth
+        );
+        if (attention_pullback_defect >
+            maximum_block_pullback_composition_defect) {
+            maximum_block_pullback_composition_defect =
+                attention_pullback_defect;
+        }
+
         FrontierMap attention_stages[7];
         int attention_count = fill_attention_stage_maps(
             &term.runtimes[layer],
@@ -1701,6 +1976,24 @@ int main(int argc, char **argv) {
         );
         if (attention_defect > maximum_chain_output_defect) {
             maximum_chain_output_defect = attention_defect;
+        }
+
+        double ffn_pullback_defect = report_block_pullback(
+            trace,
+            &term,
+            options.root_scope,
+            layer,
+            "ffn",
+            term.ffn_maps[layer],
+            term.layer_suffixes[layer + 1],
+            post_attention,
+            layer_outputs,
+            options.pullback_depth
+        );
+        if (ffn_pullback_defect >
+            maximum_block_pullback_composition_defect) {
+            maximum_block_pullback_composition_defect =
+                ffn_pullback_defect;
         }
 
         FrontierMap ffn_stages[6];
@@ -1801,11 +2094,13 @@ int main(int argc, char **argv) {
         "boundaries=%d maximum_typed_chain_output_l2_defect=%.8g "
         "maximum_llama2c_hidden_l2_defect=%.8g "
         "maximum_llama2c_hidden_relative_defect=%.8g "
+        "maximum_block_pullback_composition_l2_defect=%.8g "
         "telescoping_l2_defect=%.8g telescoping_max_abs=%.8g\n",
         boundary_index,
         maximum_chain_output_defect,
         maximum_reference_hidden_defect,
         maximum_reference_hidden_relative_defect,
+        maximum_block_pullback_composition_defect,
         telescoping_l2_defect,
         telescoping_maximum_absolute_defect
     );
@@ -1817,12 +2112,14 @@ int main(int argc, char **argv) {
             "\"maximum_typed_chain_output_l2_defect\":%.17g,"
             "\"maximum_llama2c_hidden_l2_defect\":%.17g,"
             "\"maximum_llama2c_hidden_relative_defect\":%.17g,"
+            "\"maximum_block_pullback_composition_l2_defect\":%.17g,"
             "\"telescoping_l2_defect\":%.17g,"
             "\"telescoping_maximum_absolute_defect\":%.17g}\n",
             boundary_index,
             maximum_chain_output_defect,
             maximum_reference_hidden_defect,
             maximum_reference_hidden_relative_defect,
+            maximum_block_pullback_composition_defect,
             telescoping_l2_defect,
             telescoping_maximum_absolute_defect
         );

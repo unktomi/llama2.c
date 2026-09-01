@@ -53,11 +53,14 @@ class TraceCase:
     positions: int
     dim: int
     layers: int
+    pullback_depth: int
     action_positions: tuple[int, int]
     context_tokens: dict[str, list[int]]
     vectors: dict[str, np.ndarray]
     qk_layers: list[np.ndarray]
+    block_pullbacks: dict[str, list[np.ndarray]]
     maximum_typed_chain_output_l2_defect: float
+    maximum_block_pullback_composition_l2_defect: float
     maximum_llama2c_hidden_relative_defect: float
     telescoping_maximum_absolute_defect: float
     maximum_qk_score_reconstruction_relative_defect: float
@@ -164,6 +167,7 @@ def read_trace(spec: CaseSpec, trace_directory: Path) -> TraceCase:
                 "grammatical_action_context",
                 "grammatical_action_transition",
                 "grammatical_qk_causal",
+                "grammatical_block_pullback",
                 "grammatical_action_reference_check",
                 "grammatical_action_telescoping_check",
                 "grammatical_action_check",
@@ -177,19 +181,22 @@ def read_trace(spec: CaseSpec, trace_directory: Path) -> TraceCase:
     telescoping = one(
         retained["grammatical_action_telescoping_check"], "telescoping check", path
     )
-    require(meta.get("schema_version") == 3, f"{path}: trace schema is not 3")
+    require(meta.get("schema_version") == 5, f"{path}: trace schema is not 5")
     require(meta.get("semantics") == "exact_constructor_pullbacks", f"{path}: wrong semantics")
     require(meta.get("root_observer") == "post_final_rms_hidden", f"{path}: wrong root")
     require(meta.get("root_scope") == "last", f"{path}: root scope is not last")
     require(meta.get("factorized_token_square") is True, f"{path}: square is not factorized")
     require(meta.get("constructors_commute_on_x") is True, f"{path}: actions do not commute")
     require(meta.get("qk_directed_cross_terms_retained") is True, f"{path}: QK directions absent")
+    require(meta.get("block_pullback_pairs_retained") is True, f"{path}: block pullbacks absent")
     require(meta.get("stock_forward_hidden_parity") is True, f"{path}: stock parity absent")
     require(meta.get("norms_are_diagnostics_not_scores") is True, f"{path}: unsafe norm semantics")
 
     positions = int(meta["positions"])
     dim = int(meta["dim"])
     layers = int(meta["layers"])
+    pullback_depth = int(meta.get("block_pullback_depth", 0))
+    require(pullback_depth > 0, f"{path}: invalid block pullback depth")
     require(check["boundaries"] == len(boundary_indices), f"{path}: boundary count mismatch")
     require(boundary_indices == list(range(len(boundary_indices))), f"{path}: boundary order mismatch")
     require(root_boundary is not None, f"{path}: final_rms boundary absent")
@@ -249,6 +256,78 @@ def read_trace(spec: CaseSpec, trace_directory: Path) -> TraceCase:
     transition_vectors = [as_vector(row, "delta_tau", path) for row in transitions]
     require(all(vector.size == dim for vector in transition_vectors), f"{path}: transition width mismatch")
 
+    block_order = {"attention": 0, "ffn": 1}
+    block_rows = retained["grammatical_block_pullback"]
+    require(len(block_rows) == 2 * layers, f"{path}: block pullback count mismatch")
+    require(
+        all(row.get("block") in block_order for row in block_rows),
+        f"{path}: unknown block pullback",
+    )
+    block_rows.sort(key=lambda row: (row["layer"], block_order[row["block"]]))
+    expected_blocks = [
+        (layer, block)
+        for layer in range(layers)
+        for block in ("attention", "ffn")
+    ]
+    require(
+        [(row["layer"], row["block"]) for row in block_rows] == expected_blocks,
+        f"{path}: block pullback order mismatch",
+    )
+    block_pullbacks: dict[str, list[np.ndarray]] = {}
+    for row in block_rows:
+        block = row["block"]
+        expected_map = "attention_residual" if block == "attention" else "swiglu_residual"
+        require(row.get("map") == expected_map, f"{path}: wrong {block} map")
+        require(row.get("operator") == "U_F(k)=k_after_F", f"{path}: wrong pullback operator")
+        require(row.get("action") == "(U_a-I)(U_b-I)", f"{path}: wrong pullback action")
+        require(row.get("root_width") == dim, f"{path}: block pullback width mismatch")
+        require(
+            row.get("recorded_pullback_depth") == pullback_depth,
+            f"{path}: recorded block pullback depth mismatch",
+        )
+        raw_generations = row.get("mixed_generations")
+        require(isinstance(raw_generations, list), f"{path}: pullback generations absent")
+        require(
+            len(raw_generations) == pullback_depth + 1,
+            f"{path}: pullback generation count mismatch",
+        )
+        generations = [
+            np.asarray(vector, dtype=np.float64) for vector in raw_generations
+        ]
+        require(
+            all(vector.ndim == 1 and vector.size == dim for vector in generations),
+            f"{path}: block pullback generation width mismatch",
+        )
+        require(
+            all(np.all(np.isfinite(vector)) for vector in generations),
+            f"{path}: block pullback generation is not finite",
+        )
+        generation_l2 = np.asarray(row.get("mixed_generation_l2"), dtype=np.float64)
+        require(
+            generation_l2.ndim == 1 and generation_l2.size == pullback_depth + 1,
+            f"{path}: block pullback generation norms mismatch",
+        )
+        require(
+            np.allclose(
+                generation_l2,
+                [np.linalg.norm(vector) for vector in generations],
+                rtol=2e-6,
+                atol=2e-7,
+            ),
+            f"{path}: block pullback generation norms are inconsistent",
+        )
+        composed = as_vector(row, "composed_pullback_mixed", path)
+        defect = as_vector(row, "composition_defect", path)
+        require(
+            all(vector.size == dim for vector in (composed, defect)),
+            f"{path}: block pullback vector width mismatch",
+        )
+        require(
+            np.allclose(composed - generations[1], defect, rtol=2e-6, atol=2e-7),
+            f"{path}: block pullback defect vector is inconsistent",
+        )
+        block_pullbacks[f"layer_{row['layer']}_{block}"] = generations
+
     references = retained["grammatical_action_reference_check"]
     require(len(references) == 5, f"{path}: expected five stock-forward checks")
     qk_reconstruction = max(float(row["score_reconstruction_relative_defect"]) for row in qk_rows)
@@ -265,12 +344,17 @@ def read_trace(spec: CaseSpec, trace_directory: Path) -> TraceCase:
         positions=positions,
         dim=dim,
         layers=layers,
+        pullback_depth=pullback_depth,
         action_positions=action_positions,
         context_tokens=context_tokens,
         vectors=vectors,
         qk_layers=qk_layers,
+        block_pullbacks=block_pullbacks,
         maximum_typed_chain_output_l2_defect=float(
             check["maximum_typed_chain_output_l2_defect"]
+        ),
+        maximum_block_pullback_composition_l2_defect=float(
+            check["maximum_block_pullback_composition_l2_defect"]
         ),
         maximum_llama2c_hidden_relative_defect=float(
             check["maximum_llama2c_hidden_relative_defect"]
@@ -465,6 +549,231 @@ def confirmation(
     return result
 
 
+def closure_fit(
+    training: list[TraceCase],
+    validation: list[TraceCase],
+    block_keys: list[str],
+    dictionary_depth: int,
+    observation_basis: Basis | None = None,
+) -> dict[str, Any]:
+    require(bool(training) and bool(validation), "closure split is empty")
+    require(bool(block_keys), "closure representation has no blocks")
+    require(dictionary_depth > 0, "closure dictionary depth must be positive")
+    require(
+        all(
+            dictionary_depth <= case.pullback_depth
+            for case in training + validation
+        ),
+        "closure dictionary exceeds recorded pullback depth",
+    )
+
+    def matrix(cases: list[TraceCase], generation_offset: int) -> np.ndarray:
+        rows = [
+            np.concatenate([
+                case.block_pullbacks[key][generation]
+                if observation_basis is None
+                else case.block_pullbacks[key][generation] @ observation_basis.rows.T
+                for key in block_keys
+                for generation in range(
+                    generation_offset,
+                    generation_offset + dictionary_depth,
+                )
+            ])
+            for case in cases
+        ]
+        return np.stack(rows)
+
+    fit_input = matrix(training, 0)
+    fit_pulled = matrix(training, 1)
+    validation_input = matrix(validation, 0)
+    validation_pulled = matrix(validation, 1)
+    left, singular_values, right = np.linalg.svd(fit_input, full_matrices=False)
+    require(singular_values.size > 0 and singular_values[0] > 0.0, "closure input has zero rank")
+    tolerance = float(
+        max(fit_input.shape) * np.finfo(np.float32).eps * singular_values[0]
+    )
+    rank = int(np.count_nonzero(singular_values > tolerance))
+    require(rank > 0, "closure input has no retained functions")
+    left = left[:, :rank]
+    right = right[:rank]
+    singular_values = singular_values[:rank]
+
+    pulled_norm = float(np.linalg.norm(fit_pulled))
+    require(pulled_norm > 0.0, "closure pullback table is zero")
+    represented = left @ (left.T @ fit_pulled)
+    representation_relative = float(
+        np.linalg.norm(fit_pulled - represented) / pulled_norm
+    )
+    descended = (fit_pulled @ right.T) @ right
+    descent_relative = float(np.linalg.norm(fit_pulled - descended) / pulled_norm)
+
+    coefficient_map = (left.T @ fit_pulled) / singular_values[:, np.newaxis]
+    validation_prediction = (validation_input @ right.T) @ coefficient_map
+    validation_norm = float(np.linalg.norm(validation_pulled))
+    require(validation_norm > 0.0, "closure validation pullback table is zero")
+    validation_prediction_relative = float(
+        np.linalg.norm(validation_prediction - validation_pulled) / validation_norm
+    )
+    validation_identity_relative = float(
+        np.linalg.norm(validation_input - validation_pulled) / validation_norm
+    )
+    return {
+        "training_rows": fit_input.shape[0],
+        "validation_rows": validation_input.shape[0],
+        "function_columns": fit_input.shape[1],
+        "dictionary_depth": dictionary_depth,
+        "sampled_rank": rank,
+        "sampled_row_rank_fraction": rank / fit_input.shape[0],
+        "sampled_row_rank_saturated": rank == fit_input.shape[0],
+        "observation_basis_rank": (
+            observation_basis.rank
+            if observation_basis is not None
+            else None
+        ),
+        "rank_tolerance": tolerance,
+        "largest_singular_value": float(singular_values[0]),
+        "smallest_retained_singular_value": float(singular_values[-1]),
+        "retained_condition_number": float(
+            singular_values[0] / singular_values[-1]
+        ),
+        "fit_representation_relative": representation_relative,
+        "fit_descent_relative": descent_relative,
+        "validation_prediction_relative": validation_prediction_relative,
+        "validation_identity_relative": validation_identity_relative,
+    }
+
+
+def closure_scope(cases: list[TraceCase], phase: str, role: str) -> list[TraceCase]:
+    selected = [case for case in cases if case.spec.phase == phase]
+    if role != "combined":
+        require(role in {"controller", "attractor"}, f"unknown closure scope {role}")
+        selected = [case for case in selected if case.spec.role == role]
+    return selected
+
+
+def summarize_closure_splits(splits: list[dict[str, Any]]) -> dict[str, Any]:
+    fields = (
+        "fit_representation_relative",
+        "fit_descent_relative",
+        "validation_prediction_relative",
+        "validation_identity_relative",
+    )
+    summary: dict[str, Any] = {
+        "split_count": len(splits),
+        "sampled_rank_range": [
+            min(split["sampled_rank"] for split in splits),
+            max(split["sampled_rank"] for split in splits),
+        ],
+        "row_rank_saturated_splits": sum(
+            split["sampled_row_rank_saturated"] for split in splits
+        ),
+    }
+    for field in fields:
+        values = [split[field] for split in splits]
+        summary[field] = {
+            "minimum": min(values),
+            "mean": float(np.mean(values)),
+            "maximum": max(values),
+        }
+    summary["splits"] = splits
+    return summary
+
+
+def cross_validate_closure(
+    cases: list[TraceCase],
+    role: str,
+    block_keys: list[str],
+    dictionary_depth: int,
+    relation_projected: bool,
+) -> dict[str, Any]:
+    templates = sorted({
+        case.spec.template for case in cases if case.spec.phase == "exploration"
+    })
+    fold_set = {
+        case.spec.fold for case in cases if case.spec.phase == "exploration"
+    }
+    require(None not in fold_set, "exploration family lacks a closure fold")
+    folds = sorted(fold for fold in fold_set if fold is not None)
+    splits: list[dict[str, Any]] = []
+    for held_template in templates:
+        for held_fold in folds:
+            training = [
+                case
+                for case in closure_scope(cases, "exploration", role)
+                if case.spec.template != held_template
+                and case.spec.fold != held_fold
+            ]
+            validation = [
+                case
+                for case in closure_scope(cases, "exploration", role)
+                if case.spec.template == held_template
+                and case.spec.fold == held_fold
+            ]
+            observation_basis = None
+            if relation_projected:
+                observation_basis = fit_basis([
+                    case.vectors["root_pullback_mixed"] for case in training
+                ])
+            metrics = closure_fit(
+                training,
+                validation,
+                block_keys,
+                dictionary_depth,
+                observation_basis,
+            )
+            metrics["held_template"] = held_template
+            metrics["held_fold"] = held_fold
+            splits.append(metrics)
+    require(len(splits) == 9, "closure cross-validation did not make nine splits")
+    return summarize_closure_splits(splits)
+
+
+def confirmation_closure(
+    cases: list[TraceCase],
+    role: str,
+    block_keys: list[str],
+    dictionary_depth: int,
+    relation_projected: bool,
+) -> dict[str, Any]:
+    training = closure_scope(cases, "exploration", role)
+    validation = closure_scope(cases, "confirmation", role)
+    observation_basis = None
+    if relation_projected:
+        observation_basis = fit_basis([
+            case.vectors["root_pullback_mixed"] for case in training
+        ])
+    return closure_fit(
+        training,
+        validation,
+        block_keys,
+        dictionary_depth,
+        observation_basis,
+    )
+
+
+def closure_representations(layers: int) -> dict[str, list[str]]:
+    attention = [f"layer_{layer}_attention" for layer in range(layers)]
+    ffn = [f"layer_{layer}_ffn" for layer in range(layers)]
+    representations: dict[str, list[str]] = {
+        "scale_indexed_blocks": [
+            key
+            for layer in range(layers)
+            for key in (f"layer_{layer}_attention", f"layer_{layer}_ffn")
+        ],
+        "attention_scales": attention,
+        "ffn_scales": ffn,
+    }
+    for layer in range(layers):
+        representations[f"layer_{layer}_blocks"] = [
+            f"layer_{layer}_attention",
+            f"layer_{layer}_ffn",
+        ]
+    for layer in range(layers):
+        representations[f"layer_{layer}_attention"] = [f"layer_{layer}_attention"]
+        representations[f"layer_{layer}_ffn"] = [f"layer_{layer}_ffn"]
+    return representations
+
+
 def git_head() -> str:
     result = subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True, capture_output=True, check=False
@@ -484,12 +793,20 @@ def main() -> None:
 
     trace_types = {(case.positions, case.dim, case.layers) for case in cases}
     require(len(trace_types) == 1, "trace dimensions differ")
+    pullback_depths = {case.pullback_depth for case in cases}
+    require(len(pullback_depths) == 1, "trace pullback depths differ")
+    recorded_pullback_depth = next(iter(pullback_depths))
     action_positions = {case.action_positions for case in cases}
     require(len(action_positions) == 1, "action positions are not matched globally")
     widths = {
         name: {case.vectors[name].size for case in cases} for name in REPRESENTATIONS
     }
     require(all(len(values) == 1 for values in widths.values()), "representation widths differ")
+    expected_block_keys = set(closure_representations(cases[0].layers)["scale_indexed_blocks"])
+    require(
+        all(set(case.block_pullbacks) == expected_block_keys for case in cases),
+        "block pullback keys differ",
+    )
 
     local_pair_maximum = max(
         float(np.max(np.abs(controller.vectors["layer0_directed_qk"] - attractor.vectors["layer0_directed_qk"])))
@@ -522,9 +839,57 @@ def main() -> None:
         vector_of = lambda case, index=layer: case.qk_layers[index]
         qk_by_layer[str(layer)] = cross_validate(cases, exploration_pairs, vector_of)
 
+    closure_fields = closure_representations(layers)
+    closure_cross_validation: dict[str, Any] = {}
+    closure_confirmation: dict[str, Any] = {}
+    for mode, relation_projected in (
+        ("ambient_coordinates", False),
+        ("training_relation_projection", True),
+    ):
+        closure_cross_validation[mode] = {}
+        closure_confirmation[mode] = {}
+        for dictionary_depth in range(1, recorded_pullback_depth + 1):
+            depth_key = f"depth_{dictionary_depth}"
+            closure_cross_validation[mode][depth_key] = {}
+            for name in ("scale_indexed_blocks", "attention_scales", "ffn_scales"):
+                closure_cross_validation[mode][depth_key][name] = {
+                    role: cross_validate_closure(
+                        cases,
+                        role,
+                        closure_fields[name],
+                        dictionary_depth,
+                        relation_projected,
+                    )
+                    for role in ("controller", "attractor", "combined")
+                }
+            closure_confirmation[mode][depth_key] = {
+                name: {
+                    role: confirmation_closure(
+                        cases,
+                        role,
+                        block_keys,
+                        dictionary_depth,
+                        relation_projected,
+                    )
+                    for role in ("controller", "attractor", "combined")
+                }
+                for name, block_keys in closure_fields.items()
+            }
+    pulled_scale_maximum = 0.0
+    for case in cases:
+        pulled = [
+            case.block_pullbacks[key][1]
+            for key in closure_fields["scale_indexed_blocks"]
+        ]
+        reference = pulled[0]
+        pulled_scale_maximum = max(
+            pulled_scale_maximum,
+            *(float(np.max(np.abs(vector - reference))) for vector in pulled[1:]),
+        )
+
     manifest_digest = hashlib.sha256(args.manifest.read_bytes()).hexdigest()
     result: dict[str, Any] = {
-        "schema_version": 1,
+        "schema_version": 2,
         "artifact": "matched_grammatical_continuation_geometry",
         "semantics": {
             "vectors": "torsor differences retained at learned continuation boundaries",
@@ -535,7 +900,7 @@ def main() -> None:
         },
         "provenance": {
             "model": args.model_label,
-            "trace_schema_version": 3,
+            "trace_schema_version": 5,
             "evaluator_commit": args.evaluator_commit or git_head(),
             "manifest_sha256": manifest_digest,
             "trace_count": len(cases),
@@ -545,10 +910,15 @@ def main() -> None:
             "positions": cases[0].positions,
             "hidden_width": cases[0].dim,
             "layers": cases[0].layers,
+            "recorded_pullback_depth": recorded_pullback_depth,
             "action_positions": list(next(iter(action_positions))),
             "maximum_typed_chain_output_l2_defect": max(
                 case.maximum_typed_chain_output_l2_defect for case in cases
             ),
+            "maximum_block_pullback_composition_l2_defect": max(
+                case.maximum_block_pullback_composition_l2_defect for case in cases
+            ),
+            "maximum_pulled_mixed_difference_across_scales": pulled_scale_maximum,
             "maximum_llama2c_hidden_relative_defect": max(
                 case.maximum_llama2c_hidden_relative_defect for case in cases
             ),
@@ -585,8 +955,32 @@ def main() -> None:
             "held_out_pairs": 8,
             "results": confirmation_results,
         },
+        "pullback_closure": {
+            "semantics": {
+                "input": "X[i]=(U_a-I)(U_b-I)k evaluated before each residual block",
+                "pulled": "Y[i]=(U_a-I)(U_b-I)(k after F) for the real residual map F",
+                "recursive_dictionary": "depth d uses [k,U_F k,...,U_F^(d-1)k] and tests its shift through U_F",
+                "product": "attention and FFN pullbacks remain separate scale-indexed factors",
+                "representation_defect": "distance of Y from the sampled function-value span of X",
+                "descent_defect": "failure of kernel(X) to remain in kernel(Y)",
+                "validation_prediction": "relative error of X_validation (X_fit pseudoinverse Y_fit)",
+                "training_relation_projection": "optional root relation basis fitted only on each training split",
+                "scope_of_action": "F is one repeated endomorphic residual block, not a token-extension action",
+                "not_an_inference_reward": True,
+            },
+            "representations": {
+                name: {
+                    "blocks": block_keys,
+                    "ambient_function_columns_per_generation": len(block_keys) * cases[0].dim,
+                }
+                for name, block_keys in closure_fields.items()
+            },
+            "exploration_cross_validation": closure_cross_validation,
+            "confirmation": closure_confirmation,
+        },
         "scope": [
             "finite evidence for continuation geometry, not a recovered global grammar",
+            "residual-block closure does not establish or refute closure under grammatical token actions",
             "no residual or norm is used as a completion score",
             "no inference speedup follows from this diagnostic",
         ],
@@ -608,6 +1002,31 @@ def main() -> None:
         f"{local_pairs_exact}/{len(exploration_pairs) + len(confirmation_pairs)} exact, "
         f"max_abs={local_pair_maximum:.9g}"
     )
+    print("pullback closure confirmation:")
+    for mode in ("ambient_coordinates", "training_relation_projection"):
+        print(f"  {mode}:")
+        for dictionary_depth in range(1, recorded_pullback_depth + 1):
+            depth_key = f"depth_{dictionary_depth}"
+            for role in ("controller", "attractor", "combined"):
+                metrics = closure_confirmation[mode][depth_key]["scale_indexed_blocks"][role]
+                print(
+                    f"    depth={dictionary_depth} scale_indexed_blocks "
+                    f"{role:10s} rank={metrics['sampled_rank']:2d} "
+                    f"descent={metrics['fit_descent_relative']:.8g} "
+                    f"heldout={metrics['validation_prediction_relative']:.8g} "
+                    f"identity={metrics['validation_identity_relative']:.8g}"
+                )
+        depth_key = f"depth_{recorded_pullback_depth}"
+        for name in ("attention_scales", "ffn_scales"):
+            for role in ("controller", "attractor", "combined"):
+                metrics = closure_confirmation[mode][depth_key][name][role]
+                print(
+                    f"    depth={recorded_pullback_depth} {name:22s} "
+                    f"{role:10s} rank={metrics['sampled_rank']:2d} "
+                    f"descent={metrics['fit_descent_relative']:.8g} "
+                    f"heldout={metrics['validation_prediction_relative']:.8g} "
+                    f"identity={metrics['validation_identity_relative']:.8g}"
+                )
 
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)

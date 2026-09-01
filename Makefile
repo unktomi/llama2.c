@@ -144,6 +144,7 @@ GRAMMAR_RELATION_ANALYSIS ?= outputs/cps-grammar-relations-analysis.json
 .PHONY: grammarrelations
 grammarrelations: cpsgrammaractions
 	python3 gather_grammar_relations.py \
+		--pullback-depth 3 \
 		--output $(GRAMMAR_RELATION_TRACES)
 	python3 analyze_grammar_relations.py \
 		--traces $(GRAMMAR_RELATION_TRACES) \
