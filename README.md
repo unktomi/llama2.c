@@ -245,11 +245,14 @@ The next aligned cube varies controller number (`C`) and PP-attractor number
 (`A`) independently while retaining singular/plural verb injections at the
 same pre-verb edge. It records the complete 83-coordinate codata coefficients
 and the contrast spectrum `D_C L`, `D_A L`, and `D_C D_A L`. Stories15M has
-mean responses `0.404`, `0.658`, and `0.707` respectively; the mixed term shows
-that attraction is coupled rather than merely an additive extra feature. The
-attractor projection can be dropped without changing either controller-number
-decision in only 28/44 cases. The trained control also has nonzero nuisance
-coefficients, but dropping attractor number preserves both decisions in 44/44.
+mean responses `0.404`, `0.658`, and `0.707` respectively. More decisively,
+every mixed coefficient is resolved above numerical defect, so attraction is
+coupled rather than merely an additive extra feature. The attractor projection
+can be dropped without changing either controller-number decision in only
+28/44 cases. Observer-indexed support makes the distinction explicit:
+Stories15M choice support is `{}` in 27 cases, `{A}` in 7, `{C}` in 1, and
+`{A,C}` in 9. The trained control has raw contrast-codata support `{A,C}` but
+choice support exactly `{C}` in all 44 cases.
 See [the joint-number subsection](doc/cps-fixed-points.md#joint-controller-attractor-number-demand).
 
 The preceding endpoint-observer experiment is retained only as

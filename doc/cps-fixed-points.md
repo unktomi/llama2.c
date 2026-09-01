@@ -1290,6 +1290,21 @@ The distinction requested by the interface algebra remains explicit:
 No epsilon is chosen. Every complete coefficient and every decoded decision
 margin is retained in the output.
 
+There is no observer-independent demand set. The analyzer therefore reports
+three nested interfaces:
+
+```text
+P_contrast-codata >= P_ordering >= P_choice.
+```
+
+`P_contrast-codata` is calculated from the gauge-free contrast
+`q_plural-q_singular`; common movement of both logits is discarded. A feature
+belongs to it whenever any Moebius coefficient containing that feature is
+nonzero. `P_ordering` retains the strict ordering of the constructor family,
+and `P_choice` retains only its selected injection. In this binary family all
+four contrasts are strict, so ordering and choice coincide. They need not
+coincide once more than two constructor alternatives are retained.
+
 For the known-law trained control:
 
 | Coefficient | Minimum | Mean | Maximum |
@@ -1305,6 +1320,14 @@ dropping attractor number preserves the verb constructor for both controller
 numbers in 44/44 cases. On the unseen `by` template, controller response has
 mean `30.654978`, compared with attractor mean `1.864542` and mixed mean
 `0.098305`.
+
+Its observer-indexed support is correspondingly strict:
+
+| Observer | Recovered support | Cases |
+|---|---|---:|
+| contrast codata | `{A,C}` | 44/44 |
+| constructor ordering | `{C}` | 44/44 |
+| selected injection | `{C}` | 44/44 |
 
 Stories15M gives:
 
@@ -1323,12 +1346,33 @@ Its branch decisions make the interface failure concrete:
 | `C` | 34/44 | only controller plural |
 | `AC` | 44/44 | both nouns plural |
 
+Only 13/44 carrier corners select the manifest's singular verb, so Stories15M
+also has a substantial lexical/carrier bias before attraction is isolated.
+The `A` branch identifies malformed attractor demand, while `C` shows that
+controller structure is nevertheless present. The positive mixed term is not
+intrinsically erroneous: in `AC` it reinforces the correct plural constructor.
+Its role is to prove that the unwanted attractor dependence is nonseparable.
+
 Changing attractor number preserves the selected verb in 31/44
 controller-singular strata and 34/44 controller-plural strata; it preserves
 both in only 28/44 cubes. The mean mixed coefficient `0.707283` is larger than
-either mean first-order coefficient, so the result is not adequately
-described as independent additive contamination. Controller demand itself is
+either mean first-order coefficient. The decisive nonadditivity evidence is
+casewise: the smallest absolute mixed coefficient is `0.025945`, versus a
+maximum stock logit-contrast defect of `8.44e-5`. Controller demand itself is
 being changed by attractor number.
+
+The recovered observer-indexed supports are:
+
+| Support | Contrast codata | Ordering | Choice |
+|---|---:|---:|---:|
+| `{A,C}` | 44 | 9 | 9 |
+| `{A}` | 0 | 7 | 7 |
+| `{C}` | 0 | 1 | 1 |
+| `{}` | 0 | 27 | 27 |
+
+Thus attractor number belongs to choice support in `16/44` cases. Controller
+number belongs to it in only `10/44`. The latter exposes under-use of the
+grammatical controller in addition to over-demand of the attractor.
 
 This repeats on the held-out `by` construction. Its eight cases have mean
 controller, attractor, and mixed responses `0.565103`, `1.582944`, and
@@ -1347,8 +1391,12 @@ Git and the Stories experiment is reproduced by:
 make numberdemandcubes CC=clang
 ```
 
-This recovers the complete number-demand support for one verb-constructor
-family. The next closure question is not a matrix action on hidden states. It
-is whether directly measured composite demand agrees with polynomial
-substitution of the recovered component interfaces on unseen lexemes,
-templates, and company.
+This recovers the complete observer-indexed number-demand support for one
+verb-constructor family. The next closure question is not a matrix action on
+hidden states. At the support level, polynomial substitution predicts which
+primitive projections can reach the outer constructor through an inner
+construction. Directly measured composite support must be contained in that
+substitution; unexpected support means a component interface omitted a
+demand. Ordering and selected-injection behavior must be checked separately on
+unseen lexemes, templates, and company. Numeric equality of coefficients would
+additionally require recovering the component maps, not only their support.

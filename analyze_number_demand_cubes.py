@@ -252,6 +252,28 @@ def main() -> None:
             "D_controller_L": l_c - l_x,
             "D_controller_D_attractor_L": l_ac - l_c - l_a + l_x,
         }
+        require(all(value != 0.0 for value in (l_x, l_a, l_c, l_ac)), f"{case.key}: tied constructor ordering")
+
+        choice_changes = {
+            "A": {
+                "controller_singular": (l_x > 0.0) != (l_a > 0.0),
+                "controller_plural": (l_c > 0.0) != (l_ac > 0.0),
+            },
+            "C": {
+                "attractor_singular": (l_x > 0.0) != (l_c > 0.0),
+                "attractor_plural": (l_a > 0.0) != (l_ac > 0.0),
+            },
+        }
+        choice_support = [
+            feature
+            for feature in ("A", "C")
+            if any(choice_changes[feature].values())
+        ]
+        contrast_codata_support = []
+        if demand["D_attractor_L"] != 0.0 or demand["D_controller_D_attractor_L"] != 0.0:
+            contrast_codata_support.append("A")
+        if demand["D_controller_L"] != 0.0 or demand["D_controller_D_attractor_L"] != 0.0:
+            contrast_codata_support.append("C")
 
         branch_values = {
             "x": (l_x, singular, plural),
@@ -311,6 +333,12 @@ def main() -> None:
                     "AC": l_ac,
                 },
                 "number_demand_spectrum": demand,
+                "observer_indexed_demand_support": {
+                    "contrast_codata": contrast_codata_support,
+                    "constructor_ordering": choice_support,
+                    "selected_injection": choice_support,
+                },
+                "choice_changes_along_feature_fibers": choice_changes,
                 "attractor_projection_decision_preserving": {
                     "controller_singular": a_preserves_at_controller_singular,
                     "controller_plural": a_preserves_at_controller_plural,
@@ -355,6 +383,37 @@ def main() -> None:
         )
         for controller_number in ("controller_singular", "controller_plural")
     }
+
+    def support_name(features: list[str]) -> str:
+        return "{" + ",".join(features) + "}"
+
+    def support_counts(
+        rows: list[dict[str, Any]],
+        observer: str,
+    ) -> dict[str, int]:
+        counts: dict[str, int] = defaultdict(int)
+        for record in rows:
+            features = record["observer_indexed_demand_support"][observer]
+            counts[support_name(features)] += 1
+        return dict(sorted(counts.items()))
+
+    observer_indexed_support = {
+        observer: {
+            "all_cases": support_counts(records, observer),
+            "by_phase": {
+                phase: support_counts(
+                    [record for record in records if record["phase"] == phase],
+                    observer,
+                )
+                for phase in ("exploration", "confirmation")
+            },
+        }
+        for observer in (
+            "contrast_codata",
+            "constructor_ordering",
+            "selected_injection",
+        )
+    }
     decision_preservation_by_phase: dict[str, dict[str, int]] = {}
     for phase in ("exploration", "confirmation"):
         summary = {
@@ -377,6 +436,7 @@ def main() -> None:
         "artifact": "preverb_number_projection_injection_demand_cube",
         "semantics": {
             "constructor_contrast": "L=(iota_plural^*-iota_singular^*)q",
+            "common_logit_gauge_removed": True,
             "feature_actions": {
                 "A": "pluralize attractor number",
                 "C": "pluralize grammatical controller number",
@@ -434,6 +494,25 @@ def main() -> None:
             }
             for phase, phase_spectra in spectra_by_phase.items()
         },
+        "observer_indexed_demand_lattices": {
+            "constructor_family": ["singular_verb", "plural_verb"],
+            "gauge_free_observer": "q_plural-q_singular",
+            "contrast_codata": {
+                "criterion": "feature f is droppable only if every Mobius coefficient whose subset contains f is exactly zero",
+                **observer_indexed_support["contrast_codata"],
+            },
+            "constructor_ordering": {
+                "criterion": "feature f is droppable only if the strict constructor order is constant on every f-fiber",
+                "strict_ties": 0,
+                "binary_ordering_equals_selected_injection": True,
+                **observer_indexed_support["constructor_ordering"],
+            },
+            "selected_injection": {
+                "criterion": "feature f is droppable only if argmax is constant on every f-fiber",
+                **observer_indexed_support["selected_injection"],
+            },
+            "inclusion": "P_contrast_codata contains P_ordering contains P_choice",
+        },
         "attractor_projection_decision_preservation": {
             "cases": len(records),
             **decision_preservation,
@@ -445,9 +524,9 @@ def main() -> None:
         },
         "cases": records,
         "scope": {
-            "establishes": "the complete sampled controller/attractor number Mobius support of the singular/plural verb-constructor codata",
+            "establishes": "the complete sampled controller/attractor number Mobius support and per-context contrast-codata, ordering, and choice demand sets for the singular/plural verb family",
             "does_not_yet_establish": "the remaining feature lattice or polynomial substitution closure",
-            "interpretation": "nonzero D_A retains attractor-number demand; nonzero D_C D_A records coupling rather than additive independence",
+            "interpretation": "choice-relevant A is malformed attractor demand; nonzero D_C D_A makes that dependence nonseparable but is not intrinsically erroneous",
         },
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
