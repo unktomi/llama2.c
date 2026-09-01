@@ -76,6 +76,13 @@ runhiddenselect: run_hidden_feedback_select.c llama_company.c llama_company.h at
 		-o run_hidden_feedback_select run_hidden_feedback_select.c \
 		llama_company.c atkey_term_c.c -lm
 
+.PHONY: cpspolynomialcompany
+cpspolynomialcompany: cps_polynomial_company.c llama_company.c llama_company.h atkey_term_c.c atkey_term_c.h run.c
+	$(CC) -std=c11 -O3 -Wall -Wextra -Werror \
+		-Wno-sign-compare -Wno-unused-variable -Wno-unused-function \
+		-o cps_polynomial_company cps_polynomial_company.c \
+		llama_company.c atkey_term_c.c -lm
+
 .PHONY: testcompany
 testcompany: test_llama_company.c llama_company.c llama_company.h atkey_term_c.c atkey_term_c.h run.c
 	$(CC) -std=c11 -O2 -Wall -Wextra -Werror -DATKEY_REFERENCE_TEST_API \
@@ -161,6 +168,9 @@ NUMBER_DEMAND_EVALUATOR_COMMIT ?= $(shell git rev-parse HEAD)
 POST_INJECTION_HOLE_TRACES ?= work_traces/post_injection_holes
 POST_INJECTION_HOLE_ANALYSIS ?= outputs/cps-stories15m-post-injection-hole-polynomial.json
 POST_INJECTION_HOLE_EVALUATOR_COMMIT ?= $(shell git rev-parse HEAD)
+POLYNOMIAL_COMPANY_TRACES ?= work_traces/polynomial_company
+POLYNOMIAL_SUBSTITUTION_ANALYSIS ?= outputs/cps-stories15m-polynomial-substitution.json
+POLYNOMIAL_COMPANY_EVALUATOR_COMMIT ?= $(shell git rev-parse HEAD)
 
 .PHONY: grammarrelations
 grammarrelations: cpsgrammaractions
@@ -227,6 +237,18 @@ postinjectionholes: cpsgrammarcube
 		--number-traces $(NUMBER_DEMAND_TRACES) \
 		--evaluator-commit $(POST_INJECTION_HOLE_EVALUATOR_COMMIT) \
 		--output $(POST_INJECTION_HOLE_ANALYSIS)
+
+.PHONY: polynomialsubstitution
+polynomialsubstitution: cpspolynomialcompany numberdemandcubes postinjectionholes
+	python3 gather_polynomial_company.py \
+		--number-traces $(NUMBER_DEMAND_TRACES) \
+		--output $(POLYNOMIAL_COMPANY_TRACES)
+	python3 analyze_polynomial_company.py \
+		--direct-trace $(POLYNOMIAL_COMPANY_TRACES)/polynomial-company.jsonl \
+		--number-traces $(NUMBER_DEMAND_TRACES) \
+		--hole-traces $(POST_INJECTION_HOLE_TRACES) \
+		--evaluator-commit $(POLYNOMIAL_COMPANY_EVALUATOR_COMMIT) \
+		--output $(POLYNOMIAL_SUBSTITUTION_ANALYSIS)
 
 .PHONY: longcontextprofiles
 longcontextprofiles: companyprobe

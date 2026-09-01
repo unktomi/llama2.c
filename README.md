@@ -264,6 +264,17 @@ control recovers `{C}` in 44/44, while Stories15M yields `{}` in 25, `{A}` in
 Stories cases. A three-injection algebraic oracle independently recovers the
 specified strict inclusion `{A,C} >= {A,C} >= {C}`.
 
+The next stage consumes every one of those 12 verb injections in every one of
+the 44 contexts and observes the same fixed eight-way hole coproduct after it.
+All 528 shape-indexed hole codata demand `{A,C}`; ordering specializes to
+`{A,C}`/`{A}`/`{C}`/`{}` = `467/39/6/16`, and choice specializes to
+`120/64/17/327`. A direct structured `G(H)` company then shares all causal
+prefixes and all verb continuations in 2,456 rows. Each of the 57 learned
+fillers is applied exactly once to that whole family. Independent component
+execution and the one-pass company have zero support, hierarchical-order, or
+selected-pair mismatches across all exploration and confirmation contexts.
+See [the full polynomial-substitution subsection](doc/cps-fixed-points.md#full-shape-indexed-holes-and-polynomial-substitution).
+
 The preceding endpoint-observer experiment is retained only as
 `terminal-unembedding-observer-don't-do-this.c`. It selected final token
 coordinates before discovering the transformer's own continuation structure,

@@ -1479,3 +1479,99 @@ selection among a fixed coproduct. Recovering the exponent `P(d)` requires the
 next stage: consume each injection `d`, then measure the independently typed
 feature demands of its hole. Those per-injection interfaces can finally be
 tested under polynomial substitution.
+
+#### Full shape-indexed holes and polynomial substitution
+
+`gather_post_injection_holes.py` removes the winner-only coverage restriction.
+It pairs the twelve fixed verb injections only to fit the existing three-action
+cube ABI, consumes both members of every pair, and re-indexes the resulting
+fibers back into independent A/C squares. The resulting coverage is
+
+```text
+44 contexts x 12 consumed verb injections = 528 hole observations.
+```
+
+Every hole is observed through the same fixed eight-injection coproduct
+
+```text
+., ,, quietly, late, with, by, the, it.
+```
+
+The 88 verb/context observations duplicated from the earlier number cubes have
+identical demanded supports, four-corner weak orders, and argmax sets. Their
+largest raw-coordinate rerun difference is `2.48e-7`; the typed-chain defect is
+zero and the largest edge Moebius inverse defect is `9.54e-7`.
+
+Across all 528 shape-indexed holes, Stories15M yields:
+
+| Observer | `{A,C}` | `{A}` | `{C}` | `{}` |
+|---|---:|---:|---:|---:|
+| contrast codata | 528 | 0 | 0 | 0 |
+| weak ordering | 467 | 39 | 6 | 16 |
+| selected injection | 120 | 64 | 17 | 327 |
+
+For each of the twelve concrete verb shapes, the union over its 44 sampled
+companies is `{A,C}` at all three observer levels. This does **not** mean every
+active continuation demands both features. It means no A/C coordinate can be
+dropped globally for that verb while preserving all 44 observations. The
+per-context exponents above remain the usable specialization information.
+
+`cps_polynomial_company.c` then executes the recovered container directly. It
+builds one shared causal prefix trie for all four number corners of all 44
+contexts and attaches all twelve verb continuations. The retained value is
+structured:
+
+```text
+G(H) = (outer 12-way codata, d -> 8-way hole codata after d).
+```
+
+It is not flattened into 96 pair scores. Consequently the ordering observer is
+also structured: one outer weak order and one hole weak order for every outer
+shape. Only the choice observer forms selected pairs `(d,e)`, by pairing each
+outer argmax shape with that shape's own hole argmax set.
+
+The direct company has 2,456 shared rows. One call to
+`llama_company_evaluate` applies each of the model's 57 learned fillers exactly
+once to its complete demanded family. The counters report 57 total filler
+calls, maximum one call for any filler, and 15,208,704 scalar weight reads.
+Thus the multiplicity is in the family of continuation rows, not repeated
+applications of a learned filler.
+
+`analyze_polynomial_company.py` independently reconstructs the same `G(H)`
+from the pre-verb number cubes and the 528 post-injection interfaces. Across
+both exploration and confirmation contexts it finds zero mismatches in:
+
+```text
+outer support / order / argmax,
+all shape-indexed hole supports / orders / argmax sets,
+structured composite support / order / selected pairs.
+```
+
+Direct support and the polynomial-substitution support bound agree exactly:
+
+| Observer | Direct support counts | Substitution-bound counts |
+|---|---|---|
+| contrast codata | `{A,C}`: 44 | `{A,C}`: 44 |
+| structured weak ordering | `{A,C}`: 44 | `{A,C}`: 44 |
+| selected composite injection | `{A,C}`: 21, `{A}`: 8, `{C}`: 1, `{}`: 14 | same |
+
+The one-pass and independently arranged floating-point codata have relative L2
+defects `1.33e-6` (outer) and `1.05e-6` (holes), within the independent cube
+evaluator's maximum stock-logit relative defect `2.65e-6`. Their discrete
+observer behavior is exactly equal.
+
+This establishes polynomial substitution for the measured A/C feature lattice
+and fixed D/E constructor families. It does not assert a canonical scalar or
+total order over `(d,e)` pairs, nor closure for unmeasured feature sorts. It is
+nevertheless an executable sharing result: the same structured interface that
+recovers the grammatical demand is also the term evaluated with one
+application of each learned filler.
+
+The compact artifacts are
+`outputs/cps-stories15m-post-injection-hole-polynomial.json` and
+`outputs/cps-stories15m-polynomial-substitution.json`. Raw traces remain
+outside Git. Reproduce both stages with:
+
+```bash
+make polynomialsubstitution CC=clang
+```
