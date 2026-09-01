@@ -152,7 +152,7 @@ GRAMMAR_BEHAVIOR_EVALUATOR_COMMIT ?= $(shell git rev-parse HEAD)
 GRAMMAR_CUBE_TRACES ?= work_traces/grammar_cubes
 GRAMMAR_CUBE_COMPOSITE_TRACES ?= work_traces/grammar_cube_composites
 GRAMMAR_CUBE_ANALYSIS ?= outputs/cps-grammar-cubes-analysis.json
-GRAMMAR_CUBE_EVALUATOR_COMMIT ?= $(shell git rev-parse HEAD)
+GRAMMAR_CUBE_EVALUATOR_COMMIT ?= $(shell git log -1 --format=%H -- cps_grammar_cube.c gather_grammar_cubes.py)
 
 .PHONY: grammarrelations
 grammarrelations: cpsgrammaractions
@@ -173,11 +173,12 @@ grammarbehaviors: cpsgrammaractions
 		--output $(GRAMMAR_BEHAVIOR_ANALYSIS)
 
 .PHONY: grammarcubes
-grammarcubes: cpsgrammarcube
+grammarcubes: cpsgrammarcube grammarcompositecubes
 	python3 gather_grammar_cubes.py \
 		--output $(GRAMMAR_CUBE_TRACES)
 	python3 analyze_grammar_cubes.py \
 		--traces $(GRAMMAR_CUBE_TRACES) \
+		--composite-traces $(GRAMMAR_CUBE_COMPOSITE_TRACES) \
 		--evaluator-commit $(GRAMMAR_CUBE_EVALUATOR_COMMIT) \
 		--output $(GRAMMAR_CUBE_ANALYSIS)
 
