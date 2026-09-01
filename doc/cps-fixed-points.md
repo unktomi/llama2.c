@@ -853,18 +853,85 @@ for a small quotient.  This finite dictionary therefore does **not** exhibit
 the predicted small, stable, pullback-closed continuation algebra.
 
 This is a clean negative result for the operation actually tested: repeatedly
-pulling the suffix through one endomorphic residual block.  It is not yet the
-stronger grammatical-action closure test
+pulling the suffix through one endomorphic residual block.  By itself it is
+not the stronger grammatical-action closure test
 
 ```text
 U_a K_grammar subset K_grammar,
 ```
 
 where `a` extends or transforms a grammatical context.  A residual block and
-a token/context action are not interchangeable.  Testing the stronger claim
-requires retaining the action of real context extensions on the recovered
-scale-indexed zip and increasing the number of independent diagrams enough
-that rank can stabilize below the number of sampled contexts.
+a token/context action are not interchangeable.  The following experiment
+therefore tests one real grammatical action directly on the scale-indexed zip.
+
+#### Direct grammatical role-action quotient
+
+Every matched pair supplies an exact involutive context action `R`: exchange
+the controller diagram with its PP-attractor diagram while keeping the two
+number edits and their token positions fixed.  Thus
+
+```text
+R(controller) = attractor,
+R(attractor) = controller,
+R^2 = I.
+```
+
+Let `Z(x)` be the complete 79-boundary typed-transition zip, of width 22,752.
+On exploration pairs only, an uncentered SVD supplies rank-`r` continuation
+coefficients `P_r`.  The induced action `M_r` is fitted from
+
+```text
+q_r(x)  = Z(x) P_r,
+q_r(Rx) = q_r(x) M_r.
+```
+
+The frozen confirmation tests the same equation on the unseen `by` template
+and eight unseen lexical families.  It also tests `M_r^2=I` and measures how
+much of both the complete zip and the controller--attractor difference the
+quotient discarded.  No rank is selected post hoc; the artifact retains the
+whole prespecified curve.
+
+| Rank | Unseen zip residual | Unseen role-difference residual | Action error | Identity error | Involution error |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 0.98777 | 0.99426 | 0.62129 | 0.62896 | 0.05122 |
+| 3 | 0.96746 | 0.99170 | 0.46002 | 0.46597 | 0.05445 |
+| 8 | 0.94951 | 0.97558 | 0.59441 | 0.64184 | 0.26171 |
+| 16 | 0.92601 | 0.94184 | 0.62609 | 0.81619 | 0.23072 |
+| 32 | 0.90335 | 0.90383 | 0.80771 | 0.91467 | 0.29959 |
+| 72 | 0.87897 | 0.87577 | 1.01490 | 0.92805 | 4.64e-15 |
+
+The low-rank action errors are misleading in isolation.  At rank 3 the
+quotient discards `99.17%` of the unseen role-difference norm, and its action
+prediction improves on identity by only `0.00595`.  At full training rank the
+fitted map is an exact involution, but its unseen action prediction is worse
+than identity.  All nine exploration folds show the same obstruction: their
+32-row tables have rank 32.  At rank 1 the mean held-out role-difference
+residual is `0.99784`; at rank 32 it remains `0.93544`, while action error has
+risen to `0.89975` versus a `0.67368` identity baseline.
+
+To avoid assuming that the relevant grammatical mode is among the largest
+singular directions, the same test also uses the exact action-adapted parity
+decomposition
+
+```text
+Z_even = (Z_controller + Z_attractor) / 2,   R Z_even = +Z_even,
+Z_odd  = (Z_controller - Z_attractor) / 2,   R Z_odd  = -Z_odd.
+```
+
+Both training families have rank 36/36.  Their smallest retained singular
+values are still respectively `0.0383` and `0.0896` of the largest, so there
+is no numerical rank collapse.  Even their complete training spans leave
+confirmation residuals of `0.90397` and `0.90324`.
+
+This direct action result is therefore also negative: the current 44 matched
+diagrams do not reveal a small continuation quotient that simultaneously
+retains the grammatical role distinction and carries the role action to
+unseen contexts.  The earlier 8/8 relative classification of the large zip is
+real, but relative separation is not closure.  The remaining possibilities
+include insufficient contextual coverage, a quotient organized by additional
+actions and higher-order Möbius terms, or a model-derived observation geometry
+not recovered by the present uncentered SVD.  No completion observer or
+inference speedup follows from this result.
 
 Absolute confirmation residuals for the all-transition controller span remain
 between about `0.81` and `0.96`; only their matched relative ordering is being

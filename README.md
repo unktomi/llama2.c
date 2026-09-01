@@ -200,8 +200,10 @@ its unseen-template confirmation are documented under
 The same evaluator now retains three exact residual-block pullback generations.
 Their held-out descent test is negative: the sampled dictionaries saturate all
 available rows and do not yet yield a small pullback-closed quotient.  The
-documentation distinguishes that residual-block result from the still-open
-closure test for genuine grammatical context-extension actions.
+documentation distinguishes that residual-block result from a direct test of
+the controller/attractor role-swap action on the full typed zip.  Its neutral
+and action-adapted rank curves also fail to produce a small quotient that both
+retains the role distinction and generalizes the action.
 
 The preceding endpoint-observer experiment is retained only as
 `terminal-unembedding-observer-don't-do-this.c`. It selected final token
