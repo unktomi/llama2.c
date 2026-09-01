@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Analyze the complete two-feature number demand at the pre-verb edge.
+"""Analyze number demand before and after a fixed verb injection.
 
 For each aligned cube, A changes attractor number, C changes controller number,
 and the singular/plural B alternatives are retained as constructor-coordinate
-observations before B is consumed. The output retains complete codata
-coefficients and the gauge-invariant constructor contrast L=q_plural-q_singular.
-No threshold, probability, sequence fold, or completion reward is introduced.
+observations before B is consumed.  At the next edge the same trace contains
+the hole observation after each B injection has been consumed.  The output
+therefore retains both the pre-injection demand and the per-injection exponent
+P(d) for a separately fixed post-verb constructor family.  No threshold,
+probability, sequence fold, or completion reward is introduced.
 """
 
 from __future__ import annotations
@@ -32,6 +34,7 @@ from gather_number_demand_cubes import (
 ROOT = Path(__file__).resolve().parent
 DEFAULT_OBSERVERS = ROOT / "grammar_observer_tokens.tsv"
 DEFAULT_CONSTRUCTOR_FAMILY = ROOT / "verb_constructor_family.tsv"
+DEFAULT_HOLE_CONSTRUCTOR_FAMILY = ROOT / "post_verb_constructor_family.tsv"
 DEFAULT_RESULT = ROOT / "outputs" / "cps-stories15m-number-demand-analysis.json"
 EDGE_SUBSETS = ("carrier", "A", "B", "AB")
 CORNER_NAMES = ("x", "A", "C", "AC")
@@ -62,6 +65,11 @@ def arguments() -> argparse.Namespace:
         "--constructor-family",
         type=Path,
         default=DEFAULT_CONSTRUCTOR_FAMILY,
+    )
+    parser.add_argument(
+        "--hole-constructor-family",
+        type=Path,
+        default=DEFAULT_HOLE_CONSTRUCTOR_FAMILY,
     )
     parser.add_argument("--output", type=Path, default=DEFAULT_RESULT)
     parser.add_argument("--model-label", default="Stories15M")
@@ -220,8 +228,13 @@ def read_case_trace(
     require(set(edge_rows) == {"without_C", "with_C"}, f"{path}: edge fibers differ")
 
     selected: dict[str, dict[str, Any]] = {}
+    rows_by_fiber_and_position: dict[tuple[str, int], dict[str, Any]] = {}
     maximum_b_prefix_leak = 0.0
     for fiber, candidates in edge_rows.items():
+        for row in candidates:
+            key = (fiber, int(row["token_position"]))
+            require(key not in rows_by_fiber_and_position, f"{path}: duplicate edge {key}")
+            rows_by_fiber_and_position[key] = row
         verb = [
             row
             for row in candidates
@@ -259,6 +272,27 @@ def read_case_trace(
     )
     singular = int(base["row"]["corner_token_ids"][0])
     plural = int(base["row"]["corner_token_ids"][2])
+    post_position = int(base["row"]["token_position"]) + 1
+
+    def post_injection_edge(fiber: str) -> dict[str, Any]:
+        row = rows_by_fiber_and_position.get((fiber, post_position))
+        require(row is not None, f"{path}: no edge after the consumed verb in {fiber}")
+        require(tuple(row["mobius_subsets"]) == EDGE_SUBSETS, f"{path}: post-verb subset order differs")
+        token_ids = tuple(int(token) for token in row["corner_token_ids"])
+        require(len(set(token_ids)) == 1, f"{path}: post-verb hole edge consumes different constructors")
+        coefficients = np.stack(
+            [np.asarray(row["coefficients"][name], dtype=np.float64) for name in EDGE_SUBSETS]
+        )
+        require(coefficients.shape == (4, len(observer_ids)), f"{path}: post-verb edge shape differs")
+        require(np.all(np.isfinite(coefficients)), f"{path}: non-finite post-verb codata")
+        return {
+            "token": token_ids[0],
+            "raw": reconstruct_square(coefficients),
+        }
+
+    post_base = post_injection_edge("without_C")
+    post_c = post_injection_edge("with_C")
+    require(post_base["token"] == post_c["token"], f"{path}: post-verb hole constructor differs across C")
     return {
         "path": path,
         "check": check,
@@ -267,6 +301,10 @@ def read_case_trace(
         "plural": plural,
         "base_raw": base["raw"],
         "c_raw": with_c["raw"],
+        "post_injection_token_position": post_position,
+        "post_injection_next_token": post_base["token"],
+        "post_base_raw": post_base["raw"],
+        "post_c_raw": post_c["raw"],
         "maximum_b_prefix_leak": maximum_b_prefix_leak,
     }
 
@@ -304,12 +342,26 @@ def main() -> None:
     observer_ids, observer_labels = read_observers(args.observers)
     observer_index = {token: index for index, token in enumerate(observer_ids)}
     constructor_ids, constructor_labels = read_observers(args.constructor_family)
+    hole_constructor_ids, hole_constructor_labels = read_observers(
+        args.hole_constructor_family
+    )
     require(len(constructor_ids) >= 3, "multiway constructor family must have at least three injections")
+    require(
+        len(hole_constructor_ids) >= 3,
+        "post-injection hole family must have at least three injections",
+    )
     require(
         set(constructor_ids) <= set(observer_ids),
         "multiway constructor family is not contained in the retained observer",
     )
+    require(
+        set(hole_constructor_ids) <= set(observer_ids),
+        "post-injection hole family is not contained in the retained observer",
+    )
     constructor_indices = [observer_index[token] for token in constructor_ids]
+    hole_constructor_indices = [
+        observer_index[token] for token in hole_constructor_ids
+    ]
     cases = expand_cases(read_manifest(args.manifest))
     records: list[dict[str, Any]] = []
     decisions: list[dict[str, Any]] = []
@@ -398,12 +450,77 @@ def main() -> None:
             for corner in CORNER_NAMES
         }
 
+        post_base_raw = trace["post_base_raw"]
+        post_c_raw = trace["post_c_raw"]
+        hole_observations: dict[str, dict[str, Any]] = {}
+        for injection_name, injection_token, lower, upper in (
+            ("singular", singular, 0, 1),
+            ("plural", plural, 2, 3),
+        ):
+            hole_corners = np.stack(
+                (
+                    post_base_raw[lower],
+                    post_base_raw[upper],
+                    post_c_raw[lower],
+                    post_c_raw[upper],
+                )
+            )[:, hole_constructor_indices]
+            hole = multiway_observation(hole_corners)
+            hole["injection"] = {
+                "token": injection_token,
+                "text": observer_labels[injection_token],
+            }
+            hole["argmax_constructors"] = {
+                corner: [
+                    {
+                        "token": hole_constructor_ids[index],
+                        "text": hole_constructor_labels[hole_constructor_ids[index]],
+                    }
+                    for index in hole["argmax_indices"][corner]
+                ]
+                for corner in CORNER_NAMES
+            }
+            hole_observations[injection_name] = hole
+
         branch_values = {
             "x": (l_x, singular, plural),
             "A": (l_a, singular, plural),
             "C": (l_c, plural, singular),
             "AC": (l_ac, plural, singular),
         }
+        outer_binary_choice = {
+            corner: plural if value > 0.0 else singular
+            for corner, (value, _expected, _alternative) in branch_values.items()
+        }
+        hole_name_by_token = {singular: "singular", plural: "plural"}
+        composed_choice: dict[str, tuple[int, tuple[int, ...]]] = {}
+        for corner in CORNER_NAMES:
+            outer_token = outer_binary_choice[corner]
+            hole = hole_observations[hole_name_by_token[outer_token]]
+            inner_indices = tuple(hole["argmax_indices"][corner])
+            composed_choice[corner] = (
+                outer_token,
+                tuple(hole_constructor_ids[index] for index in inner_indices),
+            )
+        direct_composite_support = essential_feature_support(composed_choice)
+        reachable_injections = set(outer_binary_choice.values())
+        substituted_support = set(choice_support)
+        for injection_token in reachable_injections:
+            substituted_support.update(
+                hole_observations[
+                    hole_name_by_token[injection_token]
+                ]["supports"]["selected_injection"]
+            )
+        substituted_support_list = [
+            feature for feature in ("A", "C") if feature in substituted_support
+        ]
+        unexpected_composite_support = sorted(
+            set(direct_composite_support) - substituted_support
+        )
+        require(
+            not unexpected_composite_support,
+            f"{case.key}: measured composite choice exceeds substituted support",
+        )
         branch_choices: dict[str, str] = {}
         case_decisions: list[dict[str, Any]] = []
         for branch, (value, expected, alternative) in branch_values.items():
@@ -445,6 +562,11 @@ def main() -> None:
                     "verb": [case.verb_singular, case.verb_plural],
                 },
                 "preverb_token_position": trace["token_position"],
+                "post_injection_token_position": trace["post_injection_token_position"],
+                "post_injection_next_token": {
+                    "token": trace["post_injection_next_token"],
+                    "text": observer_labels[trace["post_injection_next_token"]],
+                },
                 "constructor_coordinates": {
                     "singular": {"token": singular, "text": observer_labels[singular]},
                     "plural": {"token": plural, "text": observer_labels[plural]},
@@ -462,6 +584,32 @@ def main() -> None:
                     "selected_injection": choice_support,
                 },
                 "fixed_multiway_constructor_observation": multiway,
+                "post_injection_hole_observations": hole_observations,
+                "choice_polynomial_substitution": {
+                    "outer_family": "case singular/plural verb injections",
+                    "outer_choices": {
+                        corner: {
+                            "token": outer_binary_choice[corner],
+                            "text": observer_labels[outer_binary_choice[corner]],
+                        }
+                        for corner in CORNER_NAMES
+                    },
+                    "composed_choices": {
+                        corner: {
+                            "outer_token": signature[0],
+                            "outer_text": observer_labels[signature[0]],
+                            "hole_argmax_tokens": list(signature[1]),
+                            "hole_argmax_text": [
+                                hole_constructor_labels[token]
+                                for token in signature[1]
+                            ],
+                        }
+                        for corner, signature in composed_choice.items()
+                    },
+                    "direct_composite_support": direct_composite_support,
+                    "substituted_support_upper_bound": substituted_support_list,
+                    "unexpected_support": unexpected_composite_support,
+                },
                 "choice_changes_along_feature_fibers": choice_changes,
                 "attractor_projection_decision_preserving": {
                     "controller_singular": a_preserves_at_controller_singular,
@@ -577,6 +725,93 @@ def main() -> None:
         != record["fixed_multiway_constructor_observation"]["supports"]["selected_injection"]
         for record in records
     )
+
+    hole_entries: list[dict[str, Any]] = []
+    for record in records:
+        for injection_name, observation in record[
+            "post_injection_hole_observations"
+        ].items():
+            hole_entries.append(
+                {
+                    "case": record["case"],
+                    "phase": record["phase"],
+                    "injection_name": injection_name,
+                    "injection": observation["injection"],
+                    "supports": observation["supports"],
+                }
+            )
+
+    def hole_support_counts(
+        entries: list[dict[str, Any]],
+        observer: str,
+    ) -> dict[str, int]:
+        counts: dict[str, int] = defaultdict(int)
+        for entry in entries:
+            counts[support_name(entry["supports"][observer])] += 1
+        return dict(sorted(counts.items()))
+
+    hole_support = {
+        observer: {
+            "all_observed_injections": hole_support_counts(hole_entries, observer),
+            "by_phase": {
+                phase: hole_support_counts(
+                    [entry for entry in hole_entries if entry["phase"] == phase],
+                    observer,
+                )
+                for phase in ("exploration", "confirmation")
+            },
+        }
+        for observer in (
+            "contrast_codata",
+            "constructor_ordering",
+            "selected_injection",
+        )
+    }
+    hole_entries_by_token: dict[int, list[dict[str, Any]]] = defaultdict(list)
+    for entry in hole_entries:
+        hole_entries_by_token[int(entry["injection"]["token"])].append(entry)
+    hole_polynomial_summands = []
+    for token, entries in sorted(hole_entries_by_token.items()):
+        global_support = {
+            observer: [
+                feature
+                for feature in ("A", "C")
+                if any(
+                    feature in entry["supports"][observer]
+                    for entry in entries
+                )
+            ]
+            for observer in (
+                "contrast_codata",
+                "constructor_ordering",
+                "selected_injection",
+            )
+        }
+        hole_polynomial_summands.append(
+            {
+                "injection_token": token,
+                "injection_text": entries[0]["injection"]["text"],
+                "observations": len(entries),
+                "global_sampled_exponents": global_support,
+                "support_counts": {
+                    observer: hole_support_counts(entries, observer)
+                    for observer in global_support
+                },
+            }
+        )
+
+    substitution_direct_counts: dict[str, int] = defaultdict(int)
+    substitution_bound_counts: dict[str, int] = defaultdict(int)
+    substitution_strict_count = 0
+    for record in records:
+        substitution = record["choice_polynomial_substitution"]
+        direct = substitution["direct_composite_support"]
+        bound = substitution["substituted_support_upper_bound"]
+        substitution_direct_counts[support_name(direct)] += 1
+        substitution_bound_counts[support_name(bound)] += 1
+        if direct != bound:
+            substitution_strict_count += 1
+
     decision_preservation_by_phase: dict[str, dict[str, int]] = {}
     for phase in ("exploration", "confirmation"):
         summary = {
@@ -595,10 +830,13 @@ def main() -> None:
         )
         decision_preservation_by_phase[phase] = summary
     result = {
-        "schema_version": 1,
-        "artifact": "preverb_number_projection_injection_demand_cube",
+        "schema_version": 2,
+        "artifact": "number_projection_injection_polynomial_cells",
         "semantics": {
             "constructor_contrast": "L=(iota_plural^*-iota_singular^*)q",
+            "post_injection_hole": "q is observed at the next edge after each verb injection d is consumed",
+            "polynomial_interface": "P(X)=coproduct_d X^{P(d)} with observer-indexed exponents",
+            "choice_substitution": "support of (outer winner, selected hole winner) must be contained in the union of component choice supports",
             "common_logit_gauge_removed": True,
             "feature_actions": {
                 "A": "pluralize attractor number",
@@ -620,6 +858,9 @@ def main() -> None:
             "observers_sha256": hashlib.sha256(args.observers.read_bytes()).hexdigest(),
             "constructor_family_sha256": hashlib.sha256(
                 args.constructor_family.read_bytes()
+            ).hexdigest(),
+            "hole_constructor_family_sha256": hashlib.sha256(
+                args.hole_constructor_family.read_bytes()
             ).hexdigest(),
             "trace_count": len(records),
         },
@@ -702,6 +943,36 @@ def main() -> None:
             "cases_with_strict_ordering_choice_support_inclusion": multiway_strict_inclusions,
             "strict_inclusion_oracle": strict_inclusion_oracle(),
         },
+        "per_injection_hole_interfaces": {
+            "measurement_boundary": "the token edge immediately after the verb injection has been consumed",
+            "candidate_policy": "one fixed post-verb coproduct is used for every injection and feature corner",
+            "constructors": [
+                {"token": token, "text": hole_constructor_labels[token]}
+                for token in hole_constructor_ids
+            ],
+            "observed_injection_occurrences": len(hole_entries),
+            "distinct_injections": len(hole_polynomial_summands),
+            "observer_indexed_support": hole_support,
+            "polynomial_summands": hole_polynomial_summands,
+            "interpretation": "global sampled exponents are unions across held-out company for each concrete verb injection; per-case exponents remain in cases",
+        },
+        "choice_polynomial_substitution": {
+            "checked_cases": len(records),
+            "outer_family": "the case-specific singular/plural verb pair because both injections were actually consumed in every cube",
+            "hole_family": "the fixed post-verb constructor coproduct",
+            "direct_composite_support_counts": dict(
+                sorted(substitution_direct_counts.items())
+            ),
+            "substituted_support_upper_bound_counts": dict(
+                sorted(substitution_bound_counts.items())
+            ),
+            "strict_containments": substitution_strict_count,
+            "unexpected_support_cases": sum(
+                bool(record["choice_polynomial_substitution"]["unexpected_support"])
+                for record in records
+            ),
+            "scope": "support-level selected-injection substitution only; contrast-codata and complete-order component maps have not yet been composed",
+        },
         "attractor_projection_decision_preservation": {
             "cases": len(records),
             **decision_preservation,
@@ -713,8 +984,8 @@ def main() -> None:
         },
         "cases": records,
         "scope": {
-            "establishes": "the complete sampled controller/attractor number Mobius support and per-context contrast-codata, ordering, and choice demand sets for the singular/plural verb family",
-            "does_not_yet_establish": "the remaining feature lattice or polynomial substitution closure",
+            "establishes": "pre-injection demand, per-consumed-verb post-injection exponents P(d), and support-level choice substitution on the sampled two-feature cells",
+            "does_not_yet_establish": "the remaining typed feature lattice, numeric component maps, or contrast-codata and ordering substitution",
             "interpretation": "choice-relevant A is malformed attractor demand; nonzero D_C D_A makes that dependence nonseparable but is not intrinsically erroneous",
         },
     }
@@ -746,6 +1017,21 @@ def main() -> None:
     )
     for observer, summary in multiway_result["observer_indexed_support"].items():
         print(f"    {observer:22s} {summary['all_cases']}")
+    hole_result = result["per_injection_hole_interfaces"]
+    print(
+        f"  post-injection holes={hole_result['observed_injection_occurrences']} "
+        f"distinct_verbs={hole_result['distinct_injections']} "
+        f"constructors={len(hole_constructor_ids)}"
+    )
+    for observer, summary in hole_result["observer_indexed_support"].items():
+        print(f"    {observer:22s} {summary['all_observed_injections']}")
+    substitution = result["choice_polynomial_substitution"]
+    print(
+        "  choice substitution "
+        f"unexpected={substitution['unexpected_support_cases']} "
+        f"strict={substitution['strict_containments']}/{len(records)} "
+        f"direct={substitution['direct_composite_support_counts']}"
+    )
 
 
 if __name__ == "__main__":
