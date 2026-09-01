@@ -1,0 +1,2939 @@
+{
+  "schema_version": 1,
+  "artifact": "direct_polynomial_company_substitution",
+  "semantics": {
+    "container": "G(H) retains q_D and the family d -> q_E(d)",
+    "codata_observer": "outer contrasts followed by every shape-indexed hole contrast family",
+    "ordering_observer": "outer weak order plus each outer shape's independent hole weak order",
+    "choice_observer": "outer argmax shapes paired with their own hole argmax sets",
+    "flat_pair_order_invented": false,
+    "probabilities_used": false,
+    "scalar_completion_reward_used": false
+  },
+  "provenance": {
+    "model": "Stories15M",
+    "evaluator_commit": "b880136a234f57ec1b563014f9aaeaaa0fc16308",
+    "analyzer_commit": "b880136a234f57ec1b563014f9aaeaaa0fc16308",
+    "direct_trace_sha256": "7793d10157999ddd2edcb27e2b92d2c8899f9b4c1640b3dac31877b98375889a",
+    "manifest_sha256": "5a2a392c652aa2b56d438404f0a7d523a7b524112a00ff55cc807d97f28743b1",
+    "outer_family_sha256": "55a9048de957acf109afa1c6c838ecdae8f8ad0854ef51ecc092ef6965dd33aa",
+    "hole_family_sha256": "6a92f341176c8fd5c59c30d24c068b764257ce144399409e1662b0a9521af433"
+  },
+  "one_pass_company": {
+    "contexts": 44,
+    "rows": 2456,
+    "learned_fillers": 57,
+    "family_filler_calls": 57,
+    "maximum_calls_per_filler": 1,
+    "family_scalar_reads": 15208704,
+    "outer_observations": 176,
+    "shape_indexed_hole_observations": 2112
+  },
+  "validation": {
+    "behavioral_mismatches": {
+      "outer_support": 0,
+      "outer_ordering": 0,
+      "outer_argmax": 0,
+      "hole_support": 0,
+      "hole_ordering": 0,
+      "hole_argmax": 0,
+      "structured_support": 0,
+      "structured_ordering": 0,
+      "structured_argmax": 0
+    },
+    "behavioral_mismatches_by_phase": {
+      "confirmation": {
+        "outer_support": 0,
+        "outer_ordering": 0,
+        "outer_argmax": 0,
+        "hole_support": 0,
+        "hole_ordering": 0,
+        "hole_argmax": 0,
+        "structured_support": 0,
+        "structured_ordering": 0,
+        "structured_argmax": 0
+      },
+      "exploration": {
+        "outer_support": 0,
+        "outer_ordering": 0,
+        "outer_argmax": 0,
+        "hole_support": 0,
+        "hole_ordering": 0,
+        "hole_argmax": 0,
+        "structured_support": 0,
+        "structured_ordering": 0,
+        "structured_argmax": 0
+      }
+    },
+    "maximum_outer_codata_absolute_defect": 2.0969999999564948e-05,
+    "outer_codata_relative_l2_defect": 1.3309320364483288e-06,
+    "maximum_outer_codata_location": {
+      "key": [
+        "exploration/under/friend-student-works",
+        "A"
+      ],
+      "coordinate": 2,
+      "direct": -8.53413963,
+      "independent": -8.53411866
+    },
+    "maximum_hole_codata_absolute_defect": 2.3844999999855787e-05,
+    "hole_codata_relative_l2_defect": 1.047941606438878e-06,
+    "maximum_hole_codata_location": {
+      "key": [
+        "confirmation/by/teacher-woman-works",
+        "AC",
+        1371
+      ],
+      "coordinate": 4,
+      "direct": 3.41387534,
+      "independent": 3.413899185
+    },
+    "maximum_stock_logit_contrast_relative_defect": 2.6520057728118992e-06
+  },
+  "polynomial_substitution": {
+    "contrast_codata": {
+      "direct_support_counts": {
+        "{A,C}": 44
+      },
+      "substituted_support_upper_bound_counts": {
+        "{A,C}": 44
+      },
+      "strict_containments": 0,
+      "unexpected_support_cases": 0
+    },
+    "constructor_ordering": {
+      "direct_support_counts": {
+        "{A,C}": 44
+      },
+      "substituted_support_upper_bound_counts": {
+        "{A,C}": 44
+      },
+      "strict_containments": 0,
+      "unexpected_support_cases": 0
+    },
+    "selected_injection": {
+      "direct_support_counts": {
+        "{A,C}": 21,
+        "{A}": 8,
+        "{C}": 1,
+        "{}": 14
+      },
+      "substituted_support_upper_bound_counts": {
+        "{A,C}": 21,
+        "{A}": 8,
+        "{C}": 1,
+        "{}": 14
+      },
+      "strict_containments": 0,
+      "unexpected_support_cases": 0
+    }
+  },
+  "cases": [
+    {
+      "case": "confirmation/by/boy-ball-moves",
+      "phase": "confirmation",
+      "direct_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "substituted_support_upper_bound": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "selected_composite_injections": {
+        "x": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "A": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "C": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "AC": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29892
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "confirmation/by/boy-brother-helps",
+      "phase": "confirmation",
+      "direct_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": []
+      },
+      "substituted_support_upper_bound": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": []
+      },
+      "selected_composite_injections": {
+        "x": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29892
+            ]
+          }
+        ],
+        "A": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29892
+            ]
+          }
+        ],
+        "C": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29892
+            ]
+          }
+        ],
+        "AC": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29892
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "confirmation/by/car-thing-moves",
+      "phase": "confirmation",
+      "direct_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": []
+      },
+      "substituted_support_upper_bound": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": []
+      },
+      "selected_composite_injections": {
+        "x": [
+          {
+            "outer_token": 4337,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "A": [
+          {
+            "outer_token": 4337,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "C": [
+          {
+            "outer_token": 4337,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "AC": [
+          {
+            "outer_token": 4337,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "confirmation/by/dog-person-lives",
+      "phase": "confirmation",
+      "direct_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "substituted_support_upper_bound": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "selected_composite_injections": {
+        "x": [
+          {
+            "outer_token": 12080,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "A": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "C": [
+          {
+            "outer_token": 664,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "AC": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "confirmation/by/friend-lady-lives",
+      "phase": "confirmation",
+      "direct_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A"
+        ]
+      },
+      "substituted_support_upper_bound": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A"
+        ]
+      },
+      "selected_composite_injections": {
+        "x": [
+          {
+            "outer_token": 664,
+            "hole_argmax_tokens": [
+              29892
+            ]
+          }
+        ],
+        "A": [
+          {
+            "outer_token": 5735,
+            "hole_argmax_tokens": [
+              491
+            ]
+          }
+        ],
+        "C": [
+          {
+            "outer_token": 664,
+            "hole_argmax_tokens": [
+              29892
+            ]
+          }
+        ],
+        "AC": [
+          {
+            "outer_token": 5735,
+            "hole_argmax_tokens": [
+              491
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "confirmation/by/friend-man-works",
+      "phase": "confirmation",
+      "direct_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": []
+      },
+      "substituted_support_upper_bound": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": []
+      },
+      "selected_composite_injections": {
+        "x": [
+          {
+            "outer_token": 664,
+            "hole_argmax_tokens": [
+              29892
+            ]
+          }
+        ],
+        "A": [
+          {
+            "outer_token": 664,
+            "hole_argmax_tokens": [
+              29892
+            ]
+          }
+        ],
+        "C": [
+          {
+            "outer_token": 664,
+            "hole_argmax_tokens": [
+              29892
+            ]
+          }
+        ],
+        "AC": [
+          {
+            "outer_token": 664,
+            "hole_argmax_tokens": [
+              29892
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "confirmation/by/horse-boat-moves",
+      "phase": "confirmation",
+      "direct_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "substituted_support_upper_bound": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "selected_composite_injections": {
+        "x": [
+          {
+            "outer_token": 12080,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "A": [
+          {
+            "outer_token": 12080,
+            "hole_argmax_tokens": [
+              491
+            ]
+          }
+        ],
+        "C": [
+          {
+            "outer_token": 12080,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "AC": [
+          {
+            "outer_token": 5735,
+            "hole_argmax_tokens": [
+              491
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "confirmation/by/teacher-woman-works",
+      "phase": "confirmation",
+      "direct_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A"
+        ]
+      },
+      "substituted_support_upper_bound": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A"
+        ]
+      },
+      "selected_composite_injections": {
+        "x": [
+          {
+            "outer_token": 664,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "A": [
+          {
+            "outer_token": 664,
+            "hole_argmax_tokens": [
+              29892
+            ]
+          }
+        ],
+        "C": [
+          {
+            "outer_token": 664,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "AC": [
+          {
+            "outer_token": 664,
+            "hole_argmax_tokens": [
+              29892
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "exploration/near/animal-flower-lives",
+      "phase": "exploration",
+      "direct_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "substituted_support_upper_bound": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "selected_composite_injections": {
+        "x": [
+          {
+            "outer_token": 12080,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "A": [
+          {
+            "outer_token": 5735,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "C": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "AC": [
+          {
+            "outer_token": 5735,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "exploration/near/bird-dog-runs",
+      "phase": "exploration",
+      "direct_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "substituted_support_upper_bound": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "selected_composite_injections": {
+        "x": [
+          {
+            "outer_token": 12080,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "A": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "C": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "AC": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "exploration/near/boy-girl-works",
+      "phase": "exploration",
+      "direct_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": []
+      },
+      "substituted_support_upper_bound": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": []
+      },
+      "selected_composite_injections": {
+        "x": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "A": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "C": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "AC": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "exploration/near/child-boy-plays",
+      "phase": "exploration",
+      "direct_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": []
+      },
+      "substituted_support_upper_bound": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": []
+      },
+      "selected_composite_injections": {
+        "x": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "A": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "C": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "AC": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "exploration/near/dog-animal-lives",
+      "phase": "exploration",
+      "direct_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": []
+      },
+      "substituted_support_upper_bound": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": []
+      },
+      "selected_composite_injections": {
+        "x": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "A": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "C": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "AC": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "exploration/near/dog-horse-runs",
+      "phase": "exploration",
+      "direct_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "substituted_support_upper_bound": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "selected_composite_injections": {
+        "x": [
+          {
+            "outer_token": 1065,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "A": [
+          {
+            "outer_token": 1065,
+            "hole_argmax_tokens": [
+              491
+            ]
+          }
+        ],
+        "C": [
+          {
+            "outer_token": 1065,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "AC": [
+          {
+            "outer_token": 1065,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "exploration/near/friend-bird-lives",
+      "phase": "exploration",
+      "direct_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A"
+        ]
+      },
+      "substituted_support_upper_bound": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A"
+        ]
+      },
+      "selected_composite_injections": {
+        "x": [
+          {
+            "outer_token": 12080,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "A": [
+          {
+            "outer_token": 5735,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "C": [
+          {
+            "outer_token": 12080,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "AC": [
+          {
+            "outer_token": 5735,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "exploration/near/friend-student-works",
+      "phase": "exploration",
+      "direct_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": []
+      },
+      "substituted_support_upper_bound": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": []
+      },
+      "selected_composite_injections": {
+        "x": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "A": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "C": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "AC": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "exploration/near/girl-child-plays",
+      "phase": "exploration",
+      "direct_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": []
+      },
+      "substituted_support_upper_bound": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": []
+      },
+      "selected_composite_injections": {
+        "x": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "A": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "C": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "AC": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "exploration/near/horse-car-moves",
+      "phase": "exploration",
+      "direct_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "substituted_support_upper_bound": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "selected_composite_injections": {
+        "x": [
+          {
+            "outer_token": 1065,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "A": [
+          {
+            "outer_token": 12080,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "C": [
+          {
+            "outer_token": 1065,
+            "hole_argmax_tokens": [
+              491
+            ]
+          }
+        ],
+        "AC": [
+          {
+            "outer_token": 1065,
+            "hole_argmax_tokens": [
+              491
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "exploration/near/student-teacher-works",
+      "phase": "exploration",
+      "direct_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "substituted_support_upper_bound": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "selected_composite_injections": {
+        "x": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              278
+            ]
+          }
+        ],
+        "A": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "C": [
+          {
+            "outer_token": 664,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "AC": [
+          {
+            "outer_token": 5735,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "exploration/near/teacher-friend-helps",
+      "phase": "exploration",
+      "direct_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "substituted_support_upper_bound": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "selected_composite_injections": {
+        "x": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "A": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "C": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "AC": [
+          {
+            "outer_token": 5735,
+            "hole_argmax_tokens": [
+              491
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "exploration/under/animal-flower-lives",
+      "phase": "exploration",
+      "direct_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "substituted_support_upper_bound": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "selected_composite_injections": {
+        "x": [
+          {
+            "outer_token": 16229,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "A": [
+          {
+            "outer_token": 5735,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "C": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "AC": [
+          {
+            "outer_token": 5735,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "exploration/under/bird-dog-runs",
+      "phase": "exploration",
+      "direct_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": []
+      },
+      "substituted_support_upper_bound": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": []
+      },
+      "selected_composite_injections": {
+        "x": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "A": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "C": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "AC": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "exploration/under/boy-girl-works",
+      "phase": "exploration",
+      "direct_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A"
+        ]
+      },
+      "substituted_support_upper_bound": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A"
+        ]
+      },
+      "selected_composite_injections": {
+        "x": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              411
+            ]
+          }
+        ],
+        "A": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "C": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              411
+            ]
+          }
+        ],
+        "AC": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "exploration/under/child-boy-plays",
+      "phase": "exploration",
+      "direct_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A"
+        ]
+      },
+      "substituted_support_upper_bound": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A"
+        ]
+      },
+      "selected_composite_injections": {
+        "x": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              411
+            ]
+          }
+        ],
+        "A": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "C": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              411
+            ]
+          }
+        ],
+        "AC": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "exploration/under/dog-animal-lives",
+      "phase": "exploration",
+      "direct_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": []
+      },
+      "substituted_support_upper_bound": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": []
+      },
+      "selected_composite_injections": {
+        "x": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "A": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "C": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "AC": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "exploration/under/dog-horse-runs",
+      "phase": "exploration",
+      "direct_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": []
+      },
+      "substituted_support_upper_bound": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": []
+      },
+      "selected_composite_injections": {
+        "x": [
+          {
+            "outer_token": 1065,
+            "hole_argmax_tokens": [
+              491
+            ]
+          }
+        ],
+        "A": [
+          {
+            "outer_token": 1065,
+            "hole_argmax_tokens": [
+              491
+            ]
+          }
+        ],
+        "C": [
+          {
+            "outer_token": 1065,
+            "hole_argmax_tokens": [
+              491
+            ]
+          }
+        ],
+        "AC": [
+          {
+            "outer_token": 1065,
+            "hole_argmax_tokens": [
+              491
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "exploration/under/friend-bird-lives",
+      "phase": "exploration",
+      "direct_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "substituted_support_upper_bound": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "selected_composite_injections": {
+        "x": [
+          {
+            "outer_token": 12080,
+            "hole_argmax_tokens": [
+              411
+            ]
+          }
+        ],
+        "A": [
+          {
+            "outer_token": 5735,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "C": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              278
+            ]
+          }
+        ],
+        "AC": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "exploration/under/friend-student-works",
+      "phase": "exploration",
+      "direct_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "substituted_support_upper_bound": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "selected_composite_injections": {
+        "x": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29892
+            ]
+          }
+        ],
+        "A": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              278
+            ]
+          }
+        ],
+        "C": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "AC": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              278
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "exploration/under/girl-child-plays",
+      "phase": "exploration",
+      "direct_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A"
+        ]
+      },
+      "substituted_support_upper_bound": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A"
+        ]
+      },
+      "selected_composite_injections": {
+        "x": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              411
+            ]
+          }
+        ],
+        "A": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "C": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              411
+            ]
+          }
+        ],
+        "AC": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "exploration/under/horse-car-moves",
+      "phase": "exploration",
+      "direct_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": []
+      },
+      "substituted_support_upper_bound": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": []
+      },
+      "selected_composite_injections": {
+        "x": [
+          {
+            "outer_token": 1065,
+            "hole_argmax_tokens": [
+              491
+            ]
+          }
+        ],
+        "A": [
+          {
+            "outer_token": 1065,
+            "hole_argmax_tokens": [
+              491
+            ]
+          }
+        ],
+        "C": [
+          {
+            "outer_token": 1065,
+            "hole_argmax_tokens": [
+              491
+            ]
+          }
+        ],
+        "AC": [
+          {
+            "outer_token": 1065,
+            "hole_argmax_tokens": [
+              491
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "exploration/under/student-teacher-works",
+      "phase": "exploration",
+      "direct_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A"
+        ]
+      },
+      "substituted_support_upper_bound": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A"
+        ]
+      },
+      "selected_composite_injections": {
+        "x": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              278
+            ]
+          }
+        ],
+        "A": [
+          {
+            "outer_token": 664,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "C": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              278
+            ]
+          }
+        ],
+        "AC": [
+          {
+            "outer_token": 664,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "exploration/under/teacher-friend-helps",
+      "phase": "exploration",
+      "direct_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "substituted_support_upper_bound": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "selected_composite_injections": {
+        "x": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              278
+            ]
+          }
+        ],
+        "A": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              278
+            ]
+          }
+        ],
+        "C": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "AC": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              278
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "exploration/with/animal-flower-lives",
+      "phase": "exploration",
+      "direct_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "substituted_support_upper_bound": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "selected_composite_injections": {
+        "x": [
+          {
+            "outer_token": 16229,
+            "hole_argmax_tokens": [
+              29892
+            ]
+          }
+        ],
+        "A": [
+          {
+            "outer_token": 5735,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "C": [
+          {
+            "outer_token": 4337,
+            "hole_argmax_tokens": [
+              29892
+            ]
+          }
+        ],
+        "AC": [
+          {
+            "outer_token": 4337,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "exploration/with/bird-dog-runs",
+      "phase": "exploration",
+      "direct_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "substituted_support_upper_bound": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "selected_composite_injections": {
+        "x": [
+          {
+            "outer_token": 1065,
+            "hole_argmax_tokens": [
+              491
+            ]
+          }
+        ],
+        "A": [
+          {
+            "outer_token": 5735,
+            "hole_argmax_tokens": [
+              491
+            ]
+          }
+        ],
+        "C": [
+          {
+            "outer_token": 1065,
+            "hole_argmax_tokens": [
+              491
+            ]
+          }
+        ],
+        "AC": [
+          {
+            "outer_token": 5735,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "exploration/with/boy-girl-works",
+      "phase": "exploration",
+      "direct_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": []
+      },
+      "substituted_support_upper_bound": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": []
+      },
+      "selected_composite_injections": {
+        "x": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              411
+            ]
+          }
+        ],
+        "A": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              411
+            ]
+          }
+        ],
+        "C": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              411
+            ]
+          }
+        ],
+        "AC": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              411
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "exploration/with/child-boy-plays",
+      "phase": "exploration",
+      "direct_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "substituted_support_upper_bound": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "selected_composite_injections": {
+        "x": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              411
+            ]
+          }
+        ],
+        "A": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29892
+            ]
+          }
+        ],
+        "C": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              411
+            ]
+          }
+        ],
+        "AC": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "exploration/with/dog-animal-lives",
+      "phase": "exploration",
+      "direct_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "substituted_support_upper_bound": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "selected_composite_injections": {
+        "x": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "A": [
+          {
+            "outer_token": 1065,
+            "hole_argmax_tokens": [
+              491
+            ]
+          }
+        ],
+        "C": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "AC": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "exploration/with/dog-horse-runs",
+      "phase": "exploration",
+      "direct_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": []
+      },
+      "substituted_support_upper_bound": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": []
+      },
+      "selected_composite_injections": {
+        "x": [
+          {
+            "outer_token": 1065,
+            "hole_argmax_tokens": [
+              491
+            ]
+          }
+        ],
+        "A": [
+          {
+            "outer_token": 1065,
+            "hole_argmax_tokens": [
+              491
+            ]
+          }
+        ],
+        "C": [
+          {
+            "outer_token": 1065,
+            "hole_argmax_tokens": [
+              491
+            ]
+          }
+        ],
+        "AC": [
+          {
+            "outer_token": 1065,
+            "hole_argmax_tokens": [
+              491
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "exploration/with/friend-bird-lives",
+      "phase": "exploration",
+      "direct_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "substituted_support_upper_bound": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "selected_composite_injections": {
+        "x": [
+          {
+            "outer_token": 5735,
+            "hole_argmax_tokens": [
+              29892
+            ]
+          }
+        ],
+        "A": [
+          {
+            "outer_token": 5735,
+            "hole_argmax_tokens": [
+              491
+            ]
+          }
+        ],
+        "C": [
+          {
+            "outer_token": 12080,
+            "hole_argmax_tokens": [
+              411
+            ]
+          }
+        ],
+        "AC": [
+          {
+            "outer_token": 5735,
+            "hole_argmax_tokens": [
+              491
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "exploration/with/friend-student-works",
+      "phase": "exploration",
+      "direct_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "substituted_support_upper_bound": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "selected_composite_injections": {
+        "x": [
+          {
+            "outer_token": 664,
+            "hole_argmax_tokens": [
+              29892
+            ]
+          }
+        ],
+        "A": [
+          {
+            "outer_token": 664,
+            "hole_argmax_tokens": [
+              29892
+            ]
+          }
+        ],
+        "C": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29892
+            ]
+          }
+        ],
+        "AC": [
+          {
+            "outer_token": 664,
+            "hole_argmax_tokens": [
+              29892
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "exploration/with/girl-child-plays",
+      "phase": "exploration",
+      "direct_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "substituted_support_upper_bound": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "selected_composite_injections": {
+        "x": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              411
+            ]
+          }
+        ],
+        "A": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              411
+            ]
+          }
+        ],
+        "C": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              411
+            ]
+          }
+        ],
+        "AC": [
+          {
+            "outer_token": 1708,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "exploration/with/horse-car-moves",
+      "phase": "exploration",
+      "direct_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A"
+        ]
+      },
+      "substituted_support_upper_bound": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A"
+        ]
+      },
+      "selected_composite_injections": {
+        "x": [
+          {
+            "outer_token": 16229,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "A": [
+          {
+            "outer_token": 1065,
+            "hole_argmax_tokens": [
+              491
+            ]
+          }
+        ],
+        "C": [
+          {
+            "outer_token": 16229,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "AC": [
+          {
+            "outer_token": 1065,
+            "hole_argmax_tokens": [
+              491
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "exploration/with/student-teacher-works",
+      "phase": "exploration",
+      "direct_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "C"
+        ]
+      },
+      "substituted_support_upper_bound": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "C"
+        ]
+      },
+      "selected_composite_injections": {
+        "x": [
+          {
+            "outer_token": 664,
+            "hole_argmax_tokens": [
+              29892
+            ]
+          }
+        ],
+        "A": [
+          {
+            "outer_token": 664,
+            "hole_argmax_tokens": [
+              29892
+            ]
+          }
+        ],
+        "C": [
+          {
+            "outer_token": 664,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "AC": [
+          {
+            "outer_token": 664,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "exploration/with/teacher-friend-helps",
+      "phase": "exploration",
+      "direct_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "substituted_support_upper_bound": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "selected_composite_injections": {
+        "x": [
+          {
+            "outer_token": 1371,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "A": [
+          {
+            "outer_token": 664,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "C": [
+          {
+            "outer_token": 664,
+            "hole_argmax_tokens": [
+              29889
+            ]
+          }
+        ],
+        "AC": [
+          {
+            "outer_token": 5735,
+            "hole_argmax_tokens": [
+              491
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "scope": {
+    "establishes": "one-pass structured G(H) equals independent component execution on codata demand, hierarchical weak ordering, and selected composite injections",
+    "does_not_claim": "a canonical flat score or total order over constructor pairs, or closure beyond the measured A/C feature and fixed D/E constructor families"
+  }
+}
