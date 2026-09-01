@@ -100,18 +100,21 @@ def trace_complete(trace: Path, jet: Path | None, terminal_only: bool) -> bool:
                     check = row
     except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError):
         return False
+    typed_boundaries = (
+        int(check.get("typed_boundaries", -1)) if check is not None else -1
+    )
     return (
         meta is not None
         and meta.get("kind") == "grammatical_cube_meta"
         and meta.get("schema_version") == 1
         and check is not None
-        and int(check.get("typed_boundaries", -1)) == 80
+        and typed_boundaries > 0
         and (
             meta.get("local_jets_retained") is False
             if terminal_only
             else meta.get("local_jets_retained") in (None, True)
         )
-        and local_rows == (0 if terminal_only else 160)
+        and local_rows == (0 if terminal_only else 2 * typed_boundaries)
         and terminal_count == 1
         and (
             (jet is None and maximum_binary_end == 0)

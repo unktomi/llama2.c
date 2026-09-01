@@ -79,6 +79,7 @@ class CubeTrace:
     maximum_chain_defect: float
     maximum_local_inverse_defect: float
     terminal_inverse_defect: float
+    typed_boundaries: int
     maximum_hidden_relative_defect: float
     maximum_logit_relative_defect: float
 
@@ -218,6 +219,8 @@ def read_cube_trace(
         require(reference.count == 4 * reference.width, f"{path}: local shape differs")
         local[reference.fiber].append(reference)
         maximum_end = max(maximum_end, reference.offset + 4 * reference.count)
+    typed_boundaries = int(check["typed_boundaries"])
+    require(typed_boundaries > 0, f"{path}: check boundary count is not positive")
     if require_local_jets:
         require(
             meta.get("local_jets_retained") in (None, True),
@@ -226,9 +229,13 @@ def read_cube_trace(
         require(set(local) == {"without_C", "with_C"}, f"{path}: local fibers differ")
         for fiber, rows in local.items():
             rows.sort(key=lambda row: row.boundary_index)
-            require(len(rows) == 80, f"{path}: {fiber} boundary count differs")
             require(
-                [row.boundary_index for row in rows] == list(range(80)),
+                len(rows) == typed_boundaries,
+                f"{path}: {fiber} boundary count differs",
+            )
+            require(
+                [row.boundary_index for row in rows]
+                == list(range(typed_boundaries)),
                 f"{path}: unordered boundaries",
             )
         for left, right in zip(local["without_C"], local["with_C"]):
@@ -241,7 +248,6 @@ def read_cube_trace(
     else:
         require(meta.get("local_jets_retained") is False, f"{path}: expected terminal-only cube")
         require(not local and maximum_end == 0, f"{path}: terminal-only cube has local jets")
-    require(int(check["typed_boundaries"]) == 80, f"{path}: check boundary count differs")
     require(float(check["maximum_typed_chain_output_l2_defect"]) == 0.0, f"{path}: typed chain defect")
     for field in (
         "maximum_local_mobius_inverse_absolute_defect",
@@ -262,6 +268,7 @@ def read_cube_trace(
         maximum_chain_defect=float(check["maximum_typed_chain_output_l2_defect"]),
         maximum_local_inverse_defect=float(check["maximum_local_mobius_inverse_absolute_defect"]),
         terminal_inverse_defect=float(check["terminal_mobius_inverse_absolute_defect"]),
+        typed_boundaries=typed_boundaries,
         maximum_hidden_relative_defect=float(check["maximum_stock_hidden_relative_defect"]),
         maximum_logit_relative_defect=float(check["maximum_stock_logit_contrast_relative_defect"]),
     )
@@ -1643,6 +1650,12 @@ def main() -> None:
         == {1},
         "cube reference tokens differ",
     )
+    boundary_counts = {
+        trace.typed_boundaries
+        for trace in (*traces.values(), *composite_traces.values())
+    }
+    require(len(boundary_counts) == 1, "cube typed-boundary counts differ")
+    typed_boundaries = next(iter(boundary_counts))
 
     tensor = np.empty(
         (len(states), len(extensions), len(SUBSETS), len(observer_ids)),
@@ -1730,7 +1743,7 @@ def main() -> None:
             "composite_extensions": len(composite_extensions),
             "extension_families": sorted({extension.family for extension in extensions}),
             "terminal_observer_width": len(observer_ids),
-            "typed_boundaries": 80,
+            "typed_boundaries": typed_boundaries,
             "maximum_typed_chain_output_l2_defect": max(
                 trace.maximum_chain_defect
                 for trace in (*traces.values(), *composite_traces.values())
