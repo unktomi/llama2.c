@@ -3,6 +3,7 @@
   "artifact": "preverb_number_projection_injection_demand_cube",
   "semantics": {
     "constructor_contrast": "L=(iota_plural^*-iota_singular^*)q",
+    "common_logit_gauge_removed": true,
     "feature_actions": {
       "A": "pluralize attractor number",
       "C": "pluralize grammatical controller number"
@@ -21,8 +22,8 @@
   },
   "provenance": {
     "model": "Stories15M",
-    "evaluator_commit": "9a550fbdb2db76b390276aba965bf50741b2ecf1",
-    "analyzer_commit": "9a550fbdb2db76b390276aba965bf50741b2ecf1",
+    "evaluator_commit": "6e980e4323fbc44cde6553babd0c33694c9da0ea",
+    "analyzer_commit": "6e980e4323fbc44cde6553babd0c33694c9da0ea",
     "manifest_sha256": "5a2a392c652aa2b56d438404f0a7d523a7b524112a00ff55cc807d97f28743b1",
     "observers_sha256": "2dc8976d44c3c1eb832fa266e8372bea12819f80babb7eabd33408646a494753",
     "trace_count": 44
@@ -2708,6 +2709,74 @@
       }
     }
   },
+  "observer_indexed_demand_lattices": {
+    "constructor_family": [
+      "singular_verb",
+      "plural_verb"
+    ],
+    "gauge_free_observer": "q_plural-q_singular",
+    "contrast_codata": {
+      "criterion": "feature f is droppable only if every Mobius coefficient whose subset contains f is exactly zero",
+      "all_cases": {
+        "{A,C}": 44
+      },
+      "by_phase": {
+        "exploration": {
+          "{A,C}": 36
+        },
+        "confirmation": {
+          "{A,C}": 8
+        }
+      }
+    },
+    "constructor_ordering": {
+      "criterion": "feature f is droppable only if the strict constructor order is constant on every f-fiber",
+      "strict_ties": 0,
+      "binary_ordering_equals_selected_injection": true,
+      "all_cases": {
+        "{A,C}": 9,
+        "{A}": 7,
+        "{C}": 1,
+        "{}": 27
+      },
+      "by_phase": {
+        "exploration": {
+          "{A,C}": 8,
+          "{A}": 5,
+          "{}": 23
+        },
+        "confirmation": {
+          "{A,C}": 1,
+          "{A}": 2,
+          "{C}": 1,
+          "{}": 4
+        }
+      }
+    },
+    "selected_injection": {
+      "criterion": "feature f is droppable only if argmax is constant on every f-fiber",
+      "all_cases": {
+        "{A,C}": 9,
+        "{A}": 7,
+        "{C}": 1,
+        "{}": 27
+      },
+      "by_phase": {
+        "exploration": {
+          "{A,C}": 8,
+          "{A}": 5,
+          "{}": 23
+        },
+        "confirmation": {
+          "{A,C}": 1,
+          "{A}": 2,
+          "{C}": 1,
+          "{}": 4
+        }
+      }
+    },
+    "inclusion": "P_contrast_codata contains P_ordering contains P_choice"
+  },
   "attractor_projection_decision_preservation": {
     "cases": 44,
     "controller_singular": 31,
@@ -2769,6 +2838,30 @@
         "D_attractor_L": 1.235090017,
         "D_controller_L": 1.519684434,
         "D_controller_D_attractor_L": 0.9315308359999994
+      },
+      "observer_indexed_demand_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "choice_changes_along_feature_fibers": {
+        "A": {
+          "controller_singular": true,
+          "controller_plural": false
+        },
+        "C": {
+          "attractor_singular": true,
+          "attractor_plural": false
+        }
       },
       "attractor_projection_decision_preserving": {
         "controller_singular": false,
@@ -3222,6 +3315,24 @@
         "D_controller_L": 0.1616550699999999,
         "D_controller_D_attractor_L": 0.539665219
       },
+      "observer_indexed_demand_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [],
+        "selected_injection": []
+      },
+      "choice_changes_along_feature_fibers": {
+        "A": {
+          "controller_singular": false,
+          "controller_plural": false
+        },
+        "C": {
+          "attractor_singular": false,
+          "attractor_plural": false
+        }
+      },
       "attractor_projection_decision_preserving": {
         "controller_singular": true,
         "controller_plural": true
@@ -3673,6 +3784,24 @@
         "D_attractor_L": -1.4058196529999996,
         "D_controller_L": -0.07893108999999932,
         "D_controller_D_attractor_L": 1.364466428
+      },
+      "observer_indexed_demand_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [],
+        "selected_injection": []
+      },
+      "choice_changes_along_feature_fibers": {
+        "A": {
+          "controller_singular": false,
+          "controller_plural": false
+        },
+        "C": {
+          "attractor_singular": false,
+          "attractor_plural": false
+        }
       },
       "attractor_projection_decision_preserving": {
         "controller_singular": true,
@@ -4126,6 +4255,24 @@
         "D_controller_L": 1.1328678049000005,
         "D_controller_D_attractor_L": 0.29929017399999847
       },
+      "observer_indexed_demand_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [],
+        "selected_injection": []
+      },
+      "choice_changes_along_feature_fibers": {
+        "A": {
+          "controller_singular": false,
+          "controller_plural": false
+        },
+        "C": {
+          "attractor_singular": false,
+          "attractor_plural": false
+        }
+      },
       "attractor_projection_decision_preserving": {
         "controller_singular": true,
         "controller_plural": true
@@ -4577,6 +4724,28 @@
         "D_attractor_L": 3.0293803219999997,
         "D_controller_L": -0.29914064000000007,
         "D_controller_D_attractor_L": 1.780442598
+      },
+      "observer_indexed_demand_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A"
+        ],
+        "selected_injection": [
+          "A"
+        ]
+      },
+      "choice_changes_along_feature_fibers": {
+        "A": {
+          "controller_singular": true,
+          "controller_plural": true
+        },
+        "C": {
+          "attractor_singular": false,
+          "attractor_plural": false
+        }
       },
       "attractor_projection_decision_preserving": {
         "controller_singular": false,
@@ -5030,6 +5199,24 @@
         "D_controller_L": 0.6292212100000003,
         "D_controller_D_attractor_L": 0.5700161409999986
       },
+      "observer_indexed_demand_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [],
+        "selected_injection": []
+      },
+      "choice_changes_along_feature_fibers": {
+        "A": {
+          "controller_singular": false,
+          "controller_plural": false
+        },
+        "C": {
+          "attractor_singular": false,
+          "attractor_plural": false
+        }
+      },
       "attractor_projection_decision_preserving": {
         "controller_singular": true,
         "controller_plural": true
@@ -5481,6 +5668,28 @@
         "D_attractor_L": 1.8050878590000001,
         "D_controller_L": -0.16679937099999975,
         "D_controller_D_attractor_L": 0.8647314929999994
+      },
+      "observer_indexed_demand_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A"
+        ],
+        "selected_injection": [
+          "A"
+        ]
+      },
+      "choice_changes_along_feature_fibers": {
+        "A": {
+          "controller_singular": true,
+          "controller_plural": true
+        },
+        "C": {
+          "attractor_singular": false,
+          "attractor_plural": false
+        }
       },
       "attractor_projection_decision_preserving": {
         "controller_singular": false,
@@ -5934,6 +6143,24 @@
         "D_controller_L": 1.1771846429999995,
         "D_controller_D_attractor_L": 0.38747978400000127
       },
+      "observer_indexed_demand_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [],
+        "selected_injection": []
+      },
+      "choice_changes_along_feature_fibers": {
+        "A": {
+          "controller_singular": false,
+          "controller_plural": false
+        },
+        "C": {
+          "attractor_singular": false,
+          "attractor_plural": false
+        }
+      },
       "attractor_projection_decision_preserving": {
         "controller_singular": true,
         "controller_plural": true
@@ -6385,6 +6612,24 @@
         "D_attractor_L": -1.076027871,
         "D_controller_L": 2.171250816,
         "D_controller_D_attractor_L": -0.5806190990000002
+      },
+      "observer_indexed_demand_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [],
+        "selected_injection": []
+      },
+      "choice_changes_along_feature_fibers": {
+        "A": {
+          "controller_singular": false,
+          "controller_plural": false
+        },
+        "C": {
+          "attractor_singular": false,
+          "attractor_plural": false
+        }
       },
       "attractor_projection_decision_preserving": {
         "controller_singular": true,
@@ -6838,6 +7083,30 @@
         "D_controller_L": 1.4235748,
         "D_controller_D_attractor_L": -0.11907553999999898
       },
+      "observer_indexed_demand_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "choice_changes_along_feature_fibers": {
+        "A": {
+          "controller_singular": true,
+          "controller_plural": false
+        },
+        "C": {
+          "attractor_singular": true,
+          "attractor_plural": false
+        }
+      },
       "attractor_projection_decision_preserving": {
         "controller_singular": false,
         "controller_plural": true
@@ -7289,6 +7558,24 @@
         "D_attractor_L": -0.3351372490000002,
         "D_controller_L": 0.41776025100000025,
         "D_controller_D_attractor_L": 0.2890945679999999
+      },
+      "observer_indexed_demand_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [],
+        "selected_injection": []
+      },
+      "choice_changes_along_feature_fibers": {
+        "A": {
+          "controller_singular": false,
+          "controller_plural": false
+        },
+        "C": {
+          "attractor_singular": false,
+          "attractor_plural": false
+        }
       },
       "attractor_projection_decision_preserving": {
         "controller_singular": true,
@@ -7742,6 +8029,30 @@
         "D_controller_L": -0.6012040869999997,
         "D_controller_D_attractor_L": 1.9213998299999981
       },
+      "observer_indexed_demand_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "choice_changes_along_feature_fibers": {
+        "A": {
+          "controller_singular": true,
+          "controller_plural": false
+        },
+        "C": {
+          "attractor_singular": false,
+          "attractor_plural": true
+        }
+      },
       "attractor_projection_decision_preserving": {
         "controller_singular": false,
         "controller_plural": true
@@ -8193,6 +8504,24 @@
         "D_attractor_L": 0.3848160500000002,
         "D_controller_L": -0.5194708100000003,
         "D_controller_D_attractor_L": 0.962165596
+      },
+      "observer_indexed_demand_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [],
+        "selected_injection": []
+      },
+      "choice_changes_along_feature_fibers": {
+        "A": {
+          "controller_singular": false,
+          "controller_plural": false
+        },
+        "C": {
+          "attractor_singular": false,
+          "attractor_plural": false
+        }
       },
       "attractor_projection_decision_preserving": {
         "controller_singular": true,
@@ -8646,6 +8975,24 @@
         "D_controller_L": 0.25911939100000003,
         "D_controller_D_attractor_L": 0.8832044560000003
       },
+      "observer_indexed_demand_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [],
+        "selected_injection": []
+      },
+      "choice_changes_along_feature_fibers": {
+        "A": {
+          "controller_singular": false,
+          "controller_plural": false
+        },
+        "C": {
+          "attractor_singular": false,
+          "attractor_plural": false
+        }
+      },
       "attractor_projection_decision_preserving": {
         "controller_singular": true,
         "controller_plural": true
@@ -9097,6 +9444,24 @@
         "D_attractor_L": 0.03492356000000019,
         "D_controller_L": 0.6468215000000006,
         "D_controller_D_attractor_L": 0.7911128930000002
+      },
+      "observer_indexed_demand_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [],
+        "selected_injection": []
+      },
+      "choice_changes_along_feature_fibers": {
+        "A": {
+          "controller_singular": false,
+          "controller_plural": false
+        },
+        "C": {
+          "attractor_singular": false,
+          "attractor_plural": false
+        }
       },
       "attractor_projection_decision_preserving": {
         "controller_singular": true,
@@ -9550,6 +9915,24 @@
         "D_controller_L": 0.3184309000000005,
         "D_controller_D_attractor_L": 1.0166938249999995
       },
+      "observer_indexed_demand_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [],
+        "selected_injection": []
+      },
+      "choice_changes_along_feature_fibers": {
+        "A": {
+          "controller_singular": false,
+          "controller_plural": false
+        },
+        "C": {
+          "attractor_singular": false,
+          "attractor_plural": false
+        }
+      },
       "attractor_projection_decision_preserving": {
         "controller_singular": true,
         "controller_plural": true
@@ -10001,6 +10384,30 @@
         "D_attractor_L": 0.793353435,
         "D_controller_L": -2.4570219500000006,
         "D_controller_D_attractor_L": 3.3189529249999996
+      },
+      "observer_indexed_demand_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "choice_changes_along_feature_fibers": {
+        "A": {
+          "controller_singular": false,
+          "controller_plural": true
+        },
+        "C": {
+          "attractor_singular": true,
+          "attractor_plural": false
+        }
       },
       "attractor_projection_decision_preserving": {
         "controller_singular": true,
@@ -10454,6 +10861,24 @@
         "D_controller_L": 0.15373515599999998,
         "D_controller_D_attractor_L": 0.7173262860000003
       },
+      "observer_indexed_demand_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [],
+        "selected_injection": []
+      },
+      "choice_changes_along_feature_fibers": {
+        "A": {
+          "controller_singular": false,
+          "controller_plural": false
+        },
+        "C": {
+          "attractor_singular": false,
+          "attractor_plural": false
+        }
+      },
       "attractor_projection_decision_preserving": {
         "controller_singular": true,
         "controller_plural": true
@@ -10905,6 +11330,30 @@
         "D_attractor_L": 1.376048209,
         "D_controller_L": -0.6219013939999999,
         "D_controller_D_attractor_L": 0.2804013499999999
+      },
+      "observer_indexed_demand_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "choice_changes_along_feature_fibers": {
+        "A": {
+          "controller_singular": false,
+          "controller_plural": true
+        },
+        "C": {
+          "attractor_singular": true,
+          "attractor_plural": false
+        }
       },
       "attractor_projection_decision_preserving": {
         "controller_singular": true,
@@ -11358,6 +11807,24 @@
         "D_controller_L": 0.37480569300000033,
         "D_controller_D_attractor_L": 0.7331651549999991
       },
+      "observer_indexed_demand_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [],
+        "selected_injection": []
+      },
+      "choice_changes_along_feature_fibers": {
+        "A": {
+          "controller_singular": false,
+          "controller_plural": false
+        },
+        "C": {
+          "attractor_singular": false,
+          "attractor_plural": false
+        }
+      },
       "attractor_projection_decision_preserving": {
         "controller_singular": true,
         "controller_plural": true
@@ -11809,6 +12276,24 @@
         "D_attractor_L": 1.1256194119999998,
         "D_controller_L": 1.9613110999999996,
         "D_controller_D_attractor_L": -0.3835079659999998
+      },
+      "observer_indexed_demand_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [],
+        "selected_injection": []
+      },
+      "choice_changes_along_feature_fibers": {
+        "A": {
+          "controller_singular": false,
+          "controller_plural": false
+        },
+        "C": {
+          "attractor_singular": false,
+          "attractor_plural": false
+        }
       },
       "attractor_projection_decision_preserving": {
         "controller_singular": true,
@@ -12262,6 +12747,28 @@
         "D_controller_L": 0.69444693,
         "D_controller_D_attractor_L": 0.5064930900000002
       },
+      "observer_indexed_demand_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A"
+        ],
+        "selected_injection": [
+          "A"
+        ]
+      },
+      "choice_changes_along_feature_fibers": {
+        "A": {
+          "controller_singular": true,
+          "controller_plural": true
+        },
+        "C": {
+          "attractor_singular": false,
+          "attractor_plural": false
+        }
+      },
       "attractor_projection_decision_preserving": {
         "controller_singular": false,
         "controller_plural": false
@@ -12713,6 +13220,24 @@
         "D_attractor_L": 1.3616756238,
         "D_controller_L": 0.6235276509999998,
         "D_controller_D_attractor_L": -0.08367526980000006
+      },
+      "observer_indexed_demand_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [],
+        "selected_injection": []
+      },
+      "choice_changes_along_feature_fibers": {
+        "A": {
+          "controller_singular": false,
+          "controller_plural": false
+        },
+        "C": {
+          "attractor_singular": false,
+          "attractor_plural": false
+        }
       },
       "attractor_projection_decision_preserving": {
         "controller_singular": true,
@@ -13166,6 +13691,24 @@
         "D_controller_L": 0.12929689999999994,
         "D_controller_D_attractor_L": 1.2357348239999997
       },
+      "observer_indexed_demand_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [],
+        "selected_injection": []
+      },
+      "choice_changes_along_feature_fibers": {
+        "A": {
+          "controller_singular": false,
+          "controller_plural": false
+        },
+        "C": {
+          "attractor_singular": false,
+          "attractor_plural": false
+        }
+      },
       "attractor_projection_decision_preserving": {
         "controller_singular": true,
         "controller_plural": true
@@ -13617,6 +14160,30 @@
         "D_attractor_L": 1.635355413,
         "D_controller_L": 0.6706137110000001,
         "D_controller_D_attractor_L": 1.0342649839999996
+      },
+      "observer_indexed_demand_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "choice_changes_along_feature_fibers": {
+        "A": {
+          "controller_singular": true,
+          "controller_plural": false
+        },
+        "C": {
+          "attractor_singular": true,
+          "attractor_plural": false
+        }
       },
       "attractor_projection_decision_preserving": {
         "controller_singular": false,
@@ -14070,6 +14637,24 @@
         "D_controller_L": 0.2562582429999998,
         "D_controller_D_attractor_L": 0.31109869400000023
       },
+      "observer_indexed_demand_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [],
+        "selected_injection": []
+      },
+      "choice_changes_along_feature_fibers": {
+        "A": {
+          "controller_singular": false,
+          "controller_plural": false
+        },
+        "C": {
+          "attractor_singular": false,
+          "attractor_plural": false
+        }
+      },
       "attractor_projection_decision_preserving": {
         "controller_singular": true,
         "controller_plural": true
@@ -14521,6 +15106,24 @@
         "D_attractor_L": 0.383514881,
         "D_controller_L": 0.6541805300000001,
         "D_controller_D_attractor_L": 1.0073614089999996
+      },
+      "observer_indexed_demand_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [],
+        "selected_injection": []
+      },
+      "choice_changes_along_feature_fibers": {
+        "A": {
+          "controller_singular": false,
+          "controller_plural": false
+        },
+        "C": {
+          "attractor_singular": false,
+          "attractor_plural": false
+        }
       },
       "attractor_projection_decision_preserving": {
         "controller_singular": true,
@@ -14974,6 +15577,24 @@
         "D_controller_L": 0.990089062,
         "D_controller_D_attractor_L": 0.41346645000000093
       },
+      "observer_indexed_demand_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [],
+        "selected_injection": []
+      },
+      "choice_changes_along_feature_fibers": {
+        "A": {
+          "controller_singular": false,
+          "controller_plural": false
+        },
+        "C": {
+          "attractor_singular": false,
+          "attractor_plural": false
+        }
+      },
       "attractor_projection_decision_preserving": {
         "controller_singular": true,
         "controller_plural": true
@@ -15425,6 +16046,28 @@
         "D_attractor_L": 2.58385205,
         "D_controller_L": -1.3165818419999997,
         "D_controller_D_attractor_L": 2.4797048550000005
+      },
+      "observer_indexed_demand_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A"
+        ],
+        "selected_injection": [
+          "A"
+        ]
+      },
+      "choice_changes_along_feature_fibers": {
+        "A": {
+          "controller_singular": true,
+          "controller_plural": true
+        },
+        "C": {
+          "attractor_singular": false,
+          "attractor_plural": false
+        }
       },
       "attractor_projection_decision_preserving": {
         "controller_singular": false,
@@ -15878,6 +16521,24 @@
         "D_controller_L": 0.6386370710000002,
         "D_controller_D_attractor_L": 0.3764423171999991
       },
+      "observer_indexed_demand_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [],
+        "selected_injection": []
+      },
+      "choice_changes_along_feature_fibers": {
+        "A": {
+          "controller_singular": false,
+          "controller_plural": false
+        },
+        "C": {
+          "attractor_singular": false,
+          "attractor_plural": false
+        }
+      },
       "attractor_projection_decision_preserving": {
         "controller_singular": true,
         "controller_plural": true
@@ -16329,6 +16990,28 @@
         "D_attractor_L": 1.720615266,
         "D_controller_L": -0.578180914,
         "D_controller_D_attractor_L": 0.8758548469999996
+      },
+      "observer_indexed_demand_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A"
+        ],
+        "selected_injection": [
+          "A"
+        ]
+      },
+      "choice_changes_along_feature_fibers": {
+        "A": {
+          "controller_singular": true,
+          "controller_plural": true
+        },
+        "C": {
+          "attractor_singular": false,
+          "attractor_plural": false
+        }
       },
       "attractor_projection_decision_preserving": {
         "controller_singular": false,
@@ -16782,6 +17465,24 @@
         "D_controller_L": 0.8624470339999997,
         "D_controller_D_attractor_L": 0.16336752000000043
       },
+      "observer_indexed_demand_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [],
+        "selected_injection": []
+      },
+      "choice_changes_along_feature_fibers": {
+        "A": {
+          "controller_singular": false,
+          "controller_plural": false
+        },
+        "C": {
+          "attractor_singular": false,
+          "attractor_plural": false
+        }
+      },
       "attractor_projection_decision_preserving": {
         "controller_singular": true,
         "controller_plural": true
@@ -17233,6 +17934,24 @@
         "D_attractor_L": -0.08771872999999974,
         "D_controller_L": 1.4363245940000002,
         "D_controller_D_attractor_L": -0.05927633000000032
+      },
+      "observer_indexed_demand_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [],
+        "selected_injection": []
+      },
+      "choice_changes_along_feature_fibers": {
+        "A": {
+          "controller_singular": false,
+          "controller_plural": false
+        },
+        "C": {
+          "attractor_singular": false,
+          "attractor_plural": false
+        }
       },
       "attractor_projection_decision_preserving": {
         "controller_singular": true,
@@ -17686,6 +18405,30 @@
         "D_controller_L": 1.2707972500000004,
         "D_controller_D_attractor_L": 0.15556216000000034
       },
+      "observer_indexed_demand_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "choice_changes_along_feature_fibers": {
+        "A": {
+          "controller_singular": true,
+          "controller_plural": false
+        },
+        "C": {
+          "attractor_singular": true,
+          "attractor_plural": false
+        }
+      },
       "attractor_projection_decision_preserving": {
         "controller_singular": false,
         "controller_plural": true
@@ -18137,6 +18880,24 @@
         "D_attractor_L": 0.013491481500000457,
         "D_controller_L": -0.450516318,
         "D_controller_D_attractor_L": 0.8058951794999993
+      },
+      "observer_indexed_demand_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [],
+        "selected_injection": []
+      },
+      "choice_changes_along_feature_fibers": {
+        "A": {
+          "controller_singular": false,
+          "controller_plural": false
+        },
+        "C": {
+          "attractor_singular": false,
+          "attractor_plural": false
+        }
       },
       "attractor_projection_decision_preserving": {
         "controller_singular": true,
@@ -18590,6 +19351,30 @@
         "D_controller_L": -0.20975827999999996,
         "D_controller_D_attractor_L": 1.7122674100000008
       },
+      "observer_indexed_demand_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "choice_changes_along_feature_fibers": {
+        "A": {
+          "controller_singular": true,
+          "controller_plural": false
+        },
+        "C": {
+          "attractor_singular": false,
+          "attractor_plural": true
+        }
+      },
       "attractor_projection_decision_preserving": {
         "controller_singular": false,
         "controller_plural": true
@@ -19041,6 +19826,24 @@
         "D_attractor_L": 1.282296422,
         "D_controller_L": 1.536733334,
         "D_controller_D_attractor_L": -0.12390876200000056
+      },
+      "observer_indexed_demand_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [],
+        "selected_injection": []
+      },
+      "choice_changes_along_feature_fibers": {
+        "A": {
+          "controller_singular": false,
+          "controller_plural": false
+        },
+        "C": {
+          "attractor_singular": false,
+          "attractor_plural": false
+        }
       },
       "attractor_projection_decision_preserving": {
         "controller_singular": true,
@@ -19494,6 +20297,28 @@
         "D_controller_L": 0.1145441599999999,
         "D_controller_D_attractor_L": 0.9456808639999994
       },
+      "observer_indexed_demand_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A"
+        ],
+        "selected_injection": [
+          "A"
+        ]
+      },
+      "choice_changes_along_feature_fibers": {
+        "A": {
+          "controller_singular": true,
+          "controller_plural": true
+        },
+        "C": {
+          "attractor_singular": false,
+          "attractor_plural": false
+        }
+      },
       "attractor_projection_decision_preserving": {
         "controller_singular": false,
         "controller_plural": false
@@ -19945,6 +20770,24 @@
         "D_attractor_L": 0.8702384219999999,
         "D_controller_L": 0.8753457099999999,
         "D_controller_D_attractor_L": -0.025944581999999716
+      },
+      "observer_indexed_demand_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [],
+        "selected_injection": []
+      },
+      "choice_changes_along_feature_fibers": {
+        "A": {
+          "controller_singular": false,
+          "controller_plural": false
+        },
+        "C": {
+          "attractor_singular": false,
+          "attractor_plural": false
+        }
       },
       "attractor_projection_decision_preserving": {
         "controller_singular": true,
@@ -20398,6 +21241,30 @@
         "D_controller_L": 0.626068651,
         "D_controller_D_attractor_L": 0.35969865000000034
       },
+      "observer_indexed_demand_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A",
+          "C"
+        ],
+        "selected_injection": [
+          "A",
+          "C"
+        ]
+      },
+      "choice_changes_along_feature_fibers": {
+        "A": {
+          "controller_singular": false,
+          "controller_plural": true
+        },
+        "C": {
+          "attractor_singular": false,
+          "attractor_plural": true
+        }
+      },
       "attractor_projection_decision_preserving": {
         "controller_singular": true,
         "controller_plural": false
@@ -20849,6 +21716,28 @@
         "D_attractor_L": 2.837094907,
         "D_controller_L": -0.21910249199999998,
         "D_controller_D_attractor_L": 0.5072118030000001
+      },
+      "observer_indexed_demand_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "A"
+        ],
+        "selected_injection": [
+          "A"
+        ]
+      },
+      "choice_changes_along_feature_fibers": {
+        "A": {
+          "controller_singular": true,
+          "controller_plural": true
+        },
+        "C": {
+          "attractor_singular": false,
+          "attractor_plural": false
+        }
       },
       "attractor_projection_decision_preserving": {
         "controller_singular": false,
@@ -21302,6 +22191,24 @@
         "D_controller_L": 0.1379942890000001,
         "D_controller_D_attractor_L": 1.0077679100000003
       },
+      "observer_indexed_demand_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [],
+        "selected_injection": []
+      },
+      "choice_changes_along_feature_fibers": {
+        "A": {
+          "controller_singular": false,
+          "controller_plural": false
+        },
+        "C": {
+          "attractor_singular": false,
+          "attractor_plural": false
+        }
+      },
       "attractor_projection_decision_preserving": {
         "controller_singular": true,
         "controller_plural": true
@@ -21753,6 +22660,28 @@
         "D_attractor_L": 0.7907838850000002,
         "D_controller_L": 1.34025097,
         "D_controller_D_attractor_L": 0.194838520999999
+      },
+      "observer_indexed_demand_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [
+          "C"
+        ],
+        "selected_injection": [
+          "C"
+        ]
+      },
+      "choice_changes_along_feature_fibers": {
+        "A": {
+          "controller_singular": false,
+          "controller_plural": false
+        },
+        "C": {
+          "attractor_singular": true,
+          "attractor_plural": true
+        }
       },
       "attractor_projection_decision_preserving": {
         "controller_singular": true,
@@ -22206,6 +23135,24 @@
         "D_controller_L": 0.10899173879999946,
         "D_controller_D_attractor_L": 0.7525994699999998
       },
+      "observer_indexed_demand_support": {
+        "contrast_codata": [
+          "A",
+          "C"
+        ],
+        "constructor_ordering": [],
+        "selected_injection": []
+      },
+      "choice_changes_along_feature_fibers": {
+        "A": {
+          "controller_singular": false,
+          "controller_plural": false
+        },
+        "C": {
+          "attractor_singular": false,
+          "attractor_plural": false
+        }
+      },
       "attractor_projection_decision_preserving": {
         "controller_singular": true,
         "controller_plural": true
@@ -22619,8 +23566,8 @@
     }
   ],
   "scope": {
-    "establishes": "the complete sampled controller/attractor number Mobius support of the singular/plural verb-constructor codata",
+    "establishes": "the complete sampled controller/attractor number Mobius support and per-context contrast-codata, ordering, and choice demand sets for the singular/plural verb family",
     "does_not_yet_establish": "the remaining feature lattice or polynomial substitution closure",
-    "interpretation": "nonzero D_A retains attractor-number demand; nonzero D_C D_A records coupling rather than additive independence"
+    "interpretation": "choice-relevant A is malformed attractor demand; nonzero D_C D_A makes that dependence nonseparable but is not intrinsically erroneous"
   }
 }
