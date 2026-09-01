@@ -955,3 +955,130 @@ from Git because of their size and can be regenerated with:
 ```bash
 make grammarrelations CC=clang
 ```
+
+#### Future-company observational refinement
+
+The failed role-action regression above asked a chosen geometric zip to carry
+an action. The next experiment changes the object being represented. For a
+grammatical interaction diagram `x`, a future action word `w`, and the complete
+288-coordinate post-final-RMS observation at the last token, it retains
+
+```text
+V_x(w) = (U_a-I)(U_b-I)(k after w)(x).
+```
+
+The same suffix `w` is appended to all five terms `x`, `a(x)`, `b(x)`,
+`b(a(x))`, and `a(b(x))`; no role label enters the transformer or the
+observation. The retained five corner roots reconstruct `V_x(w)` exactly. For
+a primitive future action `c`, the analyzer then forms
+
+```text
+T_x(c) = V_x(c) - V_x(epsilon)
+       = (U_c-I)(U_a-I)(U_b-I)k(x).
+```
+
+This is the explicit eight-corner, third-order Möbius observation. For an
+ordered depth-two word `cd`, it separately retains
+
+```text
+Q_x(c,d) = V_x(cd) - V_x(c) - V_x(d) + V_x(epsilon).
+```
+
+Nothing is summed across mutually exclusive completions, and none of these
+vectors becomes a completion reward.
+
+The fixed action manifest contains an identity, an independently executed
+identity repeat, nine primitive future contexts, and all sixteen ordered
+depth-two compositions of four of those primitives. The primitive families
+include number-sensitive pronouns, a number-neutral witness, a clause
+extension, later attachments, lexical noun phrases, and a modifier. Applying
+all 27 words to all 88 controller/attractor diagrams produced 2,376 real
+Stories15M traces.
+
+Partition refinement happens before SVD. The initial matched-pair partition
+has 44 two-member blocks. Within each block, the controller and attractor have
+bit-identical layer-0 directed QK tensors, as established by the preceding
+experiment. At every refinement step the analyzer searches the retained
+future words for one whose **complete vector** separates a current block. It
+does not use controller/attractor labels, vector norms, or a learned
+classifier. Exact comparison is meaningful here because all 88 independent
+identity reruns are bit-identical, with maximum componentwise difference `0`.
+
+The exact refinement is decisive but negative for computational sharing:
+
+* the no-extension observation `V(epsilon)` already splits all 44 matched
+  blocks;
+* every one of the nine primitive third-order observations splits all 44;
+* every one of the sixteen fourth-order conditional observations also splits
+  all 44;
+* starting from one global block, any primitive third-order observation splits
+  all 88 diagrams into singletons.
+
+Number-neutral, lexical, and modifier controls split the blocks just as
+completely as the number-sensitive continuations. Exact separability is
+therefore generic contextual fingerprinting, not by itself a grammatical
+result. The grammatical question is addressed only by the disjoint held-out
+role comparison below.
+
+Consequently, equality under all primitive observations has no nontrivial
+pairs on which to test extension congruence. The recorded congruence check has
+zero violations but is explicitly marked vacuous; it is not closure evidence.
+
+Only after that exact result does the analyzer inspect the behavior matrices:
+
+| Behavior rows | Matrix | Numerical row rank | 99% energy rank | Smallest/largest retained singular value |
+|---|---:|---:|---:|---:|
+| all absolute future observations | 88 x 7,488 | 88/88 | 63 | 0.01895 |
+| all future increments over identity | 88 x 7,200 | 88/88 | 64 | 0.02108 |
+| nine primitive third-order observations | 88 x 2,592 | 88/88 | 65 | 0.02276 |
+| sixteen fourth-order conditional observations | 88 x 4,608 | 88/88 | 66 | 0.02483 |
+
+There is no numerical rank collapse in this sample. In particular, moving
+from the geometric zip to future behavior does not by itself produce the
+hoped-for small exact quotient.
+
+There is nevertheless a reusable relative signal in how future company
+changes the interaction. Labels are introduced only after behavior
+construction and counterexample selection, using the same nine exploration
+folds and frozen unseen `by` confirmation as the earlier experiment:
+
+| Behavior representation | Exploration relation | Exploration nearest | Confirmation relation | Confirmation nearest |
+|---|---:|---:|---:|---:|
+| absolute future behavior | 19/36 | 56/72 | 3/8 | 13/16 |
+| all future increments | 25/36 | 56/72 | 8/8 | 13/16 |
+| primitive third-order zip | 24/36 | 56/72 | 7/8 | 14/16 |
+| fourth-order conditional zip | 25/36 | 51/72 | 4/8 | 14/16 |
+
+For the all-future-increment representation, all eight primary confirmation
+margins have the expected sign, from `0.00581` through `0.08803`. An
+independent direct SVD of the 36 controller and 36 attractor exploration rows
+reproduces the same 8/8 and 13/16 results. The imperfect exploration and
+symmetric results matter: this is evidence that response to future company
+carries grammatical-role information, not evidence that the sampled spans are
+semantic states.
+
+The experiment therefore resolves the immediate ambiguity. The behavioral
+object exposes distinctions that the identical local bridge cannot contain,
+and subtracting the identity behavior transfers substantially better than the
+absolute endpoint behavior. But complete hidden-root coordinates distinguish
+every sampled context, so their exact observational quotient is the discrete
+88-state partition. More future words can only refine that exact partition;
+they cannot merge it. Any nontrivial sharing result now requires a justified
+coarser family of retained model observations or a predictive approximation
+criterion whose error is checked under further company. It cannot be obtained
+by fitting another global matrix to these rows or by treating the relative
+span residual as an inference score.
+
+The maximum stock-`forward()` hidden relative defect over all 2,376 traces is
+`1.57e-6`. Mixed and commutator vectors reconstruct from the retained roots
+with maximum defect `0`; the independently ordered eight-corner third-order
+expansion differs by at most `3.81e-6`, at float32 cancellation scale. The
+manifest, collector, analyzer, and compact result are
+`grammar_future_actions.json`, `gather_grammar_behaviors.py`,
+`analyze_grammar_behaviors.py`, and
+`outputs/cps-grammar-behaviors-analysis.json`. Raw vectors remain outside Git
+and can be regenerated with:
+
+```bash
+make grammarbehaviors CC=clang
+```

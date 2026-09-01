@@ -205,6 +205,17 @@ the controller/attractor role-swap action on the full typed zip.  Its neutral
 and action-adapted rank curves also fail to produce a small quotient that both
 retains the role distinction and generalizes the action.
 
+`grammar_future_actions.json`, `gather_grammar_behaviors.py`, and
+`analyze_grammar_behaviors.py` replace that geometric closure question with a
+counterexample-guided observational one. They extend every corner of each
+diagram by the same future company, retain complete final-root behavior, and
+form explicit third- and fourth-order Möbius observations. On 2,376 checked
+Stories15M traces the future increments carry a held-out grammatical-role
+signal, but exact refinement yields 88 singletons and every behavior matrix
+has full 88/88 row rank. Thus this finite experiment discovers no nontrivial
+exact quotient or computational sharing rule. See
+[future-company observational refinement](doc/cps-fixed-points.md#future-company-observational-refinement).
+
 The preceding endpoint-observer experiment is retained only as
 `terminal-unembedding-observer-don't-do-this.c`. It selected final token
 coordinates before discovering the transformer's own continuation structure,
