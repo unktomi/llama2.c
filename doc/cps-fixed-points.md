@@ -1238,3 +1238,117 @@ recover the minimal demanded projection sets for each constructor family,
 then compose those sum-of-products interfaces upward. Complete hidden states
 may remain unique throughout; sharing depends on common demanded projections,
 not equality of full values.
+
+#### Joint controller--attractor number demand
+
+The separate controller and attractor diagrams above measure one axis at a
+time. `gather_number_demand_cubes.py` now constructs the decisive aligned
+eight-corner cube inside each attractor sentence:
+
+| Corner | Controller | Attractor | Verb constructor |
+|---|---|---|---|
+| `x` | singular | singular | singular |
+| `A` | singular | plural | singular |
+| `B` | singular | singular | plural |
+| `AB` | singular | plural | plural |
+| `C` | plural | singular | singular |
+| `AC` | plural | plural | singular |
+| `BC` | plural | singular | plural |
+| `ABC` | plural | plural | plural |
+
+All three actions must occupy independent aligned token positions. The C
+evaluator's aligned-constructor mode validates the complete factorized cube;
+it does not pad, retokenize, or weaken the existing square check. All 44
+manifest cases pass this exact token typing.
+
+At the pre-verb edge, B is still unconsumed. Its state coefficients are
+therefore exactly zero, while its two constructor coordinates define
+
+```text
+L = q_plural - q_singular.
+```
+
+The analyzer retains all 83 or 84 coordinates of
+
+```text
+q, D_A q, D_C q, D_C D_A q
+```
+
+as well as the complete number-demand spectrum
+
+```text
+D_C L, D_A L, D_C D_A L.
+```
+
+The distinction requested by the interface algebra remains explicit:
+
+* exact factorization requires every coefficient involving a forgotten
+  projection to vanish;
+* decision-preserving factorization requires only that deleting that
+  projection never change the selected injection.
+
+No epsilon is chosen. Every complete coefficient and every decoded decision
+margin is retained in the output.
+
+For the known-law trained control:
+
+| Coefficient | Minimum | Mean | Maximum |
+|---|---:|---:|---:|
+| `D_C L` | 21.493332 | 29.562254 | 36.056793 |
+| `D_A L` | -0.517457 | 1.484175 | 4.539331 |
+| `D_C D_A L` | -3.143678 | -0.275321 | 3.166681 |
+
+Thus the trained network does not have exact attractor-number factorization:
+its nuisance first- and second-order coefficients are nonzero. Nevertheless,
+all four branches match the generated grammar in all 44 cubes (176/176), and
+dropping attractor number preserves the verb constructor for both controller
+numbers in 44/44 cases. On the unseen `by` template, controller response has
+mean `30.654978`, compared with attractor mean `1.864542` and mixed mean
+`0.098305`.
+
+Stories15M gives:
+
+| Coefficient | Minimum | Mean | Maximum | Positive cases |
+|---|---:|---:|---:|---:|
+| `D_C L` | -2.457022 | 0.404440 | 2.171251 | 32/44 |
+| `D_A L` | -2.342069 | 0.657985 | 3.029380 | 34/44 |
+| `D_C D_A L` | -0.580619 | 0.707283 | 3.318953 | 37/44 |
+
+Its branch decisions make the interface failure concrete:
+
+| Branch | Manifest matches | Meaning |
+|---|---:|---|
+| `x` | 13/44 | both nouns singular |
+| `A` | 4/44 | only attractor plural |
+| `C` | 34/44 | only controller plural |
+| `AC` | 44/44 | both nouns plural |
+
+Changing attractor number preserves the selected verb in 31/44
+controller-singular strata and 34/44 controller-plural strata; it preserves
+both in only 28/44 cubes. The mean mixed coefficient `0.707283` is larger than
+either mean first-order coefficient, so the result is not adequately
+described as independent additive contamination. Controller demand itself is
+being changed by attractor number.
+
+This repeats on the held-out `by` construction. Its eight cases have mean
+controller, attractor, and mixed responses `0.565103`, `1.582944`, and
+`0.452243`; all eight attractor responses are positive. The smallest absolute
+mixed coefficient across all 44 cases is `0.025945`, while the maximum stock
+logit-contrast L2 defect is `8.44e-5`. The typed-chain output defect and
+unconsumed-B leak are both exactly zero; the maximum cross-fiber Moebius
+inverse defect is `1.78e-15`.
+
+The compact artifacts are
+`outputs/cps-synthetic-grammar-number-demand-analysis.json` and
+`outputs/cps-stories15m-number-demand-analysis.json`. Raw traces remain outside
+Git and the Stories experiment is reproduced by:
+
+```bash
+make numberdemandcubes CC=clang
+```
+
+This recovers the complete number-demand support for one verb-constructor
+family. The next closure question is not a matrix action on hidden states. It
+is whether directly measured composite demand agrees with polynomial
+substitution of the recovered component interfaces on unseen lexemes,
+templates, and company.

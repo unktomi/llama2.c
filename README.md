@@ -241,6 +241,17 @@ difference in the model's active interface, not a failed test of company
 semantics. The equations, decoded decisions, and exact run validation are in
 [the projection--injection demand section](doc/cps-fixed-points.md#projection-injection-demand-at-token-edges).
 
+The next aligned cube varies controller number (`C`) and PP-attractor number
+(`A`) independently while retaining singular/plural verb injections at the
+same pre-verb edge. It records the complete 83-coordinate codata coefficients
+and the contrast spectrum `D_C L`, `D_A L`, and `D_C D_A L`. Stories15M has
+mean responses `0.404`, `0.658`, and `0.707` respectively; the mixed term shows
+that attraction is coupled rather than merely an additive extra feature. The
+attractor projection can be dropped without changing either controller-number
+decision in only 28/44 cases. The trained control also has nonzero nuisance
+coefficients, but dropping attractor number preserves both decisions in 44/44.
+See [the joint-number subsection](doc/cps-fixed-points.md#joint-controller-attractor-number-demand).
+
 The preceding endpoint-observer experiment is retained only as
 `terminal-unembedding-observer-don't-do-this.c`. It selected final token
 coordinates before discovering the transformer's own continuation structure,

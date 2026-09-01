@@ -155,6 +155,9 @@ GRAMMAR_CUBE_ANALYSIS ?= outputs/cps-grammar-cubes-analysis.json
 GRAMMAR_CUBE_EVALUATOR_COMMIT ?= $(shell git log -1 --format=%H -- cps_grammar_cube.c gather_grammar_cubes.py)
 GRAMMAR_EDGE_TRACES ?= work_traces/grammar_cubes_edge_v2
 GRAMMAR_EDGE_ANALYSIS ?= outputs/cps-stories15m-edge-company-analysis.json
+NUMBER_DEMAND_TRACES ?= work_traces/number_demand_cubes
+NUMBER_DEMAND_ANALYSIS ?= outputs/cps-stories15m-number-demand-analysis.json
+NUMBER_DEMAND_EVALUATOR_COMMIT ?= $(shell git rev-parse HEAD)
 
 .PHONY: grammarrelations
 grammarrelations: cpsgrammaractions
@@ -202,6 +205,15 @@ grammaredgedemands: cpsgrammarcube
 		--edge-company-only \
 		--evaluator-commit $(GRAMMAR_CUBE_EVALUATOR_COMMIT) \
 		--output $(GRAMMAR_EDGE_ANALYSIS)
+
+.PHONY: numberdemandcubes
+numberdemandcubes: cpsgrammarcube
+	python3 gather_number_demand_cubes.py \
+		--output $(NUMBER_DEMAND_TRACES)
+	python3 analyze_number_demand_cubes.py \
+		--traces $(NUMBER_DEMAND_TRACES) \
+		--evaluator-commit $(NUMBER_DEMAND_EVALUATOR_COMMIT) \
+		--output $(NUMBER_DEMAND_ANALYSIS)
 
 .PHONY: longcontextprofiles
 longcontextprofiles: companyprobe

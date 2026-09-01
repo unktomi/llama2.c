@@ -11,9 +11,10 @@
  * suffixes must be identical.
  *
  * At every typed transformer boundary, the complete local A/B action jet for
- * each C fiber is written to an append-only float32 sidecar.  C changes the
- * frontier type by changing the number of positions, so the program does not
- * invent a local subtraction between those differently typed fibers.  The
+ * each C fiber is written to an append-only float32 sidecar. C may be either a
+ * uniform suffix (which changes the position-indexed frontier type) or a third
+ * aligned constructor action. The program never invents a subtraction between
+ * differently typed fibers. The
  * learned token-observation function is also retained before every consumed
  * constructor.  These Mealy-style edge observations remain zipped by token
  * position; they are never folded into a sequence score.  At the terminal
@@ -277,6 +278,47 @@ static int validate_uniform_extension(
         }
     }
     return suffix_count;
+}
+
+static bool factorized_eight_corner_cube(
+    const EncodedContext cube[CUBE_CORNER_COUNT]
+) {
+    int positions = cube[CUBE_X].count;
+    for (int corner = 1; corner < CUBE_CORNER_COUNT; corner++) {
+        if (cube[corner].count != positions) return false;
+    }
+    bool saw_action[3] = {false, false, false};
+    for (int position = 0; position < positions; position++) {
+        int values[CUBE_CORNER_COUNT];
+        bool all_equal = true;
+        for (int corner = 0; corner < CUBE_CORNER_COUNT; corner++) {
+            values[corner] = cube[corner].tokens[position];
+            if (values[corner] != values[CUBE_X]) all_equal = false;
+        }
+        if (all_equal) continue;
+
+        int changing_bit = -1;
+        for (int bit = 0; bit < 3; bit++) {
+            int flag = 1 << bit;
+            int lower = values[CUBE_X];
+            int upper = values[flag];
+            if (lower == upper) continue;
+            bool matches = true;
+            for (int corner = 0; corner < CUBE_CORNER_COUNT; corner++) {
+                int expected = (corner & flag) != 0 ? upper : lower;
+                if (values[corner] != expected) {
+                    matches = false;
+                    break;
+                }
+            }
+            if (!matches) continue;
+            if (changing_bit != -1) return false;
+            changing_bit = bit;
+        }
+        if (changing_bit == -1) return false;
+        saw_action[changing_bit] = true;
+    }
+    return saw_action[0] && saw_action[1] && saw_action[2];
 }
 
 static void fast_mobius(float *values, int bits, int width) {
@@ -814,7 +856,15 @@ int main(int argc, char **argv) {
         !factorized_four_corner_square(cube + CUBE_C)) {
         fail("A/B actions do not form aligned constructor squares in both C fibers");
     }
-    int suffix_tokens = validate_uniform_extension(cube);
+    bool aligned_c_action = cube[CUBE_C].count == cube[CUBE_X].count;
+    int suffix_tokens = 0;
+    if (aligned_c_action) {
+        if (!factorized_eight_corner_cube(cube)) {
+            fail("aligned C action does not form a factorized eight-corner constructor cube");
+        }
+    } else {
+        suffix_tokens = validate_uniform_extension(cube);
+    }
     int base_positions = cube[CUBE_X].count;
     int extended_positions = cube[CUBE_C].count;
 
@@ -859,12 +909,15 @@ int main(int argc, char **argv) {
         "{\"kind\":\"grammatical_cube_meta\",\"schema_version\":2,"
         "\"semantics\":\"carrier_conditioned_action_jet_with_mealy_edge_zip\","
         "\"base_positions\":%d,\"extended_positions\":%d,"
-        "\"extension_token_count\":%d,\"layers\":%d,\"dim\":%d,"
+        "\"extension_token_count\":%d,\"c_action_kind\":\"%s\","
+        "\"edge_c_difference_typed\":%s,\"layers\":%d,\"dim\":%d,"
         "\"observer\":\"logit_token_minus_logit_reference\","
         "\"observer_reference_token\":%d,\"observer_tokens\":[",
         base_positions,
         extended_positions,
         suffix_tokens,
+        aligned_c_action ? "aligned_constructor" : "uniform_suffix",
+        aligned_c_action ? "true" : "false",
         base_term.layers,
         base_term.dim,
         observer.reference_token
@@ -879,9 +932,15 @@ int main(int argc, char **argv) {
           "\"edge_observations_folded\":false,"
           "\"terminal_probabilities_used\":false,"
           "\"scalar_completion_reward_used\":false,"
-          "\"local_c_difference_defined\":false,"
-          "\"local_c_reason\":\"C changes the position-indexed frontier type\","
-          "\"local_jet_binary_dtype\":\"native_float32\","
+          "\"local_c_difference_defined\":false,", trace);
+    fprintf(
+        trace,
+        "\"local_c_reason\":\"%s\",",
+        aligned_c_action
+            ? "aligned C edge differences are typed but local C jets are not retained by this schema"
+            : "C changes the position-indexed frontier type"
+    );
+    fputs("\"local_jet_binary_dtype\":\"native_float32\","
           "\"norms_are_diagnostics_not_scores\":true}\n", trace);
     for (int corner = 0; corner < CUBE_CORNER_COUNT; corner++) {
         write_cube_context(trace, &tokenizer, &cube[corner], corner);
