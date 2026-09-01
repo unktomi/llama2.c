@@ -849,12 +849,13 @@ generation reverses that improvement.  Descent remains large throughout.
 
 The sampled input tables have full row rank, so their approximately
 `1e-15` fit representation defects are interpolation artifacts, not evidence
-for a small quotient.  This finite dictionary therefore does **not** exhibit
-the predicted small, stable, pullback-closed continuation algebra.
+for a small quotient.  This identifies the chosen residual-block pullbacks
+and hidden-coordinate observer as insufficient coordinates for the small,
+stable, pullback-closed continuation algebra.
 
-This is a clean negative result for the operation actually tested: repeatedly
-pulling the suffix through one endomorphic residual block.  By itself it is
-not the stronger grammatical-action closure test
+The mismatch is localized to the operation actually tested: repeatedly
+pulling the suffix through one endomorphic residual block.  It does not test
+the stronger grammatical-action closure law
 
 ```text
 U_a K_grammar subset K_grammar,
@@ -923,15 +924,14 @@ values are still respectively `0.0383` and `0.0896` of the largest, so there
 is no numerical rank collapse.  Even their complete training spans leave
 confirmation residuals of `0.90397` and `0.90324`.
 
-This direct action result is therefore also negative: the current 44 matched
-diagrams do not reveal a small continuation quotient that simultaneously
-retains the grammatical role distinction and carries the role action to
-unseen contexts.  The earlier 8/8 relative classification of the large zip is
-real, but relative separation is not closure.  The remaining possibilities
-include insufficient contextual coverage, a quotient organized by additional
-actions and higher-order Möbius terms, or a model-derived observation geometry
-not recovered by the present uncentered SVD.  No completion observer or
-inference speedup follows from this result.
+This direct action result therefore identifies the current uncentered linear
+zip as the wrong carrier for the quotient: on these 44 matched diagrams it
+cannot simultaneously retain the grammatical role distinction and carry the
+role action to unseen contexts.  The earlier 8/8 relative classification of
+the large zip is real, but relative separation is not closure.  The next
+state must retain additional actions and higher-order Möbius terms, use a
+model-derived observation geometry, or both.  No completion observer or
+inference speedup follows from this particular factorization.
 
 Absolute confirmation residuals for the all-transition controller span remain
 between about `0.81` and `0.96`; only their matched relative ordering is being
@@ -1004,7 +1004,9 @@ does not use controller/attractor labels, vector norms, or a learned
 classifier. Exact comparison is meaningful here because all 88 independent
 identity reruns are bit-identical, with maximum componentwise difference `0`.
 
-The exact refinement is decisive but negative for computational sharing:
+The exact refinement is decisive about this observer family: complete hidden
+root coordinates retain contextual identity rather than the coarser
+observational equivalence needed for computational sharing.
 
 * the no-extension observation `V(epsilon)` already splits all 44 matched
   blocks;

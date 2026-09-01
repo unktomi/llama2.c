@@ -723,8 +723,11 @@ def deterministic_kmeans(
     chosen = [first]
     nearest = np.sum((values - values[first]) ** 2, axis=1)
     while len(chosen) < count:
-        candidate = int(np.argmax(nearest))
-        require(candidate not in chosen, "atlas initialization duplicated a center")
+        available = np.asarray(
+            [index for index in range(len(values)) if index not in chosen],
+            dtype=np.int64,
+        )
+        candidate = int(available[np.argmax(nearest[available])])
         chosen.append(candidate)
         nearest = np.minimum(
             nearest,
@@ -1135,6 +1138,18 @@ def relative_distance_matrix(vectors: np.ndarray) -> np.ndarray:
     scale = np.maximum(scale, np.finfo(np.float64).tiny)
     result = np.sqrt(distances_squared) / scale
     np.fill_diagonal(result, 0.0)
+    false_zero_candidates = np.argwhere(np.triu(result == 0.0, k=1))
+    for left, right in false_zero_candidates:
+        if not np.array_equal(vectors[left], vectors[right]):
+            direct = float(np.linalg.norm(vectors[left] - vectors[right]))
+            direct /= max(
+                float(np.linalg.norm(vectors[left])),
+                float(np.linalg.norm(vectors[right])),
+                np.finfo(np.float64).tiny,
+            )
+            require(direct > 0.0, "distinct observation vectors have zero distance")
+            result[left, right] = direct
+            result[right, left] = direct
     return result
 
 
@@ -1320,6 +1335,20 @@ def assign_held_observation_labels(
     distances = np.sqrt(squares) / scales
     nearest = np.argmin(distances, axis=1)
     nearest_distance = distances[np.arange(len(held_nodes)), nearest]
+    for index, (source, distance) in enumerate(zip(nearest, nearest_distance)):
+        if distance == 0.0 and not np.array_equal(
+            held_vectors[index],
+            train_vectors[source],
+        ):
+            direct = float(
+                np.linalg.norm(held_vectors[index] - train_vectors[source])
+            )
+            direct /= max(
+                float(held_norms[index]),
+                float(train_norms[source]),
+                np.finfo(np.float64).tiny,
+            )
+            nearest_distance[index] = direct
     next_novel = int(train_component_labels.max()) + 1
     labels: dict[tuple[int, tuple[str, ...]], int] = {}
     reused = 0
@@ -1679,7 +1708,7 @@ def main() -> None:
             "terminal_mobius": "eight corners transformed into carrier,A,B,AB,C,AC,BC,ABC",
             "local_jet": "carrier,A,B,AB retained separately within each position-indexed C fiber",
             "local_C": "not subtracted because suffix extension changes the frontier type",
-            "heldout_validation": "both context rows and complete extension-family column blocks are unseen",
+            "heldout_validation": "the held-context x held-family block is unseen; held-family loadings are identified only on training contexts",
             "labels": "controller/attractor pairing enters only future-distinction diagnostics",
             "not_an_inference_reward": True,
         },
