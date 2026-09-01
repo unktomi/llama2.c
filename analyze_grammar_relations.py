@@ -31,6 +31,7 @@ REPRESENTATIONS = (
     "qk_transition_zip",
     "typed_transition_zip",
 )
+ACTION_QUOTIENT_RANKS = (1, 2, 3, 4, 6, 8, 12, 16, 24, 32)
 
 
 @dataclass(frozen=True)
@@ -549,6 +550,370 @@ def confirmation(
     return result
 
 
+def role_swap_tables(
+    pairs: list[tuple[TraceCase, TraceCase]],
+    vector_of: Callable[[TraceCase], np.ndarray],
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    require(bool(pairs), "role-swap action has no pairs")
+    controller = np.stack([vector_of(left) for left, _ in pairs])
+    attractor = np.stack([vector_of(right) for _, right in pairs])
+    require(controller.shape == attractor.shape, "role-swap table shape mismatch")
+    return (
+        np.vstack((controller, attractor)),
+        np.vstack((attractor, controller)),
+        controller - attractor,
+    )
+
+
+def role_parity_curve(
+    training_pairs: list[tuple[TraceCase, TraceCase]],
+    validation_pairs: list[tuple[TraceCase, TraceCase]],
+    vector_of: Callable[[TraceCase], np.ndarray],
+    requested_ranks: tuple[int, ...],
+) -> dict[str, Any]:
+    def parity_tables(
+        pairs: list[tuple[TraceCase, TraceCase]],
+    ) -> tuple[np.ndarray, np.ndarray]:
+        controller = np.stack([vector_of(left) for left, _ in pairs])
+        attractor = np.stack([vector_of(right) for _, right in pairs])
+        return (controller + attractor) / 2.0, (controller - attractor) / 2.0
+
+    fit_even, fit_odd = parity_tables(training_pairs)
+    validation_even, validation_odd = parity_tables(validation_pairs)
+    result: dict[str, Any] = {}
+    for parity, fit, validation, eigenvalue in (
+        ("even", fit_even, validation_even, 1),
+        ("odd", fit_odd, validation_odd, -1),
+    ):
+        _, singular_values, right = np.linalg.svd(fit, full_matrices=False)
+        require(
+            singular_values.size > 0 and singular_values[0] > 0.0,
+            f"role-swap {parity} table has zero rank",
+        )
+        tolerance = float(
+            max(fit.shape) * np.finfo(np.float32).eps * singular_values[0]
+        )
+        rank = int(np.count_nonzero(singular_values > tolerance))
+        fit_norm = float(np.linalg.norm(fit))
+        validation_norm = float(np.linalg.norm(validation))
+        require(
+            rank > 0 and min(fit_norm, validation_norm) > 0.0,
+            f"role-swap {parity} table is empty",
+        )
+        ranks = sorted({candidate for candidate in requested_ranks if candidate <= rank})
+        require(bool(ranks), f"role-swap {parity} rank curve is empty")
+        curve: dict[str, Any] = {}
+        for quotient_rank in ranks:
+            basis = right[:quotient_rank]
+            fit_projection = (fit @ basis.T) @ basis
+            validation_projection = (validation @ basis.T) @ basis
+            curve[str(quotient_rank)] = {
+                "quotient_rank": quotient_rank,
+                "fit_relative_residual": float(
+                    np.linalg.norm(fit - fit_projection) / fit_norm
+                ),
+                "validation_relative_residual": float(
+                    np.linalg.norm(validation - validation_projection)
+                    / validation_norm
+                ),
+            }
+        result[parity] = {
+            "action_eigenvalue": eigenvalue,
+            "training_pairs": len(training_pairs),
+            "validation_pairs": len(validation_pairs),
+            "ambient_width": fit.shape[1],
+            "sampled_rank": rank,
+            "sampled_row_rank_saturated": rank == fit.shape[0],
+            "rank_tolerance": tolerance,
+            "largest_singular_value": float(singular_values[0]),
+            "smallest_retained_singular_value": float(
+                singular_values[rank - 1]
+            ),
+            "singular_value_ratios": [
+                float(value / singular_values[0])
+                for value in singular_values[:rank]
+            ],
+            "curve": curve,
+        }
+    return result
+
+
+def relative_matrix_error(actual: np.ndarray, expected: np.ndarray) -> float:
+    norm = float(np.linalg.norm(expected))
+    require(norm > 0.0, "relative matrix error has a zero denominator")
+    return float(np.linalg.norm(actual - expected) / norm)
+
+
+def role_swap_action_curve(
+    training_pairs: list[tuple[TraceCase, TraceCase]],
+    validation_pairs: list[tuple[TraceCase, TraceCase]],
+    vector_of: Callable[[TraceCase], np.ndarray],
+    requested_ranks: tuple[int, ...],
+) -> dict[str, Any]:
+    fit_input, fit_pulled, fit_role_difference = role_swap_tables(
+        training_pairs,
+        vector_of,
+    )
+    validation_input, validation_pulled, validation_role_difference = (
+        role_swap_tables(validation_pairs, vector_of)
+    )
+    _, singular_values, right = np.linalg.svd(fit_input, full_matrices=False)
+    require(
+        singular_values.size > 0 and singular_values[0] > 0.0,
+        "role-swap action table has zero rank",
+    )
+    tolerance = float(
+        max(fit_input.shape) * np.finfo(np.float32).eps * singular_values[0]
+    )
+    rank = int(np.count_nonzero(singular_values > tolerance))
+    require(rank > 0, "role-swap action table retains no functions")
+    ranks = sorted({candidate for candidate in requested_ranks if candidate <= rank})
+    require(bool(ranks), "role-swap rank curve is empty")
+
+    fit_norm = float(np.linalg.norm(fit_input))
+    validation_norm = float(np.linalg.norm(validation_input))
+    fit_difference_norm = float(np.linalg.norm(fit_role_difference))
+    validation_difference_norm = float(np.linalg.norm(validation_role_difference))
+    require(
+        min(fit_norm, validation_norm, fit_difference_norm, validation_difference_norm)
+        > 0.0,
+        "role-swap action contains a zero table",
+    )
+    curve: dict[str, Any] = {}
+    for quotient_rank in ranks:
+        coefficients = right[:quotient_rank].T
+        fit_coordinates = fit_input @ coefficients
+        fit_pulled_coordinates = fit_pulled @ coefficients
+        validation_coordinates = validation_input @ coefficients
+        validation_pulled_coordinates = validation_pulled @ coefficients
+        induced_action = np.linalg.lstsq(
+            fit_coordinates,
+            fit_pulled_coordinates,
+            rcond=None,
+        )[0]
+        fit_projection = fit_input @ coefficients @ coefficients.T
+        validation_projection = (
+            validation_input @ coefficients @ coefficients.T
+        )
+        fit_difference_projection = (
+            fit_role_difference @ coefficients @ coefficients.T
+        )
+        validation_difference_projection = (
+            validation_role_difference @ coefficients @ coefficients.T
+        )
+        curve[str(quotient_rank)] = {
+            "quotient_rank": quotient_rank,
+            "fit_zip_relative_residual": float(
+                np.linalg.norm(fit_input - fit_projection) / fit_norm
+            ),
+            "validation_zip_relative_residual": float(
+                np.linalg.norm(validation_input - validation_projection)
+                / validation_norm
+            ),
+            "fit_role_difference_relative_residual": float(
+                np.linalg.norm(fit_role_difference - fit_difference_projection)
+                / fit_difference_norm
+            ),
+            "validation_role_difference_relative_residual": float(
+                np.linalg.norm(
+                    validation_role_difference - validation_difference_projection
+                )
+                / validation_difference_norm
+            ),
+            "fit_action_relative": relative_matrix_error(
+                fit_coordinates @ induced_action,
+                fit_pulled_coordinates,
+            ),
+            "validation_action_relative": relative_matrix_error(
+                validation_coordinates @ induced_action,
+                validation_pulled_coordinates,
+            ),
+            "validation_identity_relative": relative_matrix_error(
+                validation_coordinates,
+                validation_pulled_coordinates,
+            ),
+            "fit_involution_relative": relative_matrix_error(
+                fit_coordinates @ induced_action @ induced_action,
+                fit_coordinates,
+            ),
+            "validation_involution_relative": relative_matrix_error(
+                validation_coordinates @ induced_action @ induced_action,
+                validation_coordinates,
+            ),
+        }
+    return {
+        "training_pairs": len(training_pairs),
+        "validation_pairs": len(validation_pairs),
+        "ambient_width": fit_input.shape[1],
+        "sampled_rank": rank,
+        "sampled_row_rank_saturated": rank == fit_input.shape[0],
+        "rank_tolerance": tolerance,
+        "largest_singular_value": float(singular_values[0]),
+        "smallest_retained_singular_value": float(singular_values[rank - 1]),
+        "singular_value_ratios": [
+            float(value / singular_values[0]) for value in singular_values[:rank]
+        ],
+        "curve": curve,
+    }
+
+
+def summarize_role_swap_splits(splits: list[dict[str, Any]]) -> dict[str, Any]:
+    require(bool(splits), "role-swap action has no cross-validation splits")
+    rank_keys = list(splits[0]["curve"])
+    require(
+        all(list(split["curve"]) == rank_keys for split in splits),
+        "role-swap rank curves differ across splits",
+    )
+    fields = (
+        "fit_zip_relative_residual",
+        "validation_zip_relative_residual",
+        "fit_role_difference_relative_residual",
+        "validation_role_difference_relative_residual",
+        "fit_action_relative",
+        "validation_action_relative",
+        "validation_identity_relative",
+        "fit_involution_relative",
+        "validation_involution_relative",
+    )
+    curve: dict[str, Any] = {}
+    for rank_key in rank_keys:
+        curve[rank_key] = {}
+        for field in fields:
+            values = [split["curve"][rank_key][field] for split in splits]
+            curve[rank_key][field] = {
+                "minimum": min(values),
+                "mean": float(np.mean(values)),
+                "maximum": max(values),
+            }
+    return {
+        "split_count": len(splits),
+        "sampled_rank_range": [
+            min(split["sampled_rank"] for split in splits),
+            max(split["sampled_rank"] for split in splits),
+        ],
+        "row_rank_saturated_splits": sum(
+            split["sampled_row_rank_saturated"] for split in splits
+        ),
+        "curve": curve,
+    }
+
+
+def cross_validate_role_swap(
+    cases: list[TraceCase],
+    pairs: list[tuple[TraceCase, TraceCase]],
+    vector_of: Callable[[TraceCase], np.ndarray],
+) -> dict[str, Any]:
+    templates = sorted({
+        case.spec.template for case in cases if case.spec.phase == "exploration"
+    })
+    fold_set = {
+        case.spec.fold for case in cases if case.spec.phase == "exploration"
+    }
+    require(None not in fold_set, "exploration family lacks a role-swap fold")
+    folds = sorted(fold for fold in fold_set if fold is not None)
+    splits: list[dict[str, Any]] = []
+    for held_template in templates:
+        for held_fold in folds:
+            training = [
+                pair
+                for pair in pairs
+                if pair[0].spec.template != held_template
+                and pair[0].spec.fold != held_fold
+            ]
+            validation = [
+                pair
+                for pair in pairs
+                if pair[0].spec.template == held_template
+                and pair[0].spec.fold == held_fold
+            ]
+            split = role_swap_action_curve(
+                training,
+                validation,
+                vector_of,
+                ACTION_QUOTIENT_RANKS,
+            )
+            split["held_template"] = held_template
+            split["held_fold"] = held_fold
+            splits.append(split)
+    require(len(splits) == 9, "role-swap cross-validation did not make nine splits")
+    return summarize_role_swap_splits(splits)
+
+
+def cross_validate_role_parity(
+    cases: list[TraceCase],
+    pairs: list[tuple[TraceCase, TraceCase]],
+    vector_of: Callable[[TraceCase], np.ndarray],
+) -> dict[str, Any]:
+    templates = sorted({
+        case.spec.template for case in cases if case.spec.phase == "exploration"
+    })
+    fold_set = {
+        case.spec.fold for case in cases if case.spec.phase == "exploration"
+    }
+    require(None not in fold_set, "exploration family lacks a role-parity fold")
+    folds = sorted(fold for fold in fold_set if fold is not None)
+    split_results: list[dict[str, Any]] = []
+    for held_template in templates:
+        for held_fold in folds:
+            training = [
+                pair
+                for pair in pairs
+                if pair[0].spec.template != held_template
+                and pair[0].spec.fold != held_fold
+            ]
+            validation = [
+                pair
+                for pair in pairs
+                if pair[0].spec.template == held_template
+                and pair[0].spec.fold == held_fold
+            ]
+            split_results.append(
+                role_parity_curve(
+                    training,
+                    validation,
+                    vector_of,
+                    ACTION_QUOTIENT_RANKS,
+                )
+            )
+    require(len(split_results) == 9, "role-parity cross-validation did not make nine splits")
+    result: dict[str, Any] = {"split_count": len(split_results)}
+    for parity in ("even", "odd"):
+        rank_keys = list(split_results[0][parity]["curve"])
+        require(
+            all(
+                list(split[parity]["curve"]) == rank_keys
+                for split in split_results
+            ),
+            f"role-parity {parity} rank curves differ across splits",
+        )
+        curve: dict[str, Any] = {}
+        for rank_key in rank_keys:
+            curve[rank_key] = {}
+            for field in ("fit_relative_residual", "validation_relative_residual"):
+                values = [
+                    split[parity]["curve"][rank_key][field]
+                    for split in split_results
+                ]
+                curve[rank_key][field] = {
+                    "minimum": min(values),
+                    "mean": float(np.mean(values)),
+                    "maximum": max(values),
+                }
+        result[parity] = {
+            "action_eigenvalue": split_results[0][parity]["action_eigenvalue"],
+            "sampled_rank_range": [
+                min(split[parity]["sampled_rank"] for split in split_results),
+                max(split[parity]["sampled_rank"] for split in split_results),
+            ],
+            "row_rank_saturated_splits": sum(
+                split[parity]["sampled_row_rank_saturated"]
+                for split in split_results
+            ),
+            "curve": curve,
+        }
+    return result
+
+
 def closure_fit(
     training: list[TraceCase],
     validation: list[TraceCase],
@@ -887,9 +1252,33 @@ def main() -> None:
             *(float(np.max(np.abs(vector - reference))) for vector in pulled[1:]),
         )
 
+    typed_zip = lambda case: case.vectors["typed_transition_zip"]
+    role_swap_cross_validation = cross_validate_role_swap(
+        cases,
+        exploration_pairs,
+        typed_zip,
+    )
+    role_parity_cross_validation = cross_validate_role_parity(
+        cases,
+        exploration_pairs,
+        typed_zip,
+    )
+    role_swap_confirmation = role_swap_action_curve(
+        exploration_pairs,
+        confirmation_pairs,
+        typed_zip,
+        ACTION_QUOTIENT_RANKS + (36, 48, 64, 72),
+    )
+    role_parity_confirmation = role_parity_curve(
+        exploration_pairs,
+        confirmation_pairs,
+        typed_zip,
+        ACTION_QUOTIENT_RANKS + (36,),
+    )
+
     manifest_digest = hashlib.sha256(args.manifest.read_bytes()).hexdigest()
     result: dict[str, Any] = {
-        "schema_version": 2,
+        "schema_version": 3,
         "artifact": "matched_grammatical_continuation_geometry",
         "semantics": {
             "vectors": "torsor differences retained at learned continuation boundaries",
@@ -902,6 +1291,7 @@ def main() -> None:
             "model": args.model_label,
             "trace_schema_version": 5,
             "evaluator_commit": args.evaluator_commit or git_head(),
+            "analyzer_commit": git_head(),
             "manifest_sha256": manifest_digest,
             "trace_count": len(cases),
             "raw_vectors_embedded": False,
@@ -978,6 +1368,23 @@ def main() -> None:
             "exploration_cross_validation": closure_cross_validation,
             "confirmation": closure_confirmation,
         },
+        "grammatical_action_quotient": {
+            "semantics": {
+                "action": "R swaps each matched controller diagram with its attractor diagram and R squared is identity",
+                "input": "the complete 79-boundary typed-transition zip Z(x)",
+                "quotient": "rank-r uncentered right-singular continuation coefficients fitted only on training zips",
+                "closure": "one induced M must satisfy q(Rx)=q(x)M on held-out diagrams",
+                "involution": "the same induced M must satisfy q(x)M squared=q(x)",
+                "role_difference": "the quotient must retain Z(controller)-Z(attractor), not merely close after discarding it",
+                "action_adapted_parity": "Z_even=(Z_controller+Z_attractor)/2 has eigenvalue +1 and Z_odd=(Z_controller-Z_attractor)/2 has eigenvalue -1",
+                "rank_selection": "the complete prespecified rank curve is retained; no favorable rank becomes an inference score",
+                "not_an_inference_reward": True,
+            },
+            "exploration_cross_validation": role_swap_cross_validation,
+            "confirmation": role_swap_confirmation,
+            "parity_exploration_cross_validation": role_parity_cross_validation,
+            "parity_confirmation": role_parity_confirmation,
+        },
         "scope": [
             "finite evidence for continuation geometry, not a recovered global grammar",
             "residual-block closure does not establish or refute closure under grammatical token actions",
@@ -1027,6 +1434,27 @@ def main() -> None:
                     f"heldout={metrics['validation_prediction_relative']:.8g} "
                     f"identity={metrics['validation_identity_relative']:.8g}"
                 )
+    print("grammatical role-swap quotient confirmation:")
+    for rank_key, metrics in role_swap_confirmation["curve"].items():
+        print(
+            f"  rank={int(rank_key):2d} "
+            f"zip_residual={metrics['validation_zip_relative_residual']:.8g} "
+            f"role_residual={metrics['validation_role_difference_relative_residual']:.8g} "
+            f"action={metrics['validation_action_relative']:.8g} "
+            f"identity={metrics['validation_identity_relative']:.8g} "
+            f"involution={metrics['validation_involution_relative']:.8g}"
+        )
+    print("grammatical role-swap parity confirmation:")
+    for parity in ("even", "odd"):
+        metrics = role_parity_confirmation[parity]
+        full_rank = str(metrics["sampled_rank"])
+        full = metrics["curve"][full_rank]
+        print(
+            f"  {parity:4s} eigenvalue={metrics['action_eigenvalue']:+d} "
+            f"rank={metrics['sampled_rank']:2d} "
+            f"smallest_ratio={metrics['singular_value_ratios'][-1]:.8g} "
+            f"heldout_full_span={full['validation_relative_residual']:.8g}"
+        )
 
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
