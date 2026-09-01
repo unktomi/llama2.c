@@ -140,6 +140,9 @@ cpsgrammaractions: cps_grammar_actions.c cps_fixed_points.c run.c
 
 GRAMMAR_RELATION_TRACES ?= work_traces/grammar_relations
 GRAMMAR_RELATION_ANALYSIS ?= outputs/cps-grammar-relations-analysis.json
+GRAMMAR_BEHAVIOR_TRACES ?= work_traces/grammar_behaviors
+GRAMMAR_BEHAVIOR_ANALYSIS ?= outputs/cps-grammar-behaviors-analysis.json
+GRAMMAR_BEHAVIOR_EVALUATOR_COMMIT ?= $(shell git rev-parse HEAD)
 
 .PHONY: grammarrelations
 grammarrelations: cpsgrammaractions
@@ -149,6 +152,15 @@ grammarrelations: cpsgrammaractions
 	python3 analyze_grammar_relations.py \
 		--traces $(GRAMMAR_RELATION_TRACES) \
 		--output $(GRAMMAR_RELATION_ANALYSIS)
+
+.PHONY: grammarbehaviors
+grammarbehaviors: cpsgrammaractions
+	python3 gather_grammar_behaviors.py \
+		--output $(GRAMMAR_BEHAVIOR_TRACES)
+	python3 analyze_grammar_behaviors.py \
+		--traces $(GRAMMAR_BEHAVIOR_TRACES) \
+		--evaluator-commit $(GRAMMAR_BEHAVIOR_EVALUATOR_COMMIT) \
+		--output $(GRAMMAR_BEHAVIOR_ANALYSIS)
 
 .PHONY: longcontextprofiles
 longcontextprofiles: companyprobe
