@@ -1,0 +1,1140 @@
+{
+  "schema_version": 1,
+  "artifact": "matched_grammatical_continuation_geometry",
+  "semantics": {
+    "vectors": "torsor differences retained at learned continuation boundaries",
+    "basis": "uncentered SVD row span; no hidden-state origin is selected",
+    "residual": "relative distance to a sampled span; diagnostic only",
+    "decision": "strict held-out relative ordering; ties are not wins",
+    "not_an_inference_reward": true
+  },
+  "provenance": {
+    "model": "Stories15M",
+    "trace_schema_version": 3,
+    "evaluator_commit": "743f7ec98b320102f94a4379110628c5a796e42a",
+    "manifest_sha256": "5a2a392c652aa2b56d438404f0a7d523a7b524112a00ff55cc807d97f28743b1",
+    "trace_count": 88,
+    "raw_vectors_embedded": false
+  },
+  "validation": {
+    "positions": 8,
+    "hidden_width": 288,
+    "layers": 6,
+    "action_positions": [
+      5,
+      6
+    ],
+    "maximum_typed_chain_output_l2_defect": 0.0,
+    "maximum_llama2c_hidden_relative_defect": 1.4766220027111119e-06,
+    "maximum_telescoping_absolute_defect": 1.1920928955078125e-07,
+    "maximum_qk_score_reconstruction_relative_defect": 5.372105183177041e-05,
+    "maximum_qk_cross_removed_root_relative": 0.0006313371082330548,
+    "maximum_qk_transition_identity_relative_defect": 6.287024767585395e-07,
+    "matched_layer0_qk_pairs_exact": 44,
+    "matched_layer0_qk_pairs_total": 44,
+    "matched_layer0_qk_maximum_absolute_difference": 0.0
+  },
+  "representations": {
+    "layer0_directed_qk": {
+      "width": 768,
+      "description": "both directed layer-0 QK cross tensors, concatenated"
+    },
+    "root_pullback_mixed": {
+      "width": 288,
+      "description": "final post-RMS mixed pullback vector"
+    },
+    "qk_transition_zip": {
+      "width": 1728,
+      "description": "six layer-indexed QK delta-tau vectors, concatenated"
+    },
+    "typed_transition_zip": {
+      "width": 22752,
+      "description": "all ordered typed-boundary delta-tau vectors, concatenated"
+    }
+  },
+  "exploration": {
+    "protocol": "hold out one whole template and one disjoint lexical fold",
+    "training_vectors_per_role_per_split": 16,
+    "held_out_pairs": 36,
+    "results": {
+      "layer0_directed_qk": {
+        "matched_relation_basis": {
+          "wins": 0,
+          "total": 36
+        },
+        "symmetric_nearest_basis": {
+          "wins": 0,
+          "total": 72
+        },
+        "basis_rank_range": {
+          "controller": [
+            6,
+            6
+          ],
+          "attractor": [
+            6,
+            6
+          ]
+        },
+        "per_template": {
+          "near": {
+            "matched_relation_basis": {
+              "wins": 0,
+              "total": 12
+            },
+            "symmetric_nearest_basis": {
+              "wins": 0,
+              "total": 24
+            }
+          },
+          "under": {
+            "matched_relation_basis": {
+              "wins": 0,
+              "total": 12
+            },
+            "symmetric_nearest_basis": {
+              "wins": 0,
+              "total": 24
+            }
+          },
+          "with": {
+            "matched_relation_basis": {
+              "wins": 0,
+              "total": 12
+            },
+            "symmetric_nearest_basis": {
+              "wins": 0,
+              "total": 24
+            }
+          }
+        }
+      },
+      "root_pullback_mixed": {
+        "matched_relation_basis": {
+          "wins": 25,
+          "total": 36
+        },
+        "symmetric_nearest_basis": {
+          "wins": 53,
+          "total": 72
+        },
+        "basis_rank_range": {
+          "controller": [
+            16,
+            16
+          ],
+          "attractor": [
+            16,
+            16
+          ]
+        },
+        "per_template": {
+          "near": {
+            "matched_relation_basis": {
+              "wins": 9,
+              "total": 12
+            },
+            "symmetric_nearest_basis": {
+              "wins": 20,
+              "total": 24
+            }
+          },
+          "under": {
+            "matched_relation_basis": {
+              "wins": 9,
+              "total": 12
+            },
+            "symmetric_nearest_basis": {
+              "wins": 17,
+              "total": 24
+            }
+          },
+          "with": {
+            "matched_relation_basis": {
+              "wins": 7,
+              "total": 12
+            },
+            "symmetric_nearest_basis": {
+              "wins": 16,
+              "total": 24
+            }
+          }
+        }
+      },
+      "qk_transition_zip": {
+        "matched_relation_basis": {
+          "wins": 32,
+          "total": 36
+        },
+        "symmetric_nearest_basis": {
+          "wins": 62,
+          "total": 72
+        },
+        "basis_rank_range": {
+          "controller": [
+            16,
+            16
+          ],
+          "attractor": [
+            16,
+            16
+          ]
+        },
+        "per_template": {
+          "near": {
+            "matched_relation_basis": {
+              "wins": 12,
+              "total": 12
+            },
+            "symmetric_nearest_basis": {
+              "wins": 20,
+              "total": 24
+            }
+          },
+          "under": {
+            "matched_relation_basis": {
+              "wins": 12,
+              "total": 12
+            },
+            "symmetric_nearest_basis": {
+              "wins": 21,
+              "total": 24
+            }
+          },
+          "with": {
+            "matched_relation_basis": {
+              "wins": 8,
+              "total": 12
+            },
+            "symmetric_nearest_basis": {
+              "wins": 21,
+              "total": 24
+            }
+          }
+        }
+      },
+      "typed_transition_zip": {
+        "matched_relation_basis": {
+          "wins": 34,
+          "total": 36
+        },
+        "symmetric_nearest_basis": {
+          "wins": 62,
+          "total": 72
+        },
+        "basis_rank_range": {
+          "controller": [
+            16,
+            16
+          ],
+          "attractor": [
+            16,
+            16
+          ]
+        },
+        "per_template": {
+          "near": {
+            "matched_relation_basis": {
+              "wins": 12,
+              "total": 12
+            },
+            "symmetric_nearest_basis": {
+              "wins": 20,
+              "total": 24
+            }
+          },
+          "under": {
+            "matched_relation_basis": {
+              "wins": 12,
+              "total": 12
+            },
+            "symmetric_nearest_basis": {
+              "wins": 23,
+              "total": 24
+            }
+          },
+          "with": {
+            "matched_relation_basis": {
+              "wins": 10,
+              "total": 12
+            },
+            "symmetric_nearest_basis": {
+              "wins": 19,
+              "total": 24
+            }
+          }
+        }
+      }
+    },
+    "qk_layer_results_post_hoc": {
+      "0": {
+        "matched_relation_basis": {
+          "wins": 21,
+          "total": 36
+        },
+        "symmetric_nearest_basis": {
+          "wins": 54,
+          "total": 72
+        },
+        "basis_rank_range": {
+          "controller": [
+            16,
+            16
+          ],
+          "attractor": [
+            16,
+            16
+          ]
+        },
+        "per_template": {
+          "near": {
+            "matched_relation_basis": {
+              "wins": 7,
+              "total": 12
+            },
+            "symmetric_nearest_basis": {
+              "wins": 19,
+              "total": 24
+            }
+          },
+          "under": {
+            "matched_relation_basis": {
+              "wins": 10,
+              "total": 12
+            },
+            "symmetric_nearest_basis": {
+              "wins": 20,
+              "total": 24
+            }
+          },
+          "with": {
+            "matched_relation_basis": {
+              "wins": 4,
+              "total": 12
+            },
+            "symmetric_nearest_basis": {
+              "wins": 15,
+              "total": 24
+            }
+          }
+        }
+      },
+      "1": {
+        "matched_relation_basis": {
+          "wins": 24,
+          "total": 36
+        },
+        "symmetric_nearest_basis": {
+          "wins": 49,
+          "total": 72
+        },
+        "basis_rank_range": {
+          "controller": [
+            16,
+            16
+          ],
+          "attractor": [
+            16,
+            16
+          ]
+        },
+        "per_template": {
+          "near": {
+            "matched_relation_basis": {
+              "wins": 7,
+              "total": 12
+            },
+            "symmetric_nearest_basis": {
+              "wins": 16,
+              "total": 24
+            }
+          },
+          "under": {
+            "matched_relation_basis": {
+              "wins": 10,
+              "total": 12
+            },
+            "symmetric_nearest_basis": {
+              "wins": 18,
+              "total": 24
+            }
+          },
+          "with": {
+            "matched_relation_basis": {
+              "wins": 7,
+              "total": 12
+            },
+            "symmetric_nearest_basis": {
+              "wins": 15,
+              "total": 24
+            }
+          }
+        }
+      },
+      "2": {
+        "matched_relation_basis": {
+          "wins": 29,
+          "total": 36
+        },
+        "symmetric_nearest_basis": {
+          "wins": 54,
+          "total": 72
+        },
+        "basis_rank_range": {
+          "controller": [
+            16,
+            16
+          ],
+          "attractor": [
+            16,
+            16
+          ]
+        },
+        "per_template": {
+          "near": {
+            "matched_relation_basis": {
+              "wins": 8,
+              "total": 12
+            },
+            "symmetric_nearest_basis": {
+              "wins": 19,
+              "total": 24
+            }
+          },
+          "under": {
+            "matched_relation_basis": {
+              "wins": 12,
+              "total": 12
+            },
+            "symmetric_nearest_basis": {
+              "wins": 18,
+              "total": 24
+            }
+          },
+          "with": {
+            "matched_relation_basis": {
+              "wins": 9,
+              "total": 12
+            },
+            "symmetric_nearest_basis": {
+              "wins": 17,
+              "total": 24
+            }
+          }
+        }
+      },
+      "3": {
+        "matched_relation_basis": {
+          "wins": 24,
+          "total": 36
+        },
+        "symmetric_nearest_basis": {
+          "wins": 57,
+          "total": 72
+        },
+        "basis_rank_range": {
+          "controller": [
+            16,
+            16
+          ],
+          "attractor": [
+            16,
+            16
+          ]
+        },
+        "per_template": {
+          "near": {
+            "matched_relation_basis": {
+              "wins": 10,
+              "total": 12
+            },
+            "symmetric_nearest_basis": {
+              "wins": 21,
+              "total": 24
+            }
+          },
+          "under": {
+            "matched_relation_basis": {
+              "wins": 9,
+              "total": 12
+            },
+            "symmetric_nearest_basis": {
+              "wins": 17,
+              "total": 24
+            }
+          },
+          "with": {
+            "matched_relation_basis": {
+              "wins": 5,
+              "total": 12
+            },
+            "symmetric_nearest_basis": {
+              "wins": 19,
+              "total": 24
+            }
+          }
+        }
+      },
+      "4": {
+        "matched_relation_basis": {
+          "wins": 32,
+          "total": 36
+        },
+        "symmetric_nearest_basis": {
+          "wins": 56,
+          "total": 72
+        },
+        "basis_rank_range": {
+          "controller": [
+            16,
+            16
+          ],
+          "attractor": [
+            16,
+            16
+          ]
+        },
+        "per_template": {
+          "near": {
+            "matched_relation_basis": {
+              "wins": 11,
+              "total": 12
+            },
+            "symmetric_nearest_basis": {
+              "wins": 18,
+              "total": 24
+            }
+          },
+          "under": {
+            "matched_relation_basis": {
+              "wins": 10,
+              "total": 12
+            },
+            "symmetric_nearest_basis": {
+              "wins": 19,
+              "total": 24
+            }
+          },
+          "with": {
+            "matched_relation_basis": {
+              "wins": 11,
+              "total": 12
+            },
+            "symmetric_nearest_basis": {
+              "wins": 19,
+              "total": 24
+            }
+          }
+        }
+      },
+      "5": {
+        "matched_relation_basis": {
+          "wins": 25,
+          "total": 36
+        },
+        "symmetric_nearest_basis": {
+          "wins": 51,
+          "total": 72
+        },
+        "basis_rank_range": {
+          "controller": [
+            16,
+            16
+          ],
+          "attractor": [
+            16,
+            16
+          ]
+        },
+        "per_template": {
+          "near": {
+            "matched_relation_basis": {
+              "wins": 9,
+              "total": 12
+            },
+            "symmetric_nearest_basis": {
+              "wins": 18,
+              "total": 24
+            }
+          },
+          "under": {
+            "matched_relation_basis": {
+              "wins": 10,
+              "total": 12
+            },
+            "symmetric_nearest_basis": {
+              "wins": 18,
+              "total": 24
+            }
+          },
+          "with": {
+            "matched_relation_basis": {
+              "wins": 6,
+              "total": 12
+            },
+            "symmetric_nearest_basis": {
+              "wins": 15,
+              "total": 24
+            }
+          }
+        }
+      }
+    }
+  },
+  "confirmation": {
+    "protocol": "fit all three exploration templates, then test unseen by-template and new lexemes",
+    "training_vectors_per_role": 36,
+    "held_out_pairs": 8,
+    "results": {
+      "layer0_directed_qk": {
+        "matched_relation_basis": {
+          "wins": 0,
+          "total": 8
+        },
+        "symmetric_nearest_basis": {
+          "wins": 0,
+          "total": 16
+        },
+        "basis_rank": {
+          "controller": 6,
+          "attractor": 6
+        },
+        "cases": [
+          {
+            "template": "by",
+            "family": "boy-ball-moves",
+            "fold": null,
+            "controller_in_controller_basis": 1.3808844292702335e-15,
+            "attractor_in_controller_basis": 1.3808844292702335e-15,
+            "controller_basis_margin": 0.0,
+            "controller_basis_win": false,
+            "attractor_in_attractor_basis": 1.3808844292702335e-15,
+            "controller_in_attractor_basis": 1.3808844292702335e-15,
+            "attractor_basis_margin": 0.0,
+            "attractor_basis_win": false,
+            "controller_nearest_basis_win": false,
+            "attractor_nearest_basis_win": false
+          },
+          {
+            "template": "by",
+            "family": "boy-brother-helps",
+            "fold": null,
+            "controller_in_controller_basis": 3.944884957370883e-16,
+            "attractor_in_controller_basis": 3.944884957370883e-16,
+            "controller_basis_margin": 0.0,
+            "controller_basis_win": false,
+            "attractor_in_attractor_basis": 3.944884957370883e-16,
+            "controller_in_attractor_basis": 3.944884957370883e-16,
+            "attractor_basis_margin": 0.0,
+            "attractor_basis_win": false,
+            "controller_nearest_basis_win": false,
+            "attractor_nearest_basis_win": false
+          },
+          {
+            "template": "by",
+            "family": "car-thing-moves",
+            "fold": null,
+            "controller_in_controller_basis": 1.695797203261955e-15,
+            "attractor_in_controller_basis": 1.695797203261955e-15,
+            "controller_basis_margin": 0.0,
+            "controller_basis_win": false,
+            "attractor_in_attractor_basis": 1.695797203261955e-15,
+            "controller_in_attractor_basis": 1.695797203261955e-15,
+            "attractor_basis_margin": 0.0,
+            "attractor_basis_win": false,
+            "controller_nearest_basis_win": false,
+            "attractor_nearest_basis_win": false
+          },
+          {
+            "template": "by",
+            "family": "dog-person-lives",
+            "fold": null,
+            "controller_in_controller_basis": 6.009467169396869e-16,
+            "attractor_in_controller_basis": 6.009467169396869e-16,
+            "controller_basis_margin": 0.0,
+            "controller_basis_win": false,
+            "attractor_in_attractor_basis": 6.009467169396869e-16,
+            "controller_in_attractor_basis": 6.009467169396869e-16,
+            "attractor_basis_margin": 0.0,
+            "attractor_basis_win": false,
+            "controller_nearest_basis_win": false,
+            "attractor_nearest_basis_win": false
+          },
+          {
+            "template": "by",
+            "family": "friend-lady-lives",
+            "fold": null,
+            "controller_in_controller_basis": 1.859538575864031e-15,
+            "attractor_in_controller_basis": 1.859538575864031e-15,
+            "controller_basis_margin": 0.0,
+            "controller_basis_win": false,
+            "attractor_in_attractor_basis": 1.859538575864031e-15,
+            "controller_in_attractor_basis": 1.859538575864031e-15,
+            "attractor_basis_margin": 0.0,
+            "attractor_basis_win": false,
+            "controller_nearest_basis_win": false,
+            "attractor_nearest_basis_win": false
+          },
+          {
+            "template": "by",
+            "family": "friend-man-works",
+            "fold": null,
+            "controller_in_controller_basis": 3.637427301009066e-16,
+            "attractor_in_controller_basis": 3.637427301009066e-16,
+            "controller_basis_margin": 0.0,
+            "controller_basis_win": false,
+            "attractor_in_attractor_basis": 3.637427301009066e-16,
+            "controller_in_attractor_basis": 3.637427301009066e-16,
+            "attractor_basis_margin": 0.0,
+            "attractor_basis_win": false,
+            "controller_nearest_basis_win": false,
+            "attractor_nearest_basis_win": false
+          },
+          {
+            "template": "by",
+            "family": "horse-boat-moves",
+            "fold": null,
+            "controller_in_controller_basis": 7.618002171681684e-16,
+            "attractor_in_controller_basis": 7.618002171681684e-16,
+            "controller_basis_margin": 0.0,
+            "controller_basis_win": false,
+            "attractor_in_attractor_basis": 7.618002171681684e-16,
+            "controller_in_attractor_basis": 7.618002171681684e-16,
+            "attractor_basis_margin": 0.0,
+            "attractor_basis_win": false,
+            "controller_nearest_basis_win": false,
+            "attractor_nearest_basis_win": false
+          },
+          {
+            "template": "by",
+            "family": "teacher-woman-works",
+            "fold": null,
+            "controller_in_controller_basis": 2.235798254557185e-15,
+            "attractor_in_controller_basis": 2.235798254557185e-15,
+            "controller_basis_margin": 0.0,
+            "controller_basis_win": false,
+            "attractor_in_attractor_basis": 2.235798254557185e-15,
+            "controller_in_attractor_basis": 2.235798254557185e-15,
+            "attractor_basis_margin": 0.0,
+            "attractor_basis_win": false,
+            "controller_nearest_basis_win": false,
+            "attractor_nearest_basis_win": false
+          }
+        ]
+      },
+      "root_pullback_mixed": {
+        "matched_relation_basis": {
+          "wins": 7,
+          "total": 8
+        },
+        "symmetric_nearest_basis": {
+          "wins": 13,
+          "total": 16
+        },
+        "basis_rank": {
+          "controller": 36,
+          "attractor": 36
+        },
+        "cases": [
+          {
+            "template": "by",
+            "family": "boy-ball-moves",
+            "fold": null,
+            "controller_in_controller_basis": 0.8146243876362206,
+            "attractor_in_controller_basis": 0.822492115396425,
+            "controller_basis_margin": 0.00786772776020439,
+            "controller_basis_win": true,
+            "attractor_in_attractor_basis": 0.762706036216564,
+            "controller_in_attractor_basis": 0.8475305314770673,
+            "attractor_basis_margin": 0.08482449526050329,
+            "attractor_basis_win": true,
+            "controller_nearest_basis_win": true,
+            "attractor_nearest_basis_win": true
+          },
+          {
+            "template": "by",
+            "family": "boy-brother-helps",
+            "fold": null,
+            "controller_in_controller_basis": 0.7610553350456716,
+            "attractor_in_controller_basis": 0.8352532810561313,
+            "controller_basis_margin": 0.0741979460104597,
+            "controller_basis_win": true,
+            "attractor_in_attractor_basis": 0.7691746501146297,
+            "controller_in_attractor_basis": 0.8301991461378325,
+            "attractor_basis_margin": 0.06102449602320281,
+            "attractor_basis_win": true,
+            "controller_nearest_basis_win": true,
+            "attractor_nearest_basis_win": true
+          },
+          {
+            "template": "by",
+            "family": "car-thing-moves",
+            "fold": null,
+            "controller_in_controller_basis": 0.7619233865704984,
+            "attractor_in_controller_basis": 0.769620220726606,
+            "controller_basis_margin": 0.007696834156107557,
+            "controller_basis_win": true,
+            "attractor_in_attractor_basis": 0.7753152979312037,
+            "controller_in_attractor_basis": 0.7758438101901515,
+            "attractor_basis_margin": 0.0005285122589477886,
+            "attractor_basis_win": true,
+            "controller_nearest_basis_win": true,
+            "attractor_nearest_basis_win": false
+          },
+          {
+            "template": "by",
+            "family": "dog-person-lives",
+            "fold": null,
+            "controller_in_controller_basis": 0.6942238589125274,
+            "attractor_in_controller_basis": 0.7542263328135637,
+            "controller_basis_margin": 0.0600024739010363,
+            "controller_basis_win": true,
+            "attractor_in_attractor_basis": 0.7522975325910145,
+            "controller_in_attractor_basis": 0.7803158863177875,
+            "attractor_basis_margin": 0.02801835372677297,
+            "attractor_basis_win": true,
+            "controller_nearest_basis_win": true,
+            "attractor_nearest_basis_win": true
+          },
+          {
+            "template": "by",
+            "family": "friend-lady-lives",
+            "fold": null,
+            "controller_in_controller_basis": 0.6774809568713062,
+            "attractor_in_controller_basis": 0.7183463260659607,
+            "controller_basis_margin": 0.040865369194654555,
+            "controller_basis_win": true,
+            "attractor_in_attractor_basis": 0.7922559017632299,
+            "controller_in_attractor_basis": 0.8248542578838347,
+            "attractor_basis_margin": 0.0325983561206048,
+            "attractor_basis_win": true,
+            "controller_nearest_basis_win": true,
+            "attractor_nearest_basis_win": false
+          },
+          {
+            "template": "by",
+            "family": "friend-man-works",
+            "fold": null,
+            "controller_in_controller_basis": 0.727107881235747,
+            "attractor_in_controller_basis": 0.6973241269482675,
+            "controller_basis_margin": -0.02978375428747948,
+            "controller_basis_win": false,
+            "attractor_in_attractor_basis": 0.7437728064167157,
+            "controller_in_attractor_basis": 0.8589110169066085,
+            "attractor_basis_margin": 0.11513821048989281,
+            "attractor_basis_win": true,
+            "controller_nearest_basis_win": true,
+            "attractor_nearest_basis_win": false
+          },
+          {
+            "template": "by",
+            "family": "horse-boat-moves",
+            "fold": null,
+            "controller_in_controller_basis": 0.6579615270056957,
+            "attractor_in_controller_basis": 0.6950835278670757,
+            "controller_basis_margin": 0.03712200086138007,
+            "controller_basis_win": true,
+            "attractor_in_attractor_basis": 0.6214937560812411,
+            "controller_in_attractor_basis": 0.71016671002741,
+            "attractor_basis_margin": 0.08867295394616892,
+            "attractor_basis_win": true,
+            "controller_nearest_basis_win": true,
+            "attractor_nearest_basis_win": true
+          },
+          {
+            "template": "by",
+            "family": "teacher-woman-works",
+            "fold": null,
+            "controller_in_controller_basis": 0.7697626803690766,
+            "attractor_in_controller_basis": 0.771665560074769,
+            "controller_basis_margin": 0.0019028797056924729,
+            "controller_basis_win": true,
+            "attractor_in_attractor_basis": 0.7547704973806157,
+            "controller_in_attractor_basis": 0.8305560564858542,
+            "attractor_basis_margin": 0.07578555910523843,
+            "attractor_basis_win": true,
+            "controller_nearest_basis_win": true,
+            "attractor_nearest_basis_win": true
+          }
+        ]
+      },
+      "qk_transition_zip": {
+        "matched_relation_basis": {
+          "wins": 6,
+          "total": 8
+        },
+        "symmetric_nearest_basis": {
+          "wins": 14,
+          "total": 16
+        },
+        "basis_rank": {
+          "controller": 36,
+          "attractor": 36
+        },
+        "cases": [
+          {
+            "template": "by",
+            "family": "boy-ball-moves",
+            "fold": null,
+            "controller_in_controller_basis": 0.9131357527259245,
+            "attractor_in_controller_basis": 0.8929578065374728,
+            "controller_basis_margin": -0.0201779461884517,
+            "controller_basis_win": false,
+            "attractor_in_attractor_basis": 0.9270461467143368,
+            "controller_in_attractor_basis": 0.9535128713184461,
+            "attractor_basis_margin": 0.02646672460410926,
+            "attractor_basis_win": true,
+            "controller_nearest_basis_win": true,
+            "attractor_nearest_basis_win": false
+          },
+          {
+            "template": "by",
+            "family": "boy-brother-helps",
+            "fold": null,
+            "controller_in_controller_basis": 0.8764777088437664,
+            "attractor_in_controller_basis": 0.8890440313999296,
+            "controller_basis_margin": 0.01256632255616319,
+            "controller_basis_win": true,
+            "attractor_in_attractor_basis": 0.8726468139874141,
+            "controller_in_attractor_basis": 0.8960887079517028,
+            "attractor_basis_margin": 0.02344189396428875,
+            "attractor_basis_win": true,
+            "controller_nearest_basis_win": true,
+            "attractor_nearest_basis_win": true
+          },
+          {
+            "template": "by",
+            "family": "car-thing-moves",
+            "fold": null,
+            "controller_in_controller_basis": 0.9285059118917574,
+            "attractor_in_controller_basis": 0.9293052811695072,
+            "controller_basis_margin": 0.0007993692777498174,
+            "controller_basis_win": true,
+            "attractor_in_attractor_basis": 0.9359613485790876,
+            "controller_in_attractor_basis": 0.9387915555646409,
+            "attractor_basis_margin": 0.002830206985553252,
+            "attractor_basis_win": true,
+            "controller_nearest_basis_win": true,
+            "attractor_nearest_basis_win": false
+          },
+          {
+            "template": "by",
+            "family": "dog-person-lives",
+            "fold": null,
+            "controller_in_controller_basis": 0.7824529213930396,
+            "attractor_in_controller_basis": 0.8374314514950488,
+            "controller_basis_margin": 0.05497853010200926,
+            "controller_basis_win": true,
+            "attractor_in_attractor_basis": 0.7393405790573562,
+            "controller_in_attractor_basis": 0.8693050406620557,
+            "attractor_basis_margin": 0.12996446160469954,
+            "attractor_basis_win": true,
+            "controller_nearest_basis_win": true,
+            "attractor_nearest_basis_win": true
+          },
+          {
+            "template": "by",
+            "family": "friend-lady-lives",
+            "fold": null,
+            "controller_in_controller_basis": 0.8929028077489413,
+            "attractor_in_controller_basis": 0.8953884253539207,
+            "controller_basis_margin": 0.002485617604979451,
+            "controller_basis_win": true,
+            "attractor_in_attractor_basis": 0.8630713842678909,
+            "controller_in_attractor_basis": 0.915339860778598,
+            "attractor_basis_margin": 0.052268476510707096,
+            "attractor_basis_win": true,
+            "controller_nearest_basis_win": true,
+            "attractor_nearest_basis_win": true
+          },
+          {
+            "template": "by",
+            "family": "friend-man-works",
+            "fold": null,
+            "controller_in_controller_basis": 0.7733099424331888,
+            "attractor_in_controller_basis": 0.8195392687886885,
+            "controller_basis_margin": 0.0462293263554997,
+            "controller_basis_win": true,
+            "attractor_in_attractor_basis": 0.7945262844852402,
+            "controller_in_attractor_basis": 0.8446687598741325,
+            "attractor_basis_margin": 0.05014247538889227,
+            "attractor_basis_win": true,
+            "controller_nearest_basis_win": true,
+            "attractor_nearest_basis_win": true
+          },
+          {
+            "template": "by",
+            "family": "horse-boat-moves",
+            "fold": null,
+            "controller_in_controller_basis": 0.7915211665819294,
+            "attractor_in_controller_basis": 0.7686406514043624,
+            "controller_basis_margin": -0.02288051517756695,
+            "controller_basis_win": false,
+            "attractor_in_attractor_basis": 0.7241778651074672,
+            "controller_in_attractor_basis": 0.858814259246505,
+            "attractor_basis_margin": 0.13463639413903783,
+            "attractor_basis_win": true,
+            "controller_nearest_basis_win": true,
+            "attractor_nearest_basis_win": true
+          },
+          {
+            "template": "by",
+            "family": "teacher-woman-works",
+            "fold": null,
+            "controller_in_controller_basis": 0.8500177409450167,
+            "attractor_in_controller_basis": 0.9010596914037647,
+            "controller_basis_margin": 0.05104195045874804,
+            "controller_basis_win": true,
+            "attractor_in_attractor_basis": 0.8973681675658741,
+            "controller_in_attractor_basis": 0.8881464446859847,
+            "attractor_basis_margin": -0.009221722879889427,
+            "attractor_basis_win": false,
+            "controller_nearest_basis_win": true,
+            "attractor_nearest_basis_win": true
+          }
+        ]
+      },
+      "typed_transition_zip": {
+        "matched_relation_basis": {
+          "wins": 8,
+          "total": 8
+        },
+        "symmetric_nearest_basis": {
+          "wins": 16,
+          "total": 16
+        },
+        "basis_rank": {
+          "controller": 36,
+          "attractor": 36
+        },
+        "cases": [
+          {
+            "template": "by",
+            "family": "boy-ball-moves",
+            "fold": null,
+            "controller_in_controller_basis": 0.9269294339320114,
+            "attractor_in_controller_basis": 0.949889574620318,
+            "controller_basis_margin": 0.02296014068830654,
+            "controller_basis_win": true,
+            "attractor_in_attractor_basis": 0.9410974687559627,
+            "controller_in_attractor_basis": 0.9455287678614707,
+            "attractor_basis_margin": 0.004431299105507991,
+            "attractor_basis_win": true,
+            "controller_nearest_basis_win": true,
+            "attractor_nearest_basis_win": true
+          },
+          {
+            "template": "by",
+            "family": "boy-brother-helps",
+            "fold": null,
+            "controller_in_controller_basis": 0.9130223656351799,
+            "attractor_in_controller_basis": 0.9331355433568678,
+            "controller_basis_margin": 0.020113177721687858,
+            "controller_basis_win": true,
+            "attractor_in_attractor_basis": 0.920142256037858,
+            "controller_in_attractor_basis": 0.9543433328888671,
+            "attractor_basis_margin": 0.03420107685100904,
+            "attractor_basis_win": true,
+            "controller_nearest_basis_win": true,
+            "attractor_nearest_basis_win": true
+          },
+          {
+            "template": "by",
+            "family": "car-thing-moves",
+            "fold": null,
+            "controller_in_controller_basis": 0.9512220020034056,
+            "attractor_in_controller_basis": 0.9579976134261577,
+            "controller_basis_margin": 0.006775611422752181,
+            "controller_basis_win": true,
+            "attractor_in_attractor_basis": 0.948173115821952,
+            "controller_in_attractor_basis": 0.9520194068069766,
+            "attractor_basis_margin": 0.0038462909850246474,
+            "attractor_basis_win": true,
+            "controller_nearest_basis_win": true,
+            "attractor_nearest_basis_win": true
+          },
+          {
+            "template": "by",
+            "family": "dog-person-lives",
+            "fold": null,
+            "controller_in_controller_basis": 0.9217237302898592,
+            "attractor_in_controller_basis": 0.9407338431637514,
+            "controller_basis_margin": 0.019010112873892204,
+            "controller_basis_win": true,
+            "attractor_in_attractor_basis": 0.8842318561187512,
+            "controller_in_attractor_basis": 0.9573987890739257,
+            "attractor_basis_margin": 0.07316693295517451,
+            "attractor_basis_win": true,
+            "controller_nearest_basis_win": true,
+            "attractor_nearest_basis_win": true
+          },
+          {
+            "template": "by",
+            "family": "friend-lady-lives",
+            "fold": null,
+            "controller_in_controller_basis": 0.919439840130363,
+            "attractor_in_controller_basis": 0.9231455899037045,
+            "controller_basis_margin": 0.0037057497733415934,
+            "controller_basis_win": true,
+            "attractor_in_attractor_basis": 0.9060109976458018,
+            "controller_in_attractor_basis": 0.9550365234927564,
+            "attractor_basis_margin": 0.04902552584695452,
+            "attractor_basis_win": true,
+            "controller_nearest_basis_win": true,
+            "attractor_nearest_basis_win": true
+          },
+          {
+            "template": "by",
+            "family": "friend-man-works",
+            "fold": null,
+            "controller_in_controller_basis": 0.8102757316525127,
+            "attractor_in_controller_basis": 0.8943973636801242,
+            "controller_basis_margin": 0.08412163202761158,
+            "controller_basis_win": true,
+            "attractor_in_attractor_basis": 0.8225758689455117,
+            "controller_in_attractor_basis": 0.8846771465553894,
+            "attractor_basis_margin": 0.062101277609877714,
+            "attractor_basis_win": true,
+            "controller_nearest_basis_win": true,
+            "attractor_nearest_basis_win": true
+          },
+          {
+            "template": "by",
+            "family": "horse-boat-moves",
+            "fold": null,
+            "controller_in_controller_basis": 0.8858587324699329,
+            "attractor_in_controller_basis": 0.9082519534850275,
+            "controller_basis_margin": 0.022393221015094666,
+            "controller_basis_win": true,
+            "attractor_in_attractor_basis": 0.7709680529698638,
+            "controller_in_attractor_basis": 0.9032371539077969,
+            "attractor_basis_margin": 0.1322691009379331,
+            "attractor_basis_win": true,
+            "controller_nearest_basis_win": true,
+            "attractor_nearest_basis_win": true
+          },
+          {
+            "template": "by",
+            "family": "teacher-woman-works",
+            "fold": null,
+            "controller_in_controller_basis": 0.9119067931442466,
+            "attractor_in_controller_basis": 0.9401734822391984,
+            "controller_basis_margin": 0.02826668909495178,
+            "controller_basis_win": true,
+            "attractor_in_attractor_basis": 0.9024695855248561,
+            "controller_in_attractor_basis": 0.932664776040149,
+            "attractor_basis_margin": 0.030195190515292847,
+            "attractor_basis_win": true,
+            "controller_nearest_basis_win": true,
+            "attractor_nearest_basis_win": true
+          }
+        ]
+      }
+    }
+  },
+  "scope": [
+    "finite evidence for continuation geometry, not a recovered global grammar",
+    "no residual or norm is used as a completion score",
+    "no inference speedup follows from this diagnostic"
+  ]
+}

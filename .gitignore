@@ -19,6 +19,7 @@ __pycache__/
 /candidate_probe
 /company_probe
 /company_probe_san
+/cps_grammar_actions
 /semantic_fixed_points
 /exhaustive_scale_probe
 /forced_phrase_probe

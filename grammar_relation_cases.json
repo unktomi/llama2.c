@@ -1,0 +1,208 @@
+{
+  "schema_version": 1,
+  "description": "Matched controller/attractor action rectangles for continuation geometry. The target-number and verb-number edits occupy the same token positions in both roles; no padding is permitted.",
+  "exploration_templates": [
+    {
+      "name": "near",
+      "trace_prefix": "m3",
+      "controller": "Near the {context} the {target} {verb}.",
+      "attractor": "The {context} near the {target} {verb}."
+    },
+    {
+      "name": "with",
+      "trace_prefix": "m4",
+      "controller": "With the {context} the {target} {verb}.",
+      "attractor": "The {context} with the {target} {verb}."
+    },
+    {
+      "name": "under",
+      "trace_prefix": "m5",
+      "controller": "Under the {context} the {target} {verb}.",
+      "attractor": "The {context} under the {target} {verb}."
+    }
+  ],
+  "exploration_families": [
+    {
+      "name": "animal-flower-lives",
+      "fold": 0,
+      "context": "animal",
+      "target": "flower",
+      "target_plural": "flowers",
+      "verb_singular": "lives",
+      "verb_plural": "live"
+    },
+    {
+      "name": "bird-dog-runs",
+      "fold": 1,
+      "context": "bird",
+      "target": "dog",
+      "target_plural": "dogs",
+      "verb_singular": "runs",
+      "verb_plural": "run"
+    },
+    {
+      "name": "boy-girl-works",
+      "fold": 2,
+      "context": "boy",
+      "target": "girl",
+      "target_plural": "girls",
+      "verb_singular": "works",
+      "verb_plural": "work"
+    },
+    {
+      "name": "child-boy-plays",
+      "fold": 0,
+      "context": "child",
+      "target": "boy",
+      "target_plural": "boys",
+      "verb_singular": "plays",
+      "verb_plural": "play"
+    },
+    {
+      "name": "dog-animal-lives",
+      "fold": 1,
+      "context": "dog",
+      "target": "animal",
+      "target_plural": "animals",
+      "verb_singular": "lives",
+      "verb_plural": "live"
+    },
+    {
+      "name": "dog-horse-runs",
+      "fold": 2,
+      "context": "dog",
+      "target": "horse",
+      "target_plural": "horses",
+      "verb_singular": "runs",
+      "verb_plural": "run"
+    },
+    {
+      "name": "friend-bird-lives",
+      "fold": 0,
+      "context": "friend",
+      "target": "bird",
+      "target_plural": "birds",
+      "verb_singular": "lives",
+      "verb_plural": "live"
+    },
+    {
+      "name": "friend-student-works",
+      "fold": 1,
+      "context": "friend",
+      "target": "student",
+      "target_plural": "students",
+      "verb_singular": "works",
+      "verb_plural": "work"
+    },
+    {
+      "name": "girl-child-plays",
+      "fold": 2,
+      "context": "girl",
+      "target": "child",
+      "target_plural": "children",
+      "verb_singular": "plays",
+      "verb_plural": "play"
+    },
+    {
+      "name": "horse-car-moves",
+      "fold": 0,
+      "context": "horse",
+      "target": "car",
+      "target_plural": "cars",
+      "verb_singular": "moves",
+      "verb_plural": "move"
+    },
+    {
+      "name": "student-teacher-works",
+      "fold": 1,
+      "context": "student",
+      "target": "teacher",
+      "target_plural": "teachers",
+      "verb_singular": "works",
+      "verb_plural": "work"
+    },
+    {
+      "name": "teacher-friend-helps",
+      "fold": 2,
+      "context": "teacher",
+      "target": "friend",
+      "target_plural": "friends",
+      "verb_singular": "helps",
+      "verb_plural": "help"
+    }
+  ],
+  "confirmation_templates": [
+    {
+      "name": "by",
+      "trace_prefix": "m6",
+      "controller": "By the {context} the {target} {verb}.",
+      "attractor": "The {context} by the {target} {verb}."
+    }
+  ],
+  "confirmation_families": [
+    {
+      "name": "boy-ball-moves",
+      "context": "boy",
+      "target": "ball",
+      "target_plural": "balls",
+      "verb_singular": "moves",
+      "verb_plural": "move"
+    },
+    {
+      "name": "boy-brother-helps",
+      "context": "boy",
+      "target": "brother",
+      "target_plural": "brothers",
+      "verb_singular": "helps",
+      "verb_plural": "help"
+    },
+    {
+      "name": "car-thing-moves",
+      "context": "car",
+      "target": "thing",
+      "target_plural": "things",
+      "verb_singular": "moves",
+      "verb_plural": "move"
+    },
+    {
+      "name": "dog-person-lives",
+      "context": "dog",
+      "target": "person",
+      "target_plural": "people",
+      "verb_singular": "lives",
+      "verb_plural": "live"
+    },
+    {
+      "name": "friend-lady-lives",
+      "context": "friend",
+      "target": "lady",
+      "target_plural": "ladies",
+      "verb_singular": "lives",
+      "verb_plural": "live"
+    },
+    {
+      "name": "friend-man-works",
+      "context": "friend",
+      "target": "man",
+      "target_plural": "men",
+      "verb_singular": "works",
+      "verb_plural": "work"
+    },
+    {
+      "name": "horse-boat-moves",
+      "context": "horse",
+      "target": "boat",
+      "target_plural": "boats",
+      "verb_singular": "moves",
+      "verb_plural": "move"
+    },
+    {
+      "name": "teacher-woman-works",
+      "context": "teacher",
+      "target": "woman",
+      "target_plural": "women",
+      "verb_singular": "works",
+      "verb_plural": "work"
+    }
+  ]
+}

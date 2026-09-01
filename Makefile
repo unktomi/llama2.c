@@ -138,6 +138,17 @@ cpsgrammaractions: cps_grammar_actions.c cps_fixed_points.c run.c
 		-Wno-sign-compare -Wno-unused-variable -Wno-unused-function \
 		cps_grammar_actions.c -lm -o cps_grammar_actions
 
+GRAMMAR_RELATION_TRACES ?= work_traces/grammar_relations
+GRAMMAR_RELATION_ANALYSIS ?= outputs/cps-grammar-relations-analysis.json
+
+.PHONY: grammarrelations
+grammarrelations: cpsgrammaractions
+	python3 gather_grammar_relations.py \
+		--output $(GRAMMAR_RELATION_TRACES)
+	python3 analyze_grammar_relations.py \
+		--traces $(GRAMMAR_RELATION_TRACES) \
+		--output $(GRAMMAR_RELATION_ANALYSIS)
+
 .PHONY: longcontextprofiles
 longcontextprofiles: companyprobe
 	python3 gather_company_traces.py

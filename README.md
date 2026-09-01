@@ -190,6 +190,14 @@ or scalar semantic score are used.
 See the
 [grammatical-action section](doc/cps-fixed-points.md#grammatical-action-continuations).
 
+`grammar_relation_cases.json`, `gather_grammar_relations.py`, and
+`analyze_grammar_relations.py` apply that evaluator to matched subject-
+controller and PP-attractor squares. The analysis compares complete held-out
+continuation vectors with uncentered relation spans; it never converts their
+norms or residuals into a completion reward. The checked Stories15M result and
+its unseen-template confirmation are documented under
+[matched controller/attractor geometry](doc/cps-fixed-points.md#matched-controller-attractor-continuation-geometry).
+
 The preceding endpoint-observer experiment is retained only as
 `terminal-unembedding-observer-don't-do-this.c`. It selected final token
 coordinates before discovering the transformer's own continuation structure,

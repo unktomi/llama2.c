@@ -709,3 +709,116 @@ establish an exhaustive continuation eigenspace, or compile a faster inference
 schedule. The next basis should be generated from many such retained action
 differences and their higher-order Möbius compositions, with closure checked
 on unseen actions before any transport rule is accepted.
+
+### Matched controller-attractor continuation geometry
+
+The first controlled relation-family experiment keeps the two action tokens
+at exactly the same positions while changing their grammatical role.  A
+controller square has the form
+
+```text
+x   = Near the bird the dog runs.
+ax  = Near the bird the dogs runs.
+bx  = Near the bird the dog run.
+abx = Near the bird the dogs run.
+```
+
+Here either single edit breaks subject--verb agreement and the joint edit
+repairs it.  Its matched attractor square is
+
+```text
+x   = The bird near the dog runs.
+ax  = The bird near the dogs runs.
+bx  = The bird near the dog run.
+abx = The bird near the dogs run.
+```
+
+The edited target is now inside the intervening PP, so pluralizing it does not
+repair the verb edit.  In both squares the target-number action is at token
+position 5 and the verb-number action is at position 6.  The corresponding
+token constructors at those positions are identical.  The program rejects,
+rather than pads, any diagram that does not have this type.
+
+At layer 0, QKV projection is tokenwise.  Consequently, the two retained
+directed QK cross tensors are bit-identical between every matched controller
+and attractor case.  Across all 44 matched pairs their maximum absolute
+difference is exactly `0`.  The local bridge therefore contains no controller
+label.  What changes is the continuation in which that bridge is observed.
+Even the layer-0 QK `delta_tau`, which sends the same local interaction through
+the different learned suffixes, need no longer agree.
+
+The analysis retains four representations:
+
+1. both local directed layer-0 QK cross tensors;
+2. the final post-RMS mixed pullback vector;
+3. the six layer-indexed QK `delta_tau` vectors, concatenated rather than
+   summed;
+4. all 79 ordered typed-boundary `delta_tau` vectors, likewise concatenated.
+
+These are torsor differences, so their collection is a vector space without
+choosing an origin in hidden-state space.  For training vectors `v_i` of one
+relation, an uncentered SVD supplies an orthonormal row-span `B_R`.  The only
+diagnostic is
+
+```text
+epsilon_R(v) = ||v - B_R^T B_R v|| / ||v||.
+```
+
+No residual, norm, or sum becomes a completion reward.  The primary held-out
+comparison asks whether a controller vector is closer to the controller span
+than its matched attractor vector.  A second, symmetric diagnostic fits both
+spans and asks whether each held-out vector is nearer its own span.  Strict
+ties count as failures.
+
+Exploration uses the `near`, `with`, and `under` templates and twelve lexical
+families split into three disjoint folds.  Each of nine splits holds out one
+complete template and one lexical fold, trains on the remaining 16 vectors per
+role, and tests four matched pairs.  The confirmation was frozen afterward:
+fit all 36 exploration vectors per role, then test an unseen `By/by` template
+with eight new target inflections and contexts.
+
+| Retained representation | Exploration relation | Exploration nearest | Confirmation relation | Confirmation nearest |
+|---|---:|---:|---:|---:|
+| local layer-0 directed QK | 0/36 | 0/72 | 0/8 | 0/16 |
+| final mixed root | 25/36 | 53/72 | 7/8 | 13/16 |
+| layer-indexed QK transitions | 32/36 | 62/72 | 6/8 | 14/16 |
+| all typed transitions, scale-indexed | 34/36 | 62/72 | 8/8 | 16/16 |
+
+For the scale-indexed representation, the primary exploration comparison is
+`12/12` on `near`, `12/12` on `under`, and `10/12` on `with`.  All eight
+confirmation margins have the expected sign; they range from `0.00371` to
+`0.08412`.  A post-hoc per-layer view of the suffix-pulled QK transition gives
+relation-basis results of `21`, `24`, `29`, `24`, `32`, and `25` wins out of
+36 from layers 0 through 5.  Layer 4 is the largest in this finite sample, but
+it was not a prespecified layer and is not reported as a discovered universal
+boundary.
+
+The distinction between the endpoint and the scale-indexed result is the
+important one: folding the observations to one final mixed vector loses
+relation information that remains available when each learned scale keeps its
+own observation and the observations are composed as a product.  This is
+finite evidence for the proposed continuation role of context, not yet a
+complete grammar or an inference rule.
+
+Absolute confirmation residuals for the all-transition controller span remain
+between about `0.81` and `0.96`; only their matched relative ordering is being
+tested.  Some margins are small.  More templates, lexical families, and other
+dependencies are therefore required before treating the sampled span as
+closed.  The experiment makes no speedup claim.
+
+All 88 source traces are real Stories15M executions.  Their maximum complete
+typed-chain output defect is `0`, their maximum relative stock-`forward()`
+hidden defect is `1.48e-6`, and their maximum componentwise telescoping defect
+is `1.19e-7`.  The largest QK analytic reconstruction relative defect is
+`5.37e-5`; after removing the analytic cross terms, the largest remaining root
+fraction is `6.31e-4`.
+
+The manifest, collector, analyzer, and compact result are respectively
+`grammar_relation_cases.json`, `gather_grammar_relations.py`,
+`analyze_grammar_relations.py`, and
+`outputs/cps-grammar-relations-analysis.json`.  The raw vectors are omitted
+from Git because of their size and can be regenerated with:
+
+```bash
+make grammarrelations CC=clang
+```
