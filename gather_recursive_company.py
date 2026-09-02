@@ -93,6 +93,7 @@ def trace_complete(path: Path, roots: int, widths: tuple[int, ...]) -> bool:
         and meta.get("codata_constructed_before_observation") is True
         and meta.get("root_observer_runs") == 1
         and meta.get("observations_composed") is True
+        and meta.get("completion_selected") is False
         and check.get("kind") == "recursive_company_check"
         and check.get("demand_nodes") == demands
         and check.get("complete_branches") == leaves

@@ -11,18 +11,16 @@
  *
  * The whole tree is built before llama_company_evaluate. Consequently every
  * learned filler is applied once to the complete occurrence family. The
- * result remains a tree of token-indexed contrast vectors. Once the full tree
- * exists, a memoized dependent selection product compares each candidate x
- * through the x coordinate of its candidate-specific terminal-frontier
- * codata. No path score, probability fold, whole-completion argmax, or hidden
- * local-greedy terminalization is used. Every ballot and witness is flushed.
+ * result remains a tree of token-indexed contrast vectors. This is an
+ * observation diagnostic, not an inferencer. The final-row diagonal selector
+ * was deleted: it substituted terminal token coordinates for the requested
+ * site-focused composed observations. Do not reinstate it as a fallback.
  */
 
 #include "llama_company.h"
 
 #include <errno.h>
 #include <limits.h>
-#include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -583,20 +581,6 @@ typedef struct {
     uint64_t *composition_steps;
 } ObservationBind;
 
-/* A memo entry is the deforested finite selection product at one dependent
- * constructor demand.  The structured outcome R is represented by the row
- * containing its complete terminal-frontier codata.  At site s and candidate
- * x, the local selector observes only the matching coordinate q_R[x]. */
-typedef struct {
-    bool computed;
-    int selected_token;
-    int selected_child_demand;
-    int selected_leaf;
-    int terminal_row;
-    float diagonal_contrast;
-    int exact_ties;
-} SelectionMemo;
-
 static void prepend_edge_observation(
     void *raw_environment,
     const ComposedObservation *suffix
@@ -630,23 +614,10 @@ typedef struct {
     uint64_t root_observer_runs;
     uint64_t composition_steps;
     uint64_t composed_observations;
-    SelectionMemo *selection_memo;
-    uint64_t selection_nodes;
-    uint64_t selection_candidate_evaluations;
-    uint64_t selection_root_mates;
-    uint64_t selection_exact_tie_nodes;
     uint64_t total_calls;
     uint64_t maximum_calls;
     uint64_t total_reads;
 } RecursiveObservationTerm;
-
-typedef struct {
-    int token;
-    int child_demand;
-    int leaf;
-    int terminal_row;
-    float diagonal_contrast;
-} SelectionCandidate;
 
 static int child_demand_index(
     const RecursiveObservationTerm *term,
@@ -676,252 +647,6 @@ static int child_leaf_index(
         }
     }
     return -1;
-}
-
-static int selected_continuation_length(
-    const RecursiveObservationTerm *term,
-    int demand_index
-) {
-    if (demand_index < 0 || demand_index >= term->demands->count ||
-        !term->selection_memo[demand_index].computed) {
-        fail("selection continuation is not memoized");
-    }
-    return term->families->count - term->demands->values[demand_index].depth;
-}
-
-static void fill_selected_continuation(
-    const RecursiveObservationTerm *term,
-    int demand_index,
-    int *tokens,
-    int token_count
-) {
-    int output = 0;
-    int current = demand_index;
-    while (current >= 0) {
-        if (current >= term->demands->count ||
-            !term->selection_memo[current].computed || output >= token_count) {
-            fail("selected continuation is malformed");
-        }
-        const SelectionMemo *selection = &term->selection_memo[current];
-        tokens[output++] = selection->selected_token;
-        current = selection->selected_child_demand;
-    }
-    if (output != token_count) fail("selected continuation length differs");
-}
-
-static void write_selection_candidate_path(
-    FILE *file,
-    const RecursiveObservationTerm *term,
-    const SelectionCandidate *candidate
-) {
-    fputc('[', file);
-    fprintf(file, "%d", candidate->token);
-    if (candidate->child_demand >= 0) {
-        int count = selected_continuation_length(term, candidate->child_demand);
-        int *suffix = checked_calloc((size_t)count, sizeof(*suffix));
-        fill_selected_continuation(
-            term,
-            candidate->child_demand,
-            suffix,
-            count
-        );
-        for (int index = 0; index < count; index++) {
-            fprintf(file, ",%d", suffix[index]);
-        }
-        free(suffix);
-    }
-    fputc(']', file);
-}
-
-/* Escardo's dependent product, specialized to the retained finite company.
- *
- *   b(x) = select(child_x)
- *   r_x  = p(x, b(x))
- *   eps_s(k) = argmax_x q_{r_x}[x]
- *
- * The continuation result r_x remains the complete codata row.  No edge
- * logit, path probability, or score from another selection site is added.
- * Exact float ties remain visible in the trace; the smallest token id is only
- * a deterministic representative of that retained argmax set. */
-static const SelectionMemo *select_dependent_demand(
-    RecursiveObservationTerm *term,
-    int demand_index
-) {
-    if (demand_index < 0 || demand_index >= term->demands->count) {
-        fail("selection received an invalid demand");
-    }
-    SelectionMemo *memo = &term->selection_memo[demand_index];
-    if (memo->computed) return memo;
-
-    const DemandRecord *demand = &term->demands->values[demand_index];
-    const TokenFamily *family = &term->families->values[demand->depth];
-    SelectionCandidate *candidates = checked_calloc(
-        (size_t)family->count,
-        sizeof(*candidates)
-    );
-    int best = -1;
-    for (int index = 0; index < family->count; index++) {
-        int token = family->tokens[index];
-        int child_demand = -1;
-        int leaf = -1;
-        int terminal_row = -1;
-        if (demand->depth + 1 == term->families->count) {
-            leaf = child_leaf_index(term, demand_index, token);
-            if (leaf < 0 || leaf >= term->leaves->count) {
-                fail("selection lost a terminal outcome");
-            }
-            terminal_row = term->leaves->values[leaf].row;
-        } else {
-            child_demand = child_demand_index(term, demand_index, token);
-            if (child_demand < 0) {
-                fail("selection lost a dependent continuation");
-            }
-            const SelectionMemo *suffix = select_dependent_demand(
-                term,
-                child_demand
-            );
-            terminal_row = suffix->terminal_row;
-        }
-        if (terminal_row < 0 || terminal_row >= term->row_count) {
-            fail("selection produced an invalid terminal outcome row");
-        }
-        const float *outcome = term->logits +
-            (size_t)terminal_row * term->vocab_size;
-        float diagonal = outcome[token] - outcome[term->reference_token];
-        if (!isfinite(diagonal)) fail("selection produced nonfinite dislike");
-        candidates[index] = (SelectionCandidate){
-            .token = token,
-            .child_demand = child_demand,
-            .leaf = leaf,
-            .terminal_row = terminal_row,
-            .diagonal_contrast = diagonal,
-        };
-        term->selection_candidate_evaluations++;
-        if (best < 0 || diagonal > candidates[best].diagonal_contrast ||
-            (diagonal == candidates[best].diagonal_contrast &&
-             token < candidates[best].token)) {
-            best = index;
-        }
-    }
-    if (best < 0) fail("selection demand has no retained constructors");
-    int exact_ties = 0;
-    for (int index = 0; index < family->count; index++) {
-        if (candidates[index].diagonal_contrast ==
-            candidates[best].diagonal_contrast) {
-            exact_ties++;
-        }
-    }
-    *memo = (SelectionMemo){
-        .computed = true,
-        .selected_token = candidates[best].token,
-        .selected_child_demand = candidates[best].child_demand,
-        .selected_leaf = candidates[best].leaf,
-        .terminal_row = candidates[best].terminal_row,
-        .diagonal_contrast = candidates[best].diagonal_contrast,
-        .exact_ties = exact_ties,
-    };
-    term->selection_nodes++;
-    if (exact_ties > 1) term->selection_exact_tie_nodes++;
-
-    const RootRecord *root = &term->roots->values[demand->root];
-    int *prefix = checked_calloc(
-        (size_t)term->families->count,
-        sizeof(*prefix)
-    );
-    fill_demand_path(term->demands, demand_index, prefix, demand->depth);
-    fputs("{\"kind\":\"recursive_company_selection\",\"root\":", term->trace);
-    json_string(term->trace, root->key);
-    fprintf(term->trace, ",\"depth\":%d,\"path_tokens\":", demand->depth);
-    write_int_array(term->trace, prefix, demand->depth);
-    fputs(",\"text\":", term->trace);
-    write_decoded_company(
-        term->trace,
-        term->runtime,
-        root,
-        prefix,
-        demand->depth
-    );
-    fputs(",\"observer\":\"full_company_diagonal\",\"candidates\":[", term->trace);
-    int previous = demand->depth == 0
-        ? root->prefix.values[root->prefix.count - 1]
-        : prefix[demand->depth - 1];
-    for (int index = 0; index < family->count; index++) {
-        if (index != 0) fputc(',', term->trace);
-        const SelectionCandidate *candidate = &candidates[index];
-        fprintf(term->trace, "{\"token\":%d,\"piece\":", candidate->token);
-        json_string(
-            term->trace,
-            atkey_decode(term->runtime, previous, candidate->token)
-        );
-        fprintf(
-            term->trace,
-            ",\"terminal_row\":%d,\"diagonal_contrast\":%.9g,"
-            "\"selected\":%s,\"continuation_tokens\":",
-            candidate->terminal_row,
-            candidate->diagonal_contrast,
-            index == best ? "true" : "false"
-        );
-        write_selection_candidate_path(term->trace, term, candidate);
-        fputc('}', term->trace);
-    }
-    fprintf(
-        term->trace,
-        "],\"selected_token\":%d,\"selected_terminal_row\":%d,"
-        "\"selected_diagonal_contrast\":%.9g,\"exact_argmax_size\":%d}\n",
-        memo->selected_token,
-        memo->terminal_row,
-        memo->diagonal_contrast,
-        memo->exact_ties
-    );
-    fflush(term->trace);
-    free(prefix);
-    free(candidates);
-    return memo;
-}
-
-static void write_selected_root(
-    RecursiveObservationTerm *term,
-    int root_index,
-    int demand_index
-) {
-    const SelectionMemo *selection = select_dependent_demand(term, demand_index);
-    int depth = selected_continuation_length(term, demand_index);
-    int *path = checked_calloc((size_t)depth, sizeof(*path));
-    fill_selected_continuation(term, demand_index, path, depth);
-    const RootRecord *root = &term->roots->values[root_index];
-    fputs(
-        "{\"kind\":\"recursive_company_selected_completion\",\"root\":",
-        term->trace
-    );
-    json_string(term->trace, root->key);
-    fputs(",\"path_tokens\":", term->trace);
-    write_int_array(term->trace, path, depth);
-    fputs(",\"text\":", term->trace);
-    write_decoded_company(term->trace, term->runtime, root, path, depth);
-    fprintf(
-        term->trace,
-        ",\"terminal_row\":%d,\"selection_semantics\":"
-        "\"escardo_dependent_product_full_company_diagonal\","
-        "\"position_ballots\":[",
-        selection->terminal_row
-    );
-    const float *outcome = term->logits +
-        (size_t)selection->terminal_row * term->vocab_size;
-    for (int index = 0; index < depth; index++) {
-        if (index != 0) fputc(',', term->trace);
-        float diagonal = outcome[path[index]] - outcome[term->reference_token];
-        fprintf(
-            term->trace,
-            "{\"depth\":%d,\"token\":%d,\"diagonal_contrast\":%.9g}",
-            index,
-            path[index],
-            diagonal
-        );
-    }
-    fprintf(term->trace, "]}\n");
-    fflush(term->trace);
-    term->selection_root_mates++;
-    free(path);
 }
 
 static void write_composed_observation(
@@ -1140,11 +865,7 @@ static bool observe_recursive_company(
         "\"probabilities_used\":false,\"scalar_reward_used\":false,"
         "\"whole_completion_argmax_used\":false,"
         "\"complete_paths_flattened\":false,"
-        "\"completion_selected\":true,"
-        "\"selection_semantics\":"
-        "\"escardo_dependent_product_full_company_diagonal\","
-        "\"local_edge_logits_terminalized\":false,"
-        "\"path_likelihoods_summed\":false}\n",
+        "\"completion_selected\":false,\"purpose\":\"observation_diagnostic\"}\n",
         term->trace
     );
     fflush(term->trace);
@@ -1254,34 +975,12 @@ static bool observe_recursive_company(
         term->composition_steps != expected_steps) {
         return false;
     }
-    term->selection_memo = checked_calloc(
-        (size_t)term->demands->count,
-        sizeof(*term->selection_memo)
-    );
-    for (int root = 0; root < term->roots->count; root++) {
-        write_selected_root(term, root, term->root_demands[root]);
-    }
-    uint64_t expected_selection_candidates = 0;
-    for (int index = 0; index < term->demands->count; index++) {
-        int depth = term->demands->values[index].depth;
-        expected_selection_candidates +=
-            (uint64_t)term->families->values[depth].count;
-    }
-    if (term->selection_nodes != (uint64_t)term->demands->count ||
-        term->selection_candidate_evaluations != expected_selection_candidates ||
-        term->selection_root_mates != (uint64_t)term->roots->count) {
-        free(term->selection_memo);
-        term->selection_memo = NULL;
-        return false;
-    }
     fprintf(
         term->trace,
         "{\"kind\":\"recursive_company_check\",\"roots\":%d,"
         "\"depth\":%d,\"demand_nodes\":%d,\"complete_branches\":%d,"
         "\"maximum_calls_per_filler\":%llu,\"root_observer_runs\":%llu,"
-        "\"composed_observations\":%llu,\"composition_steps\":%llu,"
-        "\"selection_nodes\":%llu,\"selection_candidate_evaluations\":%llu,"
-        "\"selection_root_mates\":%llu,\"selection_exact_tie_nodes\":%llu}\n",
+        "\"composed_observations\":%llu,\"composition_steps\":%llu}\n",
         term->roots->count,
         term->families->count,
         term->demands->count,
@@ -1289,15 +988,9 @@ static bool observe_recursive_company(
         (unsigned long long)term->maximum_calls,
         (unsigned long long)term->root_observer_runs,
         (unsigned long long)term->composed_observations,
-        (unsigned long long)term->composition_steps,
-        (unsigned long long)term->selection_nodes,
-        (unsigned long long)term->selection_candidate_evaluations,
-        (unsigned long long)term->selection_root_mates,
-        (unsigned long long)term->selection_exact_tie_nodes
+        (unsigned long long)term->composition_steps
     );
     fflush(term->trace);
-    free(term->selection_memo);
-    term->selection_memo = NULL;
     return true;
 }
 

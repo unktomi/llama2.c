@@ -1,4 +1,6 @@
 {
+  "status": "rejected_selector_deleted",
+  "rejection_reason": "The selector used a terminal-row token coordinate instead of a site-focused recursively composed company observation. These are historical results, not evidence of the requested inferencer.",
   "schema_version": 1,
   "artifact": "recursive_dependent_polynomial_company",
   "model": "Stories15M",
