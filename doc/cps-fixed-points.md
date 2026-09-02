@@ -1978,3 +1978,8 @@ Compact per-run results are committed as
 `work_traces/observer_fixed_points/`. This step establishes inspectable
 pointwise measurements and a composition counterexample. Discovering
 observer factorizations that justify actual interchange remains unfinished.
+
+The subsequent user-requested linguistic examples are in
+[commuting-samples.md](commuting-samples.md). They specify expected
+observer-relative invariances and sensitivity controls, not measured neural
+fixed points.
