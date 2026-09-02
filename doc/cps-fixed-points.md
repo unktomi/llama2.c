@@ -1679,3 +1679,91 @@ python3 browse_recursive_company.py \
   --root 'exploration/near/animal-flower-lives::x' \
   --path 12080,29889 --top 8
 ```
+
+#### Firth ballots as an energy one-form
+
+`analyze_firth_potential.py` tests the first precise energy-based reading of
+the retained recursive company. It does not add the path observations. For
+each root, outer injection `d`, and inner injection `e`, it uses exactly the
+active constructor's coordinate from the two measured local codata vectors:
+
+```text
+u_D(d,e) = q_D(root)[d]
+u_E(d,e) = q_E(root,d)[e].
+```
+
+For every pair `d0,d1` and pair `e0,e1`, these local preferences form an
+oriented square. All four edges are differences between two coordinates of
+one codata vector, so the common logit gauge cancels. The exact-potential law
+is
+
+```text
+D(d0 -> d1 | e0) + E(e0 -> e1 | d1)
+  = E(e0 -> e1 | d0) + D(d0 -> d1 | e1).
+```
+
+The retained `176 * choose(12,2) * choose(8,2) = 325,248` squares give:
+
+| Quantity | Result |
+|---|---:|
+| exactly closed squares | 0 |
+| nonclosed squares | 325,248 |
+| median absolute circulation | 2.21014737 |
+| mean absolute circulation | 2.87176393 |
+| maximum absolute circulation | 19.4165517 |
+| median circulating fraction of the four-edge L2 norm | 0.176832051 |
+| mean circulating fraction | 0.216752468 |
+| maximum circulating fraction | 0.707106765 |
+| response of the outer edge to the unobserved future injection | exactly 0 in 325,248/325,248 cells |
+
+This is a structural causal result, not a numerical failure. The earlier
+selector is evaluated before the inner injection and therefore has identical
+edges on both inner fibers. The later selector has consumed the outer
+injection, and its preference between two inner constructors generally changes
+with that injection. Their mixed responses are consequently nonreciprocal.
+
+For example, in
+`confirmation/by/car-thing-moves::AC`, changing the outer injection from
+`run` to `help` has local gain `-0.550817638`. The inner `late -> it` gain is
+`-2.3185397` after `run` and `17.098012` after `help`. The two path gains are
+therefore `-2.86935733` and `16.5471943`, a circulation of `19.4165517`.
+These are local candidate contrasts and path differences, not a proposed
+completion score.
+
+Each cell is also decomposed in two ways. The equal-edge-metric Hodge
+projection separates its nearest conservative and circulating one-forms; the
+largest conservative closure defect is `7.11e-15`. More operationally, the
+analyzer leaves both later-selector edges untouched and calculates the
+minimum-L2 reciprocal correction required of the earlier continuation. If the
+measured circulation is `c`, that correction is
+
+```text
+D(d0 -> d1 | e0) -= c/2
+D(d0 -> d1 | e1) += c/2.
+```
+
+The resulting mixed response of the earlier selection is exactly the measured
+mixed response of the later selection, and its largest closure defect is
+`5.33e-15`. This correction is labelled as a demanded backward continuation;
+the analyzer does not claim that it is already present in `q_D`.
+
+The result rules out only the two edge-local final-unembedding selectors as
+the restrictions of one scalar energy. It does not rule out the stronger
+hypothesis that the complete scale-indexed CPS ballots close after the suffix
+continuations propagate later interactions back to earlier selections. It
+instead gives that hypothesis a concrete next requirement: the typed
+pullbacks must supply the missing reciprocal mixed response measured in every
+cell.
+
+The compact artifact is
+`outputs/cps-stories15m-firth-potential.json`. Every one of the 325,248 cells,
+including all candidate contrasts, both path gains, the Hodge split, and the
+required backward term, is retained in the line-buffered local trace
+`work_traces/firth_potential/cells.jsonl`. Reproduce and browse it with:
+
+```bash
+make firthpotential
+python3 browse_firth_potential.py \
+  --root 'confirmation/by/car-thing-moves::AC' \
+  --top 8
+```

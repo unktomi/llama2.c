@@ -199,6 +199,9 @@ POST_INJECTION_HOLE_EVALUATOR_COMMIT ?= $(shell git rev-parse HEAD)
 POLYNOMIAL_COMPANY_TRACES ?= work_traces/polynomial_company
 POLYNOMIAL_SUBSTITUTION_ANALYSIS ?= outputs/cps-stories15m-polynomial-substitution.json
 POLYNOMIAL_COMPANY_EVALUATOR_COMMIT ?= $(shell git rev-parse HEAD)
+FIRTH_POTENTIAL_CELLS ?= work_traces/firth_potential/cells.jsonl
+FIRTH_POTENTIAL_ANALYSIS ?= outputs/cps-stories15m-firth-potential.json
+FIRTH_POTENTIAL_EVALUATOR_COMMIT ?= $(shell git log -1 --format=%H -- cps_recursive_company.c llama_company.c)
 
 .PHONY: grammarrelations
 grammarrelations: cpsgrammaractions
@@ -277,6 +280,13 @@ polynomialsubstitution: cpspolynomialcompany numberdemandcubes postinjectionhole
 		--hole-traces $(POST_INJECTION_HOLE_TRACES) \
 		--evaluator-commit $(POLYNOMIAL_COMPANY_EVALUATOR_COMMIT) \
 		--output $(POLYNOMIAL_SUBSTITUTION_ANALYSIS)
+
+.PHONY: firthpotential
+firthpotential:
+	python3 analyze_firth_potential.py \
+		--cells $(FIRTH_POTENTIAL_CELLS) \
+		--evaluator-commit $(FIRTH_POTENTIAL_EVALUATOR_COMMIT) \
+		--output $(FIRTH_POTENTIAL_ANALYSIS)
 
 .PHONY: longcontextprofiles
 longcontextprofiles: companyprobe
