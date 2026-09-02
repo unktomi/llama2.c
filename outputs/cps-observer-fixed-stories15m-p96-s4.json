@@ -1,0 +1,1991 @@
+{
+  "trace": "/Users/christopheroliver/Documents/Codex/2026-08-27/referenced-chatgpt-conversation-this-is-an-2/work/llama2-company-readout/work_traces/observer_fixed_points/stories15m-p96-s4.jsonl",
+  "meta": {
+    "kind": "meta",
+    "schema_version": 1,
+    "measurement": "individual_residual_observer_fixed_points",
+    "model": "../llama2.c/test/stories15M.bin",
+    "corpus": "../data/TinyStories-valid.txt",
+    "logits_file": "work_traces/observer_fixed_points/stories15m-p96-s4.f32",
+    "logits_dtype": "float32",
+    "byte_order": "little",
+    "layers": 6,
+    "dim": 288,
+    "vocabulary": 32000,
+    "positions": 96,
+    "position_stride": 4,
+    "requested_samples": 2,
+    "start_story": 1,
+    "observer": "corpus-target contrasts, their signs, and full argmax set",
+    "equality": "exact recorded values; no tolerance",
+    "grammar_labels_supplied": false,
+    "optimization_enabled": false
+  },
+  "complete": true,
+  "summary": {
+    "kind": "summary",
+    "samples": 2,
+    "operations": 600,
+    "structurally_unreachable": 96,
+    "codata_fixed": 96,
+    "target_order_fixed": 595,
+    "choice_fixed": 595,
+    "joint_groups": 24,
+    "joint_choice_changed": 3,
+    "cpu_seconds": 98.737946
+  },
+  "all_individual_updates": {
+    "operations": 600,
+    "codata_fixed": 96,
+    "choice_fixed": 595,
+    "target_order_fixed": 595,
+    "target_order_changed": 5
+  },
+  "excluding_structurally_unreachable": {
+    "operations": 504,
+    "codata_fixed": 0,
+    "choice_fixed": 499,
+    "target_order_fixed": 499,
+    "target_order_changed": 5
+  },
+  "by_layer_and_operation": [
+    {
+      "layer": 0,
+      "operation": "attention_residual",
+      "operations": 50,
+      "codata_fixed": 0,
+      "choice_fixed": 50,
+      "target_order_fixed": 50,
+      "target_order_changed": 0
+    },
+    {
+      "layer": 0,
+      "operation": "ffn_residual",
+      "operations": 50,
+      "codata_fixed": 0,
+      "choice_fixed": 48,
+      "target_order_fixed": 48,
+      "target_order_changed": 2
+    },
+    {
+      "layer": 1,
+      "operation": "attention_residual",
+      "operations": 50,
+      "codata_fixed": 0,
+      "choice_fixed": 50,
+      "target_order_fixed": 50,
+      "target_order_changed": 0
+    },
+    {
+      "layer": 1,
+      "operation": "ffn_residual",
+      "operations": 50,
+      "codata_fixed": 0,
+      "choice_fixed": 50,
+      "target_order_fixed": 50,
+      "target_order_changed": 0
+    },
+    {
+      "layer": 2,
+      "operation": "attention_residual",
+      "operations": 50,
+      "codata_fixed": 0,
+      "choice_fixed": 49,
+      "target_order_fixed": 49,
+      "target_order_changed": 1
+    },
+    {
+      "layer": 2,
+      "operation": "ffn_residual",
+      "operations": 50,
+      "codata_fixed": 0,
+      "choice_fixed": 49,
+      "target_order_fixed": 49,
+      "target_order_changed": 1
+    },
+    {
+      "layer": 3,
+      "operation": "attention_residual",
+      "operations": 50,
+      "codata_fixed": 0,
+      "choice_fixed": 50,
+      "target_order_fixed": 50,
+      "target_order_changed": 0
+    },
+    {
+      "layer": 3,
+      "operation": "ffn_residual",
+      "operations": 50,
+      "codata_fixed": 0,
+      "choice_fixed": 49,
+      "target_order_fixed": 49,
+      "target_order_changed": 1
+    },
+    {
+      "layer": 4,
+      "operation": "attention_residual",
+      "operations": 50,
+      "codata_fixed": 0,
+      "choice_fixed": 50,
+      "target_order_fixed": 50,
+      "target_order_changed": 0
+    },
+    {
+      "layer": 4,
+      "operation": "ffn_residual",
+      "operations": 50,
+      "codata_fixed": 0,
+      "choice_fixed": 50,
+      "target_order_fixed": 50,
+      "target_order_changed": 0
+    },
+    {
+      "layer": 5,
+      "operation": "attention_residual",
+      "operations": 2,
+      "codata_fixed": 0,
+      "choice_fixed": 2,
+      "target_order_fixed": 2,
+      "target_order_changed": 0
+    },
+    {
+      "layer": 5,
+      "operation": "ffn_residual",
+      "operations": 2,
+      "codata_fixed": 0,
+      "choice_fixed": 2,
+      "target_order_fixed": 2,
+      "target_order_changed": 0
+    }
+  ],
+  "joint_groups": 24,
+  "joint_choice_changed": 3,
+  "samples": [
+    {
+      "kind": "sample",
+      "sample": 0,
+      "story_index": 1,
+      "positions": 96,
+      "text": "Once upon a time, in a big forest, there lived a rhinoceros named Roxy. Roxy loved to climb. She climbed trees, rocks, and hills. One day, Roxy found an icy hill. She had never seen anything like it before. It was shiny and cold, and she wanted to climb it.<0x0A>Roxy tried to climb the icy hill, but it was very slippery. She",
+      "source_story": "Once upon a time, in a big forest, there lived a rhinoceros named Roxy. Roxy loved to climb. She climbed trees, rocks, and hills. One day, Roxy found an icy hill. She had never seen anything like it before. It was shiny and cold, and she wanted to climb it.\nRoxy tried to climb the icy hill, but it was very slippery. She tried again and again, but she kept falling down. Roxy was sad. She wanted to climb the icy hill so much. Then, she saw a little bird named Billy. Billy saw that Roxy was sad and asked, \"Why are you sad, Roxy?\"\nRoxy told Billy about the icy hill and how she couldn't climb it. Billy said, \"I have an idea! Let's find some big leaves to put under your feet. They will help you climb the icy hill.\" Roxy and Billy looked for big leaves and found some. Roxy put the leaves under her feet and tried to climb the icy hill again.\nThis time, Roxy didn't slip. She climbed and climbed until she reached the top of the icy hill. Roxy was so happy! She and Billy played on the icy hill all day. From that day on, Roxy and Billy were the best of friends, and they climbed and played together all the time. And Roxy learned that with a little help from a friend, she could climb anything.\n",
+      "target": 1898,
+      "target_piece": " tried",
+      "logits_offset": 0,
+      "top_with_update": [
+        {
+          "token": 1898,
+          "piece": " tried",
+          "logit": 15.4998446
+        },
+        {
+          "token": 8379,
+          "piece": " fell",
+          "logit": 14.7042255
+        },
+        {
+          "token": 20662,
+          "piece": " sli",
+          "logit": 14.6512032
+        },
+        {
+          "token": 471,
+          "piece": " was",
+          "logit": 14.5001478
+        },
+        {
+          "token": 4687,
+          "piece": " started",
+          "logit": 13.7724514
+        }
+      ],
+      "tokens": [
+        1,
+        9038,
+        2501,
+        263,
+        931,
+        29892,
+        297,
+        263,
+        4802,
+        13569,
+        29892,
+        727,
+        10600,
+        263,
+        364,
+        11222,
+        542,
+        9672,
+        4257,
+        1528,
+        3594,
+        29889,
+        1528,
+        3594,
+        18012,
+        304,
+        10784,
+        29890,
+        29889,
+        2296,
+        10784,
+        2580,
+        10697,
+        29892,
+        23150,
+        29892,
+        322,
+        22696,
+        29889,
+        3118,
+        2462,
+        29892,
+        1528,
+        3594,
+        1476,
+        385,
+        29871,
+        4245,
+        17306,
+        29889,
+        2296,
+        750,
+        2360,
+        3595,
+        3099,
+        763,
+        372,
+        1434,
+        29889,
+        739,
+        471,
+        528,
+        4901,
+        322,
+        11220,
+        29892,
+        322,
+        1183,
+        5131,
+        304,
+        10784,
+        29890,
+        372,
+        29889,
+        13,
+        29934,
+        2251,
+        29891,
+        1898,
+        304,
+        10784,
+        29890,
+        278,
+        29871,
+        4245,
+        17306,
+        29892,
+        541,
+        372,
+        471,
+        1407,
+        20662,
+        407,
+        708,
+        29889,
+        2296
+      ]
+    },
+    {
+      "kind": "sample",
+      "sample": 1,
+      "story_index": 2,
+      "positions": 96,
+      "text": "Once upon a time, in a small yard, there was a small daisy. The daisy had a name. Her name was Daisy. Daisy was very small, but she was also very happy.<0x0A>One day, Daisy saw a dog. The dog was big and had a name too. His name was Max. Max liked to play in the yard. Daisy liked to watch Max play. Max and Daisy became friends",
+      "source_story": "Once upon a time, in a small yard, there was a small daisy. The daisy had a name. Her name was Daisy. Daisy was very small, but she was also very happy.\nOne day, Daisy saw a dog. The dog was big and had a name too. His name was Max. Max liked to play in the yard. Daisy liked to watch Max play. Max and Daisy became friends.\nEvery day, Max would come to the yard to play. Daisy would watch and smile. They were very happy together. And even though Daisy was small, she knew that she had a big friend in Max.\n",
+      "target": 29889,
+      "target_piece": ".",
+      "logits_offset": 40064000,
+      "top_with_update": [
+        {
+          "token": 29889,
+          "piece": ".",
+          "logit": 20.2636814
+        },
+        {
+          "token": 322,
+          "piece": " and",
+          "logit": 14.4833536
+        },
+        {
+          "token": 29892,
+          "piece": ",",
+          "logit": 13.3393908
+        },
+        {
+          "token": 297,
+          "piece": " in",
+          "logit": 13.2709093
+        },
+        {
+          "token": 2086,
+          "piece": " too",
+          "logit": 13.1065359
+        }
+      ],
+      "tokens": [
+        1,
+        9038,
+        2501,
+        263,
+        931,
+        29892,
+        297,
+        263,
+        2319,
+        29413,
+        29892,
+        727,
+        471,
+        263,
+        2319,
+        1146,
+        13344,
+        29889,
+        450,
+        1146,
+        13344,
+        750,
+        263,
+        1024,
+        29889,
+        2439,
+        1024,
+        471,
+        360,
+        1759,
+        29891,
+        29889,
+        360,
+        1759,
+        29891,
+        471,
+        1407,
+        2319,
+        29892,
+        541,
+        1183,
+        471,
+        884,
+        1407,
+        9796,
+        29889,
+        13,
+        6716,
+        2462,
+        29892,
+        360,
+        1759,
+        29891,
+        4446,
+        263,
+        11203,
+        29889,
+        450,
+        11203,
+        471,
+        4802,
+        322,
+        750,
+        263,
+        1024,
+        2086,
+        29889,
+        3600,
+        1024,
+        471,
+        5918,
+        29889,
+        5918,
+        23289,
+        304,
+        1708,
+        297,
+        278,
+        29413,
+        29889,
+        360,
+        1759,
+        29891,
+        23289,
+        304,
+        6505,
+        5918,
+        1708,
+        29889,
+        5918,
+        322,
+        360,
+        1759,
+        29891,
+        3897,
+        7875
+      ]
+    }
+  ],
+  "first_changed_comparisons": [
+    {
+      "kind": "fixed_observation",
+      "sample": 0,
+      "layer": 0,
+      "operation": "ffn_residual",
+      "position": 0,
+      "term_piece": "\n<s>\n",
+      "logits_offset": 3456000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 31998,
+      "target_order_changed_count": 1,
+      "choice_fixed": false,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 20662,
+          "piece": " sli",
+          "logit": 12.8722353
+        },
+        {
+          "token": 1898,
+          "piece": " tried",
+          "logit": 12.0846729
+        },
+        {
+          "token": 8379,
+          "piece": " fell",
+          "logit": 11.7290344
+        },
+        {
+          "token": 471,
+          "piece": " was",
+          "logit": 11.666647
+        },
+        {
+          "token": 1033,
+          "piece": " could",
+          "logit": 11.3764238
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 8379,
+          "piece": " fell",
+          "with_update": 0.795619010925293,
+          "without_update": 0.3556385040283203,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 20662,
+          "piece": " sli",
+          "with_update": 0.8486413955688477,
+          "without_update": -0.787562370300293,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 471,
+          "piece": " was",
+          "with_update": 0.9996967315673828,
+          "without_update": 0.4180259704589844,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 4687,
+          "piece": " started",
+          "with_update": 1.7273931503295898,
+          "without_update": 2.1734256744384766,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 750,
+          "piece": " had",
+          "with_update": 2.248784065246582,
+          "without_update": 1.3121623992919922,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 20662,
+          "piece": " sli",
+          "with_update": 0.8486413955688477,
+          "without_update": -0.787562370300293,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ]
+    },
+    {
+      "kind": "fixed_observation",
+      "sample": 0,
+      "layer": 2,
+      "operation": "attention_residual",
+      "position": 95,
+      "term_piece": " She",
+      "logits_offset": 16512000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 31997,
+      "target_order_changed_count": 2,
+      "choice_fixed": false,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 8379,
+          "piece": " fell",
+          "logit": 15.0520458
+        },
+        {
+          "token": 20662,
+          "piece": " sli",
+          "logit": 14.9283457
+        },
+        {
+          "token": 1898,
+          "piece": " tried",
+          "logit": 14.7049446
+        },
+        {
+          "token": 471,
+          "piece": " was",
+          "logit": 13.9647751
+        },
+        {
+          "token": 2243,
+          "piece": " sl",
+          "logit": 13.3944893
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 8379,
+          "piece": " fell",
+          "with_update": 0.795619010925293,
+          "without_update": -0.34710121154785156,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 20662,
+          "piece": " sli",
+          "with_update": 0.8486413955688477,
+          "without_update": -0.22340106964111328,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 471,
+          "piece": " was",
+          "with_update": 0.9996967315673828,
+          "without_update": 0.7401695251464844,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 4687,
+          "piece": " started",
+          "with_update": 1.7273931503295898,
+          "without_update": 1.676518440246582,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 750,
+          "piece": " had",
+          "with_update": 2.248784065246582,
+          "without_update": 1.3676490783691406,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 8379,
+          "piece": " fell",
+          "with_update": 0.795619010925293,
+          "without_update": -0.34710121154785156,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 20662,
+          "piece": " sli",
+          "with_update": 0.8486413955688477,
+          "without_update": -0.22340106964111328,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ]
+    },
+    {
+      "kind": "fixed_observation",
+      "sample": 0,
+      "layer": 2,
+      "operation": "ffn_residual",
+      "position": 95,
+      "term_piece": " She",
+      "logits_offset": 19840000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 31997,
+      "target_order_changed_count": 2,
+      "choice_fixed": false,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 8379,
+          "piece": " fell",
+          "logit": 14.2452173
+        },
+        {
+          "token": 20662,
+          "piece": " sli",
+          "logit": 14.1980639
+        },
+        {
+          "token": 1898,
+          "piece": " tried",
+          "logit": 13.6874409
+        },
+        {
+          "token": 471,
+          "piece": " was",
+          "logit": 13.5795994
+        },
+        {
+          "token": 750,
+          "piece": " had",
+          "logit": 13.2096186
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 8379,
+          "piece": " fell",
+          "with_update": 0.795619010925293,
+          "without_update": -0.5577764511108398,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 20662,
+          "piece": " sli",
+          "with_update": 0.8486413955688477,
+          "without_update": -0.5106229782104492,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 471,
+          "piece": " was",
+          "with_update": 0.9996967315673828,
+          "without_update": 0.10784149169921875,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 4687,
+          "piece": " started",
+          "with_update": 1.7273931503295898,
+          "without_update": 0.6270122528076172,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 750,
+          "piece": " had",
+          "with_update": 2.248784065246582,
+          "without_update": 0.47782230377197266,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 8379,
+          "piece": " fell",
+          "with_update": 0.795619010925293,
+          "without_update": -0.5577764511108398,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 20662,
+          "piece": " sli",
+          "with_update": 0.8486413955688477,
+          "without_update": -0.5106229782104492,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ]
+    },
+    {
+      "kind": "fixed_observation",
+      "sample": 0,
+      "layer": 3,
+      "operation": "ffn_residual",
+      "position": 95,
+      "term_piece": " She",
+      "logits_offset": 26496000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 31998,
+      "target_order_changed_count": 1,
+      "choice_fixed": false,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 471,
+          "piece": " was",
+          "logit": 14.9604502
+        },
+        {
+          "token": 1898,
+          "piece": " tried",
+          "logit": 14.6748409
+        },
+        {
+          "token": 20662,
+          "piece": " sli",
+          "logit": 14.4501753
+        },
+        {
+          "token": 8379,
+          "piece": " fell",
+          "logit": 14.0798407
+        },
+        {
+          "token": 4687,
+          "piece": " started",
+          "logit": 13.9986229
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 8379,
+          "piece": " fell",
+          "with_update": 0.795619010925293,
+          "without_update": 0.5950002670288086,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 20662,
+          "piece": " sli",
+          "with_update": 0.8486413955688477,
+          "without_update": 0.22466564178466797,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 471,
+          "piece": " was",
+          "with_update": 0.9996967315673828,
+          "without_update": -0.28560924530029297,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 4687,
+          "piece": " started",
+          "with_update": 1.7273931503295898,
+          "without_update": 0.6762180328369141,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 750,
+          "piece": " had",
+          "with_update": 2.248784065246582,
+          "without_update": 1.1803569793701172,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 471,
+          "piece": " was",
+          "with_update": 0.9996967315673828,
+          "without_update": -0.28560924530029297,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ]
+    },
+    {
+      "kind": "fixed_observation",
+      "sample": 1,
+      "layer": 0,
+      "operation": "ffn_residual",
+      "position": 95,
+      "term_piece": " friends",
+      "logits_offset": 46592000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 31998,
+      "target_order_changed_count": 1,
+      "choice_fixed": false,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 7875,
+          "piece": " friends",
+          "logit": 14.1944742
+        },
+        {
+          "token": 29889,
+          "piece": ".",
+          "logit": 12.9445219
+        },
+        {
+          "token": 1900,
+          "piece": " best",
+          "logit": 12.4970284
+        },
+        {
+          "token": 1781,
+          "piece": " good",
+          "logit": 11.0752487
+        },
+        {
+          "token": 2086,
+          "piece": " too",
+          "logit": 11.0150347
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 322,
+          "piece": " and",
+          "with_update": 5.780327796936035,
+          "without_update": 3.7198266983032227,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 29892,
+          "piece": ",",
+          "with_update": 6.924290657043457,
+          "without_update": 6.09234094619751,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 297,
+          "piece": " in",
+          "with_update": 6.992772102355957,
+          "without_update": 3.859325408935547,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 2086,
+          "piece": " too",
+          "with_update": 7.1571455001831055,
+          "without_update": 1.9294872283935547,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 1492,
+          "piece": " right",
+          "with_update": 7.807031631469727,
+          "without_update": 2.409273147583008,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 7875,
+          "piece": " friends",
+          "with_update": 13.701817512512207,
+          "without_update": -1.2499523162841797,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ]
+    }
+  ],
+  "first_fixed_choice_changed_codata": [
+    {
+      "kind": "fixed_observation",
+      "sample": 0,
+      "layer": 0,
+      "operation": "attention_residual",
+      "position": 0,
+      "term_piece": "\n<s>\n",
+      "logits_offset": 128000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 31999,
+      "target_order_changed_count": 0,
+      "choice_fixed": true,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 1898,
+          "piece": " tried",
+          "logit": 15.7658625
+        },
+        {
+          "token": 8379,
+          "piece": " fell",
+          "logit": 14.661068
+        },
+        {
+          "token": 471,
+          "piece": " was",
+          "logit": 14.6291332
+        },
+        {
+          "token": 20662,
+          "piece": " sli",
+          "logit": 14.1903343
+        },
+        {
+          "token": 4687,
+          "piece": " started",
+          "logit": 13.8135099
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 8379,
+          "piece": " fell",
+          "with_update": 0.795619010925293,
+          "without_update": 1.1047945022583008,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 20662,
+          "piece": " sli",
+          "with_update": 0.8486413955688477,
+          "without_update": 1.5755281448364258,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 471,
+          "piece": " was",
+          "with_update": 0.9996967315673828,
+          "without_update": 1.1367292404174805,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 4687,
+          "piece": " started",
+          "with_update": 1.7273931503295898,
+          "without_update": 1.952352523803711,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 750,
+          "piece": " had",
+          "with_update": 2.248784065246582,
+          "without_update": 2.6968040466308594,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": []
+    },
+    {
+      "kind": "fixed_observation",
+      "sample": 0,
+      "layer": 0,
+      "operation": "attention_residual",
+      "position": 4,
+      "term_piece": " time",
+      "logits_offset": 256000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 31999,
+      "target_order_changed_count": 0,
+      "choice_fixed": true,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 1898,
+          "piece": " tried",
+          "logit": 15.4623919
+        },
+        {
+          "token": 8379,
+          "piece": " fell",
+          "logit": 14.6761007
+        },
+        {
+          "token": 20662,
+          "piece": " sli",
+          "logit": 14.6543198
+        },
+        {
+          "token": 471,
+          "piece": " was",
+          "logit": 14.49541
+        },
+        {
+          "token": 4687,
+          "piece": " started",
+          "logit": 13.7662859
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 8379,
+          "piece": " fell",
+          "with_update": 0.795619010925293,
+          "without_update": 0.7862911224365234,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 20662,
+          "piece": " sli",
+          "with_update": 0.8486413955688477,
+          "without_update": 0.8080720901489258,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 471,
+          "piece": " was",
+          "with_update": 0.9996967315673828,
+          "without_update": 0.9669818878173828,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 4687,
+          "piece": " started",
+          "with_update": 1.7273931503295898,
+          "without_update": 1.69610595703125,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 750,
+          "piece": " had",
+          "with_update": 2.248784065246582,
+          "without_update": 2.2241382598876953,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": []
+    },
+    {
+      "kind": "fixed_observation",
+      "sample": 0,
+      "layer": 0,
+      "operation": "attention_residual",
+      "position": 8,
+      "term_piece": " big",
+      "logits_offset": 384000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 31999,
+      "target_order_changed_count": 0,
+      "choice_fixed": true,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 1898,
+          "piece": " tried",
+          "logit": 15.4490242
+        },
+        {
+          "token": 8379,
+          "piece": " fell",
+          "logit": 14.7290297
+        },
+        {
+          "token": 20662,
+          "piece": " sli",
+          "logit": 14.6700954
+        },
+        {
+          "token": 471,
+          "piece": " was",
+          "logit": 14.4684582
+        },
+        {
+          "token": 4687,
+          "piece": " started",
+          "logit": 13.7924614
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 8379,
+          "piece": " fell",
+          "with_update": 0.795619010925293,
+          "without_update": 0.7199945449829102,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 20662,
+          "piece": " sli",
+          "with_update": 0.8486413955688477,
+          "without_update": 0.7789287567138672,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 471,
+          "piece": " was",
+          "with_update": 0.9996967315673828,
+          "without_update": 0.9805660247802734,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 4687,
+          "piece": " started",
+          "with_update": 1.7273931503295898,
+          "without_update": 1.6565628051757812,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 750,
+          "piece": " had",
+          "with_update": 2.248784065246582,
+          "without_update": 2.298257827758789,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": []
+    },
+    {
+      "kind": "fixed_observation",
+      "sample": 0,
+      "layer": 0,
+      "operation": "attention_residual",
+      "position": 12,
+      "term_piece": " lived",
+      "logits_offset": 512000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 31999,
+      "target_order_changed_count": 0,
+      "choice_fixed": true,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 1898,
+          "piece": " tried",
+          "logit": 15.5597715
+        },
+        {
+          "token": 8379,
+          "piece": " fell",
+          "logit": 14.7549753
+        },
+        {
+          "token": 20662,
+          "piece": " sli",
+          "logit": 14.6928091
+        },
+        {
+          "token": 471,
+          "piece": " was",
+          "logit": 14.5136967
+        },
+        {
+          "token": 4687,
+          "piece": " started",
+          "logit": 13.8124676
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 8379,
+          "piece": " fell",
+          "with_update": 0.795619010925293,
+          "without_update": 0.8047962188720703,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 20662,
+          "piece": " sli",
+          "with_update": 0.8486413955688477,
+          "without_update": 0.8669624328613281,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 471,
+          "piece": " was",
+          "with_update": 0.9996967315673828,
+          "without_update": 1.0460748672485352,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 4687,
+          "piece": " started",
+          "with_update": 1.7273931503295898,
+          "without_update": 1.7473039627075195,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 750,
+          "piece": " had",
+          "with_update": 2.248784065246582,
+          "without_update": 2.2729501724243164,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": []
+    },
+    {
+      "kind": "fixed_observation",
+      "sample": 0,
+      "layer": 0,
+      "operation": "attention_residual",
+      "position": 16,
+      "term_piece": "oc",
+      "logits_offset": 640000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 1,
+      "target_order_fixed_count": 31999,
+      "target_order_changed_count": 0,
+      "choice_fixed": true,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 1898,
+          "piece": " tried",
+          "logit": 15.5055389
+        },
+        {
+          "token": 8379,
+          "piece": " fell",
+          "logit": 14.6889687
+        },
+        {
+          "token": 20662,
+          "piece": " sli",
+          "logit": 14.6424084
+        },
+        {
+          "token": 471,
+          "piece": " was",
+          "logit": 14.4930782
+        },
+        {
+          "token": 4687,
+          "piece": " started",
+          "logit": 13.7630768
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 8379,
+          "piece": " fell",
+          "with_update": 0.795619010925293,
+          "without_update": 0.8165702819824219,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 20662,
+          "piece": " sli",
+          "with_update": 0.8486413955688477,
+          "without_update": 0.8631305694580078,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 471,
+          "piece": " was",
+          "with_update": 0.9996967315673828,
+          "without_update": 1.012460708618164,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 4687,
+          "piece": " started",
+          "with_update": 1.7273931503295898,
+          "without_update": 1.742462158203125,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 750,
+          "piece": " had",
+          "with_update": 2.248784065246582,
+          "without_update": 2.2562103271484375,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": []
+    },
+    {
+      "kind": "fixed_observation",
+      "sample": 0,
+      "layer": 0,
+      "operation": "attention_residual",
+      "position": 20,
+      "term_piece": "xy",
+      "logits_offset": 768000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 31999,
+      "target_order_changed_count": 0,
+      "choice_fixed": true,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 1898,
+          "piece": " tried",
+          "logit": 15.4940557
+        },
+        {
+          "token": 8379,
+          "piece": " fell",
+          "logit": 14.7309389
+        },
+        {
+          "token": 20662,
+          "piece": " sli",
+          "logit": 14.5931349
+        },
+        {
+          "token": 471,
+          "piece": " was",
+          "logit": 14.4731026
+        },
+        {
+          "token": 4687,
+          "piece": " started",
+          "logit": 13.6896353
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 8379,
+          "piece": " fell",
+          "with_update": 0.795619010925293,
+          "without_update": 0.7631168365478516,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 20662,
+          "piece": " sli",
+          "with_update": 0.8486413955688477,
+          "without_update": 0.9009208679199219,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 471,
+          "piece": " was",
+          "with_update": 0.9996967315673828,
+          "without_update": 1.0209531784057617,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 4687,
+          "piece": " started",
+          "with_update": 1.7273931503295898,
+          "without_update": 1.8044204711914062,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 750,
+          "piece": " had",
+          "with_update": 2.248784065246582,
+          "without_update": 2.2896432876586914,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": []
+    },
+    {
+      "kind": "fixed_observation",
+      "sample": 0,
+      "layer": 0,
+      "operation": "attention_residual",
+      "position": 24,
+      "term_piece": " loved",
+      "logits_offset": 896000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 31999,
+      "target_order_changed_count": 0,
+      "choice_fixed": true,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 1898,
+          "piece": " tried",
+          "logit": 15.5063705
+        },
+        {
+          "token": 8379,
+          "piece": " fell",
+          "logit": 14.7074404
+        },
+        {
+          "token": 20662,
+          "piece": " sli",
+          "logit": 14.6056023
+        },
+        {
+          "token": 471,
+          "piece": " was",
+          "logit": 14.4499445
+        },
+        {
+          "token": 4687,
+          "piece": " started",
+          "logit": 13.6995573
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 8379,
+          "piece": " fell",
+          "with_update": 0.795619010925293,
+          "without_update": 0.7989301681518555,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 20662,
+          "piece": " sli",
+          "with_update": 0.8486413955688477,
+          "without_update": 0.9007682800292969,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 471,
+          "piece": " was",
+          "with_update": 0.9996967315673828,
+          "without_update": 1.0564260482788086,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 4687,
+          "piece": " started",
+          "with_update": 1.7273931503295898,
+          "without_update": 1.8068132400512695,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 750,
+          "piece": " had",
+          "with_update": 2.248784065246582,
+          "without_update": 2.2805604934692383,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": []
+    },
+    {
+      "kind": "fixed_observation",
+      "sample": 0,
+      "layer": 0,
+      "operation": "attention_residual",
+      "position": 28,
+      "term_piece": ".",
+      "logits_offset": 1024000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 31999,
+      "target_order_changed_count": 0,
+      "choice_fixed": true,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 1898,
+          "piece": " tried",
+          "logit": 15.4399633
+        },
+        {
+          "token": 8379,
+          "piece": " fell",
+          "logit": 14.5986233
+        },
+        {
+          "token": 471,
+          "piece": " was",
+          "logit": 14.494029
+        },
+        {
+          "token": 20662,
+          "piece": " sli",
+          "logit": 14.4437494
+        },
+        {
+          "token": 4687,
+          "piece": " started",
+          "logit": 13.7000151
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 8379,
+          "piece": " fell",
+          "with_update": 0.795619010925293,
+          "without_update": 0.8413400650024414,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 20662,
+          "piece": " sli",
+          "with_update": 0.8486413955688477,
+          "without_update": 0.9962139129638672,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 471,
+          "piece": " was",
+          "with_update": 0.9996967315673828,
+          "without_update": 0.9459342956542969,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 4687,
+          "piece": " started",
+          "with_update": 1.7273931503295898,
+          "without_update": 1.7399482727050781,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 750,
+          "piece": " had",
+          "with_update": 2.248784065246582,
+          "without_update": 2.195561408996582,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": []
+    }
+  ],
+  "joint_choice_changes": [
+    {
+      "kind": "joint_omission",
+      "sample": 0,
+      "layer": 0,
+      "operation": "ffn_residual",
+      "position": -1,
+      "term_piece": null,
+      "logits_offset": 6656000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 31996,
+      "target_order_changed_count": 3,
+      "choice_fixed": false,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 1497,
+          "piece": " said",
+          "logit": 11.2418556
+        },
+        {
+          "token": 8379,
+          "piece": " fell",
+          "logit": 10.8821192
+        },
+        {
+          "token": 471,
+          "piece": " was",
+          "logit": 10.5906057
+        },
+        {
+          "token": 1898,
+          "piece": " tried",
+          "logit": 10.4345608
+        },
+        {
+          "token": 4446,
+          "piece": " saw",
+          "logit": 10.0172443
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 8379,
+          "piece": " fell",
+          "with_update": 0.795619010925293,
+          "without_update": -0.4475584030151367,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 20662,
+          "piece": " sli",
+          "with_update": 0.8486413955688477,
+          "without_update": 0.803868293762207,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 471,
+          "piece": " was",
+          "with_update": 0.9996967315673828,
+          "without_update": -0.15604496002197266,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 4687,
+          "piece": " started",
+          "with_update": 1.7273931503295898,
+          "without_update": 0.819392204284668,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 750,
+          "piece": " had",
+          "with_update": 2.248784065246582,
+          "without_update": 1.414468765258789,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 8379,
+          "piece": " fell",
+          "with_update": 0.795619010925293,
+          "without_update": -0.4475584030151367,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 471,
+          "piece": " was",
+          "with_update": 0.9996967315673828,
+          "without_update": -0.15604496002197266,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 1497,
+          "piece": " said",
+          "with_update": 3.8381242752075195,
+          "without_update": -0.8072948455810547,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ],
+      "individually_choice_fixed_count": 24,
+      "omitted_positions": [
+        4,
+        8,
+        12,
+        16,
+        20,
+        24,
+        28,
+        32,
+        36,
+        40,
+        44,
+        48,
+        52,
+        56,
+        60,
+        64,
+        68,
+        72,
+        76,
+        80,
+        84,
+        88,
+        92,
+        95
+      ]
+    },
+    {
+      "kind": "joint_omission",
+      "sample": 0,
+      "layer": 1,
+      "operation": "attention_residual",
+      "position": -1,
+      "term_piece": null,
+      "logits_offset": 9984000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 31998,
+      "target_order_changed_count": 1,
+      "choice_fixed": false,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 20662,
+          "piece": " sli",
+          "logit": 15.0956869
+        },
+        {
+          "token": 1898,
+          "piece": " tried",
+          "logit": 14.6839819
+        },
+        {
+          "token": 8379,
+          "piece": " fell",
+          "logit": 14.1356649
+        },
+        {
+          "token": 471,
+          "piece": " was",
+          "logit": 13.9936123
+        },
+        {
+          "token": 1033,
+          "piece": " could",
+          "logit": 13.4827433
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 8379,
+          "piece": " fell",
+          "with_update": 0.795619010925293,
+          "without_update": 0.5483169555664062,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 20662,
+          "piece": " sli",
+          "with_update": 0.8486413955688477,
+          "without_update": -0.41170501708984375,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 471,
+          "piece": " was",
+          "with_update": 0.9996967315673828,
+          "without_update": 0.6903696060180664,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 4687,
+          "piece": " started",
+          "with_update": 1.7273931503295898,
+          "without_update": 1.4886646270751953,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 750,
+          "piece": " had",
+          "with_update": 2.248784065246582,
+          "without_update": 2.3146657943725586,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 20662,
+          "piece": " sli",
+          "with_update": 0.8486413955688477,
+          "without_update": -0.41170501708984375,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ],
+      "individually_choice_fixed_count": 25,
+      "omitted_positions": [
+        0,
+        4,
+        8,
+        12,
+        16,
+        20,
+        24,
+        28,
+        32,
+        36,
+        40,
+        44,
+        48,
+        52,
+        56,
+        60,
+        64,
+        68,
+        72,
+        76,
+        80,
+        84,
+        88,
+        92,
+        95
+      ]
+    },
+    {
+      "kind": "joint_omission",
+      "sample": 0,
+      "layer": 1,
+      "operation": "ffn_residual",
+      "position": -1,
+      "term_piece": null,
+      "logits_offset": 13312000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 31998,
+      "target_order_changed_count": 1,
+      "choice_fixed": false,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 8379,
+          "piece": " fell",
+          "logit": 13.9779243
+        },
+        {
+          "token": 1898,
+          "piece": " tried",
+          "logit": 13.7184143
+        },
+        {
+          "token": 20662,
+          "piece": " sli",
+          "logit": 13.676857
+        },
+        {
+          "token": 471,
+          "piece": " was",
+          "logit": 13.3822784
+        },
+        {
+          "token": 7091,
+          "piece": " felt",
+          "logit": 13.224349
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 8379,
+          "piece": " fell",
+          "with_update": 0.795619010925293,
+          "without_update": -0.2595100402832031,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 20662,
+          "piece": " sli",
+          "with_update": 0.8486413955688477,
+          "without_update": 0.04155731201171875,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 471,
+          "piece": " was",
+          "with_update": 0.9996967315673828,
+          "without_update": 0.3361358642578125,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 4687,
+          "piece": " started",
+          "with_update": 1.7273931503295898,
+          "without_update": 0.7349424362182617,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 750,
+          "piece": " had",
+          "with_update": 2.248784065246582,
+          "without_update": 0.9362201690673828,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 8379,
+          "piece": " fell",
+          "with_update": 0.795619010925293,
+          "without_update": -0.2595100402832031,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ],
+      "individually_choice_fixed_count": 25,
+      "omitted_positions": [
+        0,
+        4,
+        8,
+        12,
+        16,
+        20,
+        24,
+        28,
+        32,
+        36,
+        40,
+        44,
+        48,
+        52,
+        56,
+        60,
+        64,
+        68,
+        72,
+        76,
+        80,
+        84,
+        88,
+        92,
+        95
+      ]
+    }
+  ],
+  "scope": "Observed corpus points only. No grammar labels, inference reward, global eigenspace, or deployed rewrite are claimed."
+}

@@ -1,0 +1,3960 @@
+{
+  "trace": "/Users/christopheroliver/Documents/Codex/2026-08-27/referenced-chatgpt-conversation-this-is-an-2/work/llama2-company-readout/work_traces/observer_fixed_points/stories15m-p32.jsonl",
+  "meta": {
+    "kind": "meta",
+    "schema_version": 1,
+    "measurement": "individual_residual_observer_fixed_points",
+    "model": "../llama2.c/test/stories15M.bin",
+    "corpus": "../data/TinyStories-valid.txt",
+    "logits_file": "work_traces/observer_fixed_points/stories15m-p32.f32",
+    "logits_dtype": "float32",
+    "byte_order": "little",
+    "layers": 6,
+    "dim": 288,
+    "vocabulary": 32000,
+    "positions": 32,
+    "position_stride": 1,
+    "requested_samples": 4,
+    "start_story": 1,
+    "observer": "corpus-target contrasts, their signs, and full argmax set",
+    "equality": "exact recorded values; no tolerance",
+    "grammar_labels_supplied": false,
+    "optimization_enabled": false
+  },
+  "complete": true,
+  "summary": {
+    "kind": "summary",
+    "samples": 4,
+    "operations": 1536,
+    "structurally_unreachable": 248,
+    "codata_fixed": 248,
+    "target_order_fixed": 1520,
+    "choice_fixed": 1520,
+    "joint_groups": 48,
+    "joint_choice_changed": 14,
+    "cpu_seconds": 91.582071
+  },
+  "all_individual_updates": {
+    "operations": 1536,
+    "codata_fixed": 248,
+    "choice_fixed": 1520,
+    "target_order_fixed": 1520,
+    "target_order_changed": 16
+  },
+  "excluding_structurally_unreachable": {
+    "operations": 1288,
+    "codata_fixed": 0,
+    "choice_fixed": 1272,
+    "target_order_fixed": 1272,
+    "target_order_changed": 16
+  },
+  "by_layer_and_operation": [
+    {
+      "layer": 0,
+      "operation": "attention_residual",
+      "operations": 128,
+      "codata_fixed": 0,
+      "choice_fixed": 127,
+      "target_order_fixed": 127,
+      "target_order_changed": 1
+    },
+    {
+      "layer": 0,
+      "operation": "ffn_residual",
+      "operations": 128,
+      "codata_fixed": 0,
+      "choice_fixed": 120,
+      "target_order_fixed": 120,
+      "target_order_changed": 8
+    },
+    {
+      "layer": 1,
+      "operation": "attention_residual",
+      "operations": 128,
+      "codata_fixed": 0,
+      "choice_fixed": 128,
+      "target_order_fixed": 128,
+      "target_order_changed": 0
+    },
+    {
+      "layer": 1,
+      "operation": "ffn_residual",
+      "operations": 128,
+      "codata_fixed": 0,
+      "choice_fixed": 127,
+      "target_order_fixed": 127,
+      "target_order_changed": 1
+    },
+    {
+      "layer": 2,
+      "operation": "attention_residual",
+      "operations": 128,
+      "codata_fixed": 0,
+      "choice_fixed": 128,
+      "target_order_fixed": 128,
+      "target_order_changed": 0
+    },
+    {
+      "layer": 2,
+      "operation": "ffn_residual",
+      "operations": 128,
+      "codata_fixed": 0,
+      "choice_fixed": 127,
+      "target_order_fixed": 127,
+      "target_order_changed": 1
+    },
+    {
+      "layer": 3,
+      "operation": "attention_residual",
+      "operations": 128,
+      "codata_fixed": 0,
+      "choice_fixed": 127,
+      "target_order_fixed": 127,
+      "target_order_changed": 1
+    },
+    {
+      "layer": 3,
+      "operation": "ffn_residual",
+      "operations": 128,
+      "codata_fixed": 0,
+      "choice_fixed": 126,
+      "target_order_fixed": 126,
+      "target_order_changed": 2
+    },
+    {
+      "layer": 4,
+      "operation": "attention_residual",
+      "operations": 128,
+      "codata_fixed": 0,
+      "choice_fixed": 128,
+      "target_order_fixed": 128,
+      "target_order_changed": 0
+    },
+    {
+      "layer": 4,
+      "operation": "ffn_residual",
+      "operations": 128,
+      "codata_fixed": 0,
+      "choice_fixed": 127,
+      "target_order_fixed": 127,
+      "target_order_changed": 1
+    },
+    {
+      "layer": 5,
+      "operation": "attention_residual",
+      "operations": 4,
+      "codata_fixed": 0,
+      "choice_fixed": 3,
+      "target_order_fixed": 3,
+      "target_order_changed": 1
+    },
+    {
+      "layer": 5,
+      "operation": "ffn_residual",
+      "operations": 4,
+      "codata_fixed": 0,
+      "choice_fixed": 4,
+      "target_order_fixed": 4,
+      "target_order_changed": 0
+    }
+  ],
+  "joint_groups": 48,
+  "joint_choice_changed": 14,
+  "samples": [
+    {
+      "kind": "sample",
+      "sample": 0,
+      "story_index": 1,
+      "positions": 32,
+      "text": "Once upon a time, in a big forest, there lived a rhinoceros named Roxy. Roxy loved to climb. She climbed",
+      "source_story": "Once upon a time, in a big forest, there lived a rhinoceros named Roxy. Roxy loved to climb. She climbed trees, rocks, and hills. One day, Roxy found an icy hill. She had never seen anything like it before. It was shiny and cold, and she wanted to climb it.\nRoxy tried to climb the icy hill, but it was very slippery. She tried again and again, but she kept falling down. Roxy was sad. She wanted to climb the icy hill so much. Then, she saw a little bird named Billy. Billy saw that Roxy was sad and asked, \"Why are you sad, Roxy?\"\nRoxy told Billy about the icy hill and how she couldn't climb it. Billy said, \"I have an idea! Let's find some big leaves to put under your feet. They will help you climb the icy hill.\" Roxy and Billy looked for big leaves and found some. Roxy put the leaves under her feet and tried to climb the icy hill again.\nThis time, Roxy didn't slip. She climbed and climbed until she reached the top of the icy hill. Roxy was so happy! She and Billy played on the icy hill all day. From that day on, Roxy and Billy were the best of friends, and they climbed and played together all the time. And Roxy learned that with a little help from a friend, she could climb anything.\n",
+      "target": 10697,
+      "target_piece": " trees",
+      "logits_offset": 0,
+      "top_with_update": [
+        {
+          "token": 10697,
+          "piece": " trees",
+          "logit": 17.1194973
+        },
+        {
+          "token": 278,
+          "piece": " the",
+          "logit": 13.0967894
+        },
+        {
+          "token": 373,
+          "piece": " on",
+          "logit": 12.8952618
+        },
+        {
+          "token": 701,
+          "piece": " up",
+          "logit": 12.7468233
+        },
+        {
+          "token": 4802,
+          "piece": " big",
+          "logit": 12.0629158
+        }
+      ],
+      "tokens": [
+        1,
+        9038,
+        2501,
+        263,
+        931,
+        29892,
+        297,
+        263,
+        4802,
+        13569,
+        29892,
+        727,
+        10600,
+        263,
+        364,
+        11222,
+        542,
+        9672,
+        4257,
+        1528,
+        3594,
+        29889,
+        1528,
+        3594,
+        18012,
+        304,
+        10784,
+        29890,
+        29889,
+        2296,
+        10784,
+        2580
+      ]
+    },
+    {
+      "kind": "sample",
+      "sample": 1,
+      "story_index": 2,
+      "positions": 32,
+      "text": "Once upon a time, in a small yard, there was a small daisy. The daisy had a name. Her name was Daisy.",
+      "source_story": "Once upon a time, in a small yard, there was a small daisy. The daisy had a name. Her name was Daisy. Daisy was very small, but she was also very happy.\nOne day, Daisy saw a dog. The dog was big and had a name too. His name was Max. Max liked to play in the yard. Daisy liked to watch Max play. Max and Daisy became friends.\nEvery day, Max would come to the yard to play. Daisy would watch and smile. They were very happy together. And even though Daisy was small, she knew that she had a big friend in Max.\n",
+      "target": 360,
+      "target_piece": " D",
+      "logits_offset": 50816000,
+      "top_with_update": [
+        {
+          "token": 360,
+          "piece": " D",
+          "logit": 18.1025295
+        },
+        {
+          "token": 2296,
+          "piece": " She",
+          "logit": 14.8899574
+        },
+        {
+          "token": 13,
+          "piece": "<0x0A>",
+          "logit": 14.3907976
+        },
+        {
+          "token": 3118,
+          "piece": " One",
+          "logit": 12.9997807
+        },
+        {
+          "token": 7569,
+          "piece": " Every",
+          "logit": 12.3195906
+        }
+      ],
+      "tokens": [
+        1,
+        9038,
+        2501,
+        263,
+        931,
+        29892,
+        297,
+        263,
+        2319,
+        29413,
+        29892,
+        727,
+        471,
+        263,
+        2319,
+        1146,
+        13344,
+        29889,
+        450,
+        1146,
+        13344,
+        750,
+        263,
+        1024,
+        29889,
+        2439,
+        1024,
+        471,
+        360,
+        1759,
+        29891,
+        29889
+      ]
+    },
+    {
+      "kind": "sample",
+      "sample": 2,
+      "story_index": 3,
+      "positions": 32,
+      "text": "Once upon a time, there was a thoughtful girl named Sue. Sue loved to help her mom around the house. One day, her mom asked her",
+      "source_story": "Once upon a time, there was a thoughtful girl named Sue. Sue loved to help her mom around the house. One day, her mom asked her to wipe the table after they ate their lunch. Sue was happy to help.\nAs Sue was wiping the table, she saw a pretty candle on the window sill. The candle was her mom's favorite. Sue wanted to do something nice for her mom, so she said, \"Mom, can I light the candle for you?\" Her mom said, \"Yes, but be very careful.\"\nSue carefully lit the candle and put it on the table. Her mom was so happy to see the pretty candle. They both sat and watched the candle burn. Sue's mom said, \"Thank you, Sue, for being so thoughtful and careful.\" Sue felt proud that she could help her mom.\nThe moral of the story is to always be thoughtful and careful when helping others.\n",
+      "target": 304,
+      "target_piece": " to",
+      "logits_offset": 101632000,
+      "top_with_update": [
+        {
+          "token": 304,
+          "piece": " to",
+          "logit": 20.1322117
+        },
+        {
+          "token": 29892,
+          "piece": ",",
+          "logit": 14.4843464
+        },
+        {
+          "token": 565,
+          "piece": " if",
+          "logit": 12.5865736
+        },
+        {
+          "token": 263,
+          "piece": " a",
+          "logit": 11.9979763
+        },
+        {
+          "token": 363,
+          "piece": " for",
+          "logit": 11.4087553
+        }
+      ],
+      "tokens": [
+        1,
+        9038,
+        2501,
+        263,
+        931,
+        29892,
+        727,
+        471,
+        263,
+        2714,
+        1319,
+        7826,
+        4257,
+        28674,
+        29889,
+        28674,
+        18012,
+        304,
+        1371,
+        902,
+        16823,
+        2820,
+        278,
+        3699,
+        29889,
+        3118,
+        2462,
+        29892,
+        902,
+        16823,
+        4433,
+        902
+      ]
+    },
+    {
+      "kind": "sample",
+      "sample": 3,
+      "story_index": 4,
+      "positions": 32,
+      "text": "Once upon a time, there was a kind farmer. He had a big cow. The cow was sad. The farmer did not know why.",
+      "source_story": "Once upon a time, there was a kind farmer. He had a big cow. The cow was sad. The farmer did not know why.\nOne day, a little boy came to the farm. He saw the sad cow. The boy kneeled down to talk to the cow. \"Why are you sad, cow?\" he asked. The cow said, \"I am lonely. I want a friend.\"\nThe kind farmer heard the cow. He wanted to help. So, he got another cow to be friends with the sad cow. The sad cow was happy now. They played together every day. And the kind farmer, the little boy, and the two cows all lived happily ever after.\n",
+      "target": 13,
+      "target_piece": "<0x0A>",
+      "logits_offset": 152448000,
+      "top_with_update": [
+        {
+          "token": 13,
+          "piece": "<0x0A>",
+          "logit": 19.493
+        },
+        {
+          "token": 940,
+          "piece": " He",
+          "logit": 18.4237423
+        },
+        {
+          "token": 450,
+          "piece": " The",
+          "logit": 18.280365
+        },
+        {
+          "token": 3118,
+          "piece": " One",
+          "logit": 16.3176842
+        },
+        {
+          "token": 1105,
+          "piece": " So",
+          "logit": 14.8016987
+        }
+      ],
+      "tokens": [
+        1,
+        9038,
+        2501,
+        263,
+        931,
+        29892,
+        727,
+        471,
+        263,
+        2924,
+        2215,
+        1050,
+        29889,
+        940,
+        750,
+        263,
+        4802,
+        21282,
+        29889,
+        450,
+        21282,
+        471,
+        14610,
+        29889,
+        450,
+        2215,
+        1050,
+        1258,
+        451,
+        1073,
+        2020,
+        29889
+      ]
+    }
+  ],
+  "first_changed_comparisons": [
+    {
+      "kind": "fixed_observation",
+      "sample": 0,
+      "layer": 0,
+      "operation": "ffn_residual",
+      "position": 31,
+      "term_piece": "bed",
+      "logits_offset": 8320000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 31998,
+      "target_order_changed_count": 1,
+      "choice_fixed": false,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 29879,
+          "piece": "s",
+          "logit": 13.5057726
+        },
+        {
+          "token": 10697,
+          "piece": " trees",
+          "logit": 11.5973568
+        },
+        {
+          "token": 373,
+          "piece": " on",
+          "logit": 11.4139881
+        },
+        {
+          "token": 701,
+          "piece": " up",
+          "logit": 10.635704
+        },
+        {
+          "token": 599,
+          "piece": " all",
+          "logit": 10.5696621
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 278,
+          "piece": " the",
+          "with_update": 4.022707939147949,
+          "without_update": 2.680060386657715,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 373,
+          "piece": " on",
+          "with_update": 4.224235534667969,
+          "without_update": 0.18336868286132812,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 701,
+          "piece": " up",
+          "with_update": 4.372673988342285,
+          "without_update": 0.9616527557373047,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 4802,
+          "piece": " big",
+          "with_update": 5.056581497192383,
+          "without_update": 3.614553928375244,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 22696,
+          "piece": " hills",
+          "with_update": 5.165597915649414,
+          "without_update": 3.776294708251953,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 29879,
+          "piece": "s",
+          "with_update": 10.795737266540527,
+          "without_update": -1.9084157943725586,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ]
+    },
+    {
+      "kind": "fixed_observation",
+      "sample": 0,
+      "layer": 3,
+      "operation": "ffn_residual",
+      "position": 31,
+      "term_piece": "bed",
+      "logits_offset": 33664000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 31998,
+      "target_order_changed_count": 1,
+      "choice_fixed": false,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 701,
+          "piece": " up",
+          "logit": 16.3249722
+        },
+        {
+          "token": 10697,
+          "piece": " trees",
+          "logit": 14.3693905
+        },
+        {
+          "token": 373,
+          "piece": " on",
+          "logit": 13.7275658
+        },
+        {
+          "token": 278,
+          "piece": " the",
+          "logit": 11.9060249
+        },
+        {
+          "token": 599,
+          "piece": " all",
+          "logit": 11.4319172
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 278,
+          "piece": " the",
+          "with_update": 4.022707939147949,
+          "without_update": 2.4633655548095703,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 373,
+          "piece": " on",
+          "with_update": 4.224235534667969,
+          "without_update": 0.6418247222900391,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 701,
+          "piece": " up",
+          "with_update": 4.372673988342285,
+          "without_update": -1.9555816650390625,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 4802,
+          "piece": " big",
+          "with_update": 5.056581497192383,
+          "without_update": 4.801037788391113,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 22696,
+          "piece": " hills",
+          "with_update": 5.165597915649414,
+          "without_update": 4.423174858093262,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 701,
+          "piece": " up",
+          "with_update": 4.372673988342285,
+          "without_update": -1.9555816650390625,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ]
+    },
+    {
+      "kind": "fixed_observation",
+      "sample": 1,
+      "layer": 0,
+      "operation": "ffn_residual",
+      "position": 0,
+      "term_piece": "\n<s>\n",
+      "logits_offset": 55168000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 31997,
+      "target_order_changed_count": 2,
+      "choice_fixed": false,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 13,
+          "piece": "<0x0A>",
+          "logit": 17.4695206
+        },
+        {
+          "token": 2296,
+          "piece": " She",
+          "logit": 14.6806154
+        },
+        {
+          "token": 360,
+          "piece": " D",
+          "logit": 12.943327
+        },
+        {
+          "token": 3118,
+          "piece": " One",
+          "logit": 11.7290821
+        },
+        {
+          "token": 1,
+          "piece": "\n<s>\n",
+          "logit": 11.368145
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 2296,
+          "piece": " She",
+          "with_update": 3.2125720977783203,
+          "without_update": -1.737288475036621,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 13,
+          "piece": "<0x0A>",
+          "with_update": 3.7117319107055664,
+          "without_update": -4.526193618774414,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 3118,
+          "piece": " One",
+          "with_update": 5.102748870849609,
+          "without_update": 1.2142448425292969,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 7569,
+          "piece": " Every",
+          "with_update": 5.7829389572143555,
+          "without_update": 2.021749496459961,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 2178,
+          "piece": " All",
+          "with_update": 7.133342742919922,
+          "without_update": 4.488511085510254,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 2296,
+          "piece": " She",
+          "with_update": 3.2125720977783203,
+          "without_update": -1.737288475036621,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 13,
+          "piece": "<0x0A>",
+          "with_update": 3.7117319107055664,
+          "without_update": -4.526193618774414,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ]
+    },
+    {
+      "kind": "fixed_observation",
+      "sample": 1,
+      "layer": 5,
+      "operation": "attention_residual",
+      "position": 31,
+      "term_piece": ".",
+      "logits_offset": 97152000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 31985,
+      "target_order_changed_count": 14,
+      "choice_fixed": false,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 2296,
+          "piece": " She",
+          "logit": 12.4074154
+        },
+        {
+          "token": 13,
+          "piece": "<0x0A>",
+          "logit": 11.5564251
+        },
+        {
+          "token": 3118,
+          "piece": " One",
+          "logit": 11.0772648
+        },
+        {
+          "token": 450,
+          "piece": " The",
+          "logit": 10.8718576
+        },
+        {
+          "token": 7569,
+          "piece": " Every",
+          "logit": 10.7482109
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 2296,
+          "piece": " She",
+          "with_update": 3.2125720977783203,
+          "without_update": -2.816187858581543,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 13,
+          "piece": "<0x0A>",
+          "with_update": 3.7117319107055664,
+          "without_update": -1.9651975631713867,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 3118,
+          "piece": " One",
+          "with_update": 5.102748870849609,
+          "without_update": -1.486037254333496,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 7569,
+          "piece": " Every",
+          "with_update": 5.7829389572143555,
+          "without_update": -1.1569833755493164,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 2178,
+          "piece": " All",
+          "with_update": 7.133342742919922,
+          "without_update": 1.2741289138793945,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 2296,
+          "piece": " She",
+          "with_update": 3.2125720977783203,
+          "without_update": -2.816187858581543,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 13,
+          "piece": "<0x0A>",
+          "with_update": 3.7117319107055664,
+          "without_update": -1.9651975631713867,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 3118,
+          "piece": " One",
+          "with_update": 5.102748870849609,
+          "without_update": -1.486037254333496,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 7569,
+          "piece": " Every",
+          "with_update": 5.7829389572143555,
+          "without_update": -1.1569833755493164,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 450,
+          "piece": " The",
+          "with_update": 7.3647871017456055,
+          "without_update": -1.280630111694336,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ]
+    },
+    {
+      "kind": "fixed_observation",
+      "sample": 3,
+      "layer": 0,
+      "operation": "attention_residual",
+      "position": 18,
+      "term_piece": ".",
+      "logits_offset": 154880000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 31998,
+      "target_order_changed_count": 1,
+      "choice_fixed": false,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 940,
+          "piece": " He",
+          "logit": 18.7251091
+        },
+        {
+          "token": 13,
+          "piece": "<0x0A>",
+          "logit": 18.5698833
+        },
+        {
+          "token": 450,
+          "piece": " The",
+          "logit": 17.9681644
+        },
+        {
+          "token": 3118,
+          "piece": " One",
+          "logit": 16.9794178
+        },
+        {
+          "token": 1105,
+          "piece": " So",
+          "logit": 15.402009
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 940,
+          "piece": " He",
+          "with_update": 1.0692577362060547,
+          "without_update": -0.1552257537841797,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 450,
+          "piece": " The",
+          "with_update": 1.2126350402832031,
+          "without_update": 0.6017189025878906,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 3118,
+          "piece": " One",
+          "with_update": 3.1753158569335938,
+          "without_update": 1.5904655456542969,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 1105,
+          "piece": " So",
+          "with_update": 4.691301345825195,
+          "without_update": 3.167874336242676,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 2688,
+          "piece": " They",
+          "with_update": 4.938627243041992,
+          "without_update": 3.6613035202026367,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 940,
+          "piece": " He",
+          "with_update": 1.0692577362060547,
+          "without_update": -0.1552257537841797,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ]
+    },
+    {
+      "kind": "fixed_observation",
+      "sample": 3,
+      "layer": 0,
+      "operation": "ffn_residual",
+      "position": 12,
+      "term_piece": ".",
+      "logits_offset": 158336000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 31997,
+      "target_order_changed_count": 2,
+      "choice_fixed": false,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 940,
+          "piece": " He",
+          "logit": 18.2499065
+        },
+        {
+          "token": 450,
+          "piece": " The",
+          "logit": 17.9737797
+        },
+        {
+          "token": 13,
+          "piece": "<0x0A>",
+          "logit": 17.9641399
+        },
+        {
+          "token": 3118,
+          "piece": " One",
+          "logit": 15.8153496
+        },
+        {
+          "token": 1105,
+          "piece": " So",
+          "logit": 14.46208
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 940,
+          "piece": " He",
+          "with_update": 1.0692577362060547,
+          "without_update": -0.2857666015625,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 450,
+          "piece": " The",
+          "with_update": 1.2126350402832031,
+          "without_update": -0.009639739990234375,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 3118,
+          "piece": " One",
+          "with_update": 3.1753158569335938,
+          "without_update": 2.1487903594970703,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 1105,
+          "piece": " So",
+          "with_update": 4.691301345825195,
+          "without_update": 3.5020599365234375,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 2688,
+          "piece": " They",
+          "with_update": 4.938627243041992,
+          "without_update": 3.892117500305176,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 940,
+          "piece": " He",
+          "with_update": 1.0692577362060547,
+          "without_update": -0.2857666015625,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 450,
+          "piece": " The",
+          "with_update": 1.2126350402832031,
+          "without_update": -0.009639739990234375,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ]
+    },
+    {
+      "kind": "fixed_observation",
+      "sample": 3,
+      "layer": 0,
+      "operation": "ffn_residual",
+      "position": 18,
+      "term_piece": ".",
+      "logits_offset": 159104000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 31998,
+      "target_order_changed_count": 1,
+      "choice_fixed": false,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 940,
+          "piece": " He",
+          "logit": 18.465559
+        },
+        {
+          "token": 13,
+          "piece": "<0x0A>",
+          "logit": 18.2255707
+        },
+        {
+          "token": 450,
+          "piece": " The",
+          "logit": 17.8681145
+        },
+        {
+          "token": 3118,
+          "piece": " One",
+          "logit": 15.8170595
+        },
+        {
+          "token": 1105,
+          "piece": " So",
+          "logit": 15.2720509
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 940,
+          "piece": " He",
+          "with_update": 1.0692577362060547,
+          "without_update": -0.2399883270263672,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 450,
+          "piece": " The",
+          "with_update": 1.2126350402832031,
+          "without_update": 0.3574562072753906,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 3118,
+          "piece": " One",
+          "with_update": 3.1753158569335938,
+          "without_update": 2.408511161804199,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 1105,
+          "piece": " So",
+          "with_update": 4.691301345825195,
+          "without_update": 2.953519821166992,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 2688,
+          "piece": " They",
+          "with_update": 4.938627243041992,
+          "without_update": 4.141449928283691,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 940,
+          "piece": " He",
+          "with_update": 1.0692577362060547,
+          "without_update": -0.2399883270263672,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ]
+    },
+    {
+      "kind": "fixed_observation",
+      "sample": 3,
+      "layer": 0,
+      "operation": "ffn_residual",
+      "position": 23,
+      "term_piece": ".",
+      "logits_offset": 159744000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 31998,
+      "target_order_changed_count": 1,
+      "choice_fixed": false,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 450,
+          "piece": " The",
+          "logit": 18.4860878
+        },
+        {
+          "token": 13,
+          "piece": "<0x0A>",
+          "logit": 18.4590893
+        },
+        {
+          "token": 940,
+          "piece": " He",
+          "logit": 17.395916
+        },
+        {
+          "token": 3118,
+          "piece": " One",
+          "logit": 16.5810738
+        },
+        {
+          "token": 7569,
+          "piece": " Every",
+          "logit": 14.2164803
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 940,
+          "piece": " He",
+          "with_update": 1.0692577362060547,
+          "without_update": 1.0631732940673828,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 450,
+          "piece": " The",
+          "with_update": 1.2126350402832031,
+          "without_update": -0.026998519897460938,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 3118,
+          "piece": " One",
+          "with_update": 3.1753158569335938,
+          "without_update": 1.8780155181884766,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 1105,
+          "piece": " So",
+          "with_update": 4.691301345825195,
+          "without_update": 4.3598785400390625,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 2688,
+          "piece": " They",
+          "with_update": 4.938627243041992,
+          "without_update": 4.7950849533081055,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 450,
+          "piece": " The",
+          "with_update": 1.2126350402832031,
+          "without_update": -0.026998519897460938,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ]
+    }
+  ],
+  "first_fixed_choice_changed_codata": [
+    {
+      "kind": "fixed_observation",
+      "sample": 0,
+      "layer": 0,
+      "operation": "attention_residual",
+      "position": 0,
+      "term_piece": "\n<s>\n",
+      "logits_offset": 128000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 31999,
+      "target_order_changed_count": 0,
+      "choice_fixed": true,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 10697,
+          "piece": " trees",
+          "logit": 15.7901125
+        },
+        {
+          "token": 701,
+          "piece": " up",
+          "logit": 12.797245
+        },
+        {
+          "token": 278,
+          "piece": " the",
+          "logit": 12.7429867
+        },
+        {
+          "token": 373,
+          "piece": " on",
+          "logit": 12.1113386
+        },
+        {
+          "token": 4802,
+          "piece": " big",
+          "logit": 11.7621431
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 278,
+          "piece": " the",
+          "with_update": 4.022707939147949,
+          "without_update": 3.047125816345215,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 373,
+          "piece": " on",
+          "with_update": 4.224235534667969,
+          "without_update": 3.678773880004883,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 701,
+          "piece": " up",
+          "with_update": 4.372673988342285,
+          "without_update": 2.9928674697875977,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 4802,
+          "piece": " big",
+          "with_update": 5.056581497192383,
+          "without_update": 4.0279693603515625,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 22696,
+          "piece": " hills",
+          "with_update": 5.165597915649414,
+          "without_update": 4.175703048706055,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": []
+    },
+    {
+      "kind": "fixed_observation",
+      "sample": 0,
+      "layer": 0,
+      "operation": "attention_residual",
+      "position": 1,
+      "term_piece": "Once",
+      "logits_offset": 256000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 1,
+      "target_order_fixed_count": 31999,
+      "target_order_changed_count": 0,
+      "choice_fixed": true,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 10697,
+          "piece": " trees",
+          "logit": 17.1853294
+        },
+        {
+          "token": 278,
+          "piece": " the",
+          "logit": 13.1570787
+        },
+        {
+          "token": 373,
+          "piece": " on",
+          "logit": 12.9124861
+        },
+        {
+          "token": 701,
+          "piece": " up",
+          "logit": 12.5032225
+        },
+        {
+          "token": 4802,
+          "piece": " big",
+          "logit": 12.0866699
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 278,
+          "piece": " the",
+          "with_update": 4.022707939147949,
+          "without_update": 4.028250694274902,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 373,
+          "piece": " on",
+          "with_update": 4.224235534667969,
+          "without_update": 4.272843360900879,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 701,
+          "piece": " up",
+          "with_update": 4.372673988342285,
+          "without_update": 4.682106971740723,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 4802,
+          "piece": " big",
+          "with_update": 5.056581497192383,
+          "without_update": 5.098659515380859,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 22696,
+          "piece": " hills",
+          "with_update": 5.165597915649414,
+          "without_update": 5.276096343994141,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": []
+    },
+    {
+      "kind": "fixed_observation",
+      "sample": 0,
+      "layer": 0,
+      "operation": "attention_residual",
+      "position": 2,
+      "term_piece": " upon",
+      "logits_offset": 384000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 31999,
+      "target_order_changed_count": 0,
+      "choice_fixed": true,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 10697,
+          "piece": " trees",
+          "logit": 17.0938206
+        },
+        {
+          "token": 278,
+          "piece": " the",
+          "logit": 13.0591631
+        },
+        {
+          "token": 373,
+          "piece": " on",
+          "logit": 12.895174
+        },
+        {
+          "token": 701,
+          "piece": " up",
+          "logit": 12.6716366
+        },
+        {
+          "token": 4802,
+          "piece": " big",
+          "logit": 11.9358683
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 278,
+          "piece": " the",
+          "with_update": 4.022707939147949,
+          "without_update": 4.0346574783325195,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 373,
+          "piece": " on",
+          "with_update": 4.224235534667969,
+          "without_update": 4.198646545410156,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 701,
+          "piece": " up",
+          "with_update": 4.372673988342285,
+          "without_update": 4.422183990478516,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 4802,
+          "piece": " big",
+          "with_update": 5.056581497192383,
+          "without_update": 5.157952308654785,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 22696,
+          "piece": " hills",
+          "with_update": 5.165597915649414,
+          "without_update": 5.176369667053223,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": []
+    },
+    {
+      "kind": "fixed_observation",
+      "sample": 0,
+      "layer": 0,
+      "operation": "attention_residual",
+      "position": 3,
+      "term_piece": " a",
+      "logits_offset": 512000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 31999,
+      "target_order_changed_count": 0,
+      "choice_fixed": true,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 10697,
+          "piece": " trees",
+          "logit": 17.1146622
+        },
+        {
+          "token": 278,
+          "piece": " the",
+          "logit": 13.1222019
+        },
+        {
+          "token": 373,
+          "piece": " on",
+          "logit": 12.8720598
+        },
+        {
+          "token": 701,
+          "piece": " up",
+          "logit": 12.6524925
+        },
+        {
+          "token": 4802,
+          "piece": " big",
+          "logit": 12.1381903
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 278,
+          "piece": " the",
+          "with_update": 4.022707939147949,
+          "without_update": 3.992460250854492,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 373,
+          "piece": " on",
+          "with_update": 4.224235534667969,
+          "without_update": 4.242602348327637,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 701,
+          "piece": " up",
+          "with_update": 4.372673988342285,
+          "without_update": 4.462169647216797,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 4802,
+          "piece": " big",
+          "with_update": 5.056581497192383,
+          "without_update": 4.976471900939941,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 22696,
+          "piece": " hills",
+          "with_update": 5.165597915649414,
+          "without_update": 5.190513610839844,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": []
+    },
+    {
+      "kind": "fixed_observation",
+      "sample": 0,
+      "layer": 0,
+      "operation": "attention_residual",
+      "position": 4,
+      "term_piece": " time",
+      "logits_offset": 640000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 31999,
+      "target_order_changed_count": 0,
+      "choice_fixed": true,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 10697,
+          "piece": " trees",
+          "logit": 17.013483
+        },
+        {
+          "token": 278,
+          "piece": " the",
+          "logit": 13.1055365
+        },
+        {
+          "token": 373,
+          "piece": " on",
+          "logit": 12.7414789
+        },
+        {
+          "token": 701,
+          "piece": " up",
+          "logit": 12.7191782
+        },
+        {
+          "token": 22696,
+          "piece": " hills",
+          "logit": 11.8840513
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 278,
+          "piece": " the",
+          "with_update": 4.022707939147949,
+          "without_update": 3.9079465866088867,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 373,
+          "piece": " on",
+          "with_update": 4.224235534667969,
+          "without_update": 4.272004127502441,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 701,
+          "piece": " up",
+          "with_update": 4.372673988342285,
+          "without_update": 4.294304847717285,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 4802,
+          "piece": " big",
+          "with_update": 5.056581497192383,
+          "without_update": 5.237025260925293,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 22696,
+          "piece": " hills",
+          "with_update": 5.165597915649414,
+          "without_update": 5.12943172454834,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": []
+    },
+    {
+      "kind": "fixed_observation",
+      "sample": 0,
+      "layer": 0,
+      "operation": "attention_residual",
+      "position": 5,
+      "term_piece": ",",
+      "logits_offset": 768000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 31999,
+      "target_order_changed_count": 0,
+      "choice_fixed": true,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 10697,
+          "piece": " trees",
+          "logit": 17.0821056
+        },
+        {
+          "token": 278,
+          "piece": " the",
+          "logit": 13.0684671
+        },
+        {
+          "token": 373,
+          "piece": " on",
+          "logit": 12.8826866
+        },
+        {
+          "token": 701,
+          "piece": " up",
+          "logit": 12.5868263
+        },
+        {
+          "token": 4802,
+          "piece": " big",
+          "logit": 12.1543179
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 278,
+          "piece": " the",
+          "with_update": 4.022707939147949,
+          "without_update": 4.013638496398926,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 373,
+          "piece": " on",
+          "with_update": 4.224235534667969,
+          "without_update": 4.199419021606445,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 701,
+          "piece": " up",
+          "with_update": 4.372673988342285,
+          "without_update": 4.495279312133789,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 4802,
+          "piece": " big",
+          "with_update": 5.056581497192383,
+          "without_update": 4.927787780761719,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 22696,
+          "piece": " hills",
+          "with_update": 5.165597915649414,
+          "without_update": 5.033836364746094,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": []
+    },
+    {
+      "kind": "fixed_observation",
+      "sample": 0,
+      "layer": 0,
+      "operation": "attention_residual",
+      "position": 6,
+      "term_piece": " in",
+      "logits_offset": 896000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 31999,
+      "target_order_changed_count": 0,
+      "choice_fixed": true,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 10697,
+          "piece": " trees",
+          "logit": 17.1504955
+        },
+        {
+          "token": 278,
+          "piece": " the",
+          "logit": 13.0993767
+        },
+        {
+          "token": 373,
+          "piece": " on",
+          "logit": 12.688838
+        },
+        {
+          "token": 701,
+          "piece": " up",
+          "logit": 12.5795784
+        },
+        {
+          "token": 22696,
+          "piece": " hills",
+          "logit": 11.9458723
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 278,
+          "piece": " the",
+          "with_update": 4.022707939147949,
+          "without_update": 4.051118850708008,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 373,
+          "piece": " on",
+          "with_update": 4.224235534667969,
+          "without_update": 4.461657524108887,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 701,
+          "piece": " up",
+          "with_update": 4.372673988342285,
+          "without_update": 4.570917129516602,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 4802,
+          "piece": " big",
+          "with_update": 5.056581497192383,
+          "without_update": 5.473406791687012,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 22696,
+          "piece": " hills",
+          "with_update": 5.165597915649414,
+          "without_update": 5.204623222351074,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": []
+    },
+    {
+      "kind": "fixed_observation",
+      "sample": 0,
+      "layer": 0,
+      "operation": "attention_residual",
+      "position": 7,
+      "term_piece": " a",
+      "logits_offset": 1024000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 1,
+      "target_order_fixed_count": 31999,
+      "target_order_changed_count": 0,
+      "choice_fixed": true,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 10697,
+          "piece": " trees",
+          "logit": 17.1299992
+        },
+        {
+          "token": 278,
+          "piece": " the",
+          "logit": 13.1112728
+        },
+        {
+          "token": 373,
+          "piece": " on",
+          "logit": 12.8497171
+        },
+        {
+          "token": 701,
+          "piece": " up",
+          "logit": 12.7448721
+        },
+        {
+          "token": 22696,
+          "piece": " hills",
+          "logit": 11.9467354
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 278,
+          "piece": " the",
+          "with_update": 4.022707939147949,
+          "without_update": 4.018726348876953,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 373,
+          "piece": " on",
+          "with_update": 4.224235534667969,
+          "without_update": 4.280282020568848,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 701,
+          "piece": " up",
+          "with_update": 4.372673988342285,
+          "without_update": 4.385127067565918,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 4802,
+          "piece": " big",
+          "with_update": 5.056581497192383,
+          "without_update": 5.260224342346191,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 22696,
+          "piece": " hills",
+          "with_update": 5.165597915649414,
+          "without_update": 5.183263778686523,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": []
+    }
+  ],
+  "joint_choice_changes": [
+    {
+      "kind": "joint_omission",
+      "sample": 0,
+      "layer": 0,
+      "operation": "attention_residual",
+      "position": -1,
+      "term_piece": null,
+      "logits_offset": 4224000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 31694,
+      "target_order_changed_count": 305,
+      "choice_fixed": false,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 902,
+          "piece": " her",
+          "logit": 10.2260923
+        },
+        {
+          "token": 701,
+          "piece": " up",
+          "logit": 10.0430193
+        },
+        {
+          "token": 372,
+          "piece": " it",
+          "logit": 9.20139885
+        },
+        {
+          "token": 322,
+          "piece": " and",
+          "logit": 8.94474792
+        },
+        {
+          "token": 278,
+          "piece": " the",
+          "logit": 8.82437611
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 278,
+          "piece": " the",
+          "with_update": 4.022707939147949,
+          "without_update": -7.5397549867630005,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 373,
+          "piece": " on",
+          "with_update": 4.224235534667969,
+          "without_update": -6.631394028663635,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 701,
+          "piece": " up",
+          "with_update": 4.372673988342285,
+          "without_update": -8.758398175239563,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 4802,
+          "piece": " big",
+          "with_update": 5.056581497192383,
+          "without_update": -1.5716735124588013,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 22696,
+          "piece": " hills",
+          "with_update": 5.165597915649414,
+          "without_update": 0.8532683849334717,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 278,
+          "piece": " the",
+          "with_update": 4.022707939147949,
+          "without_update": -7.5397549867630005,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 373,
+          "piece": " on",
+          "with_update": 4.224235534667969,
+          "without_update": -6.631394028663635,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 701,
+          "piece": " up",
+          "with_update": 4.372673988342285,
+          "without_update": -8.758398175239563,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 4802,
+          "piece": " big",
+          "with_update": 5.056581497192383,
+          "without_update": -1.5716735124588013,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 599,
+          "piece": " all",
+          "with_update": 5.6365509033203125,
+          "without_update": -5.463316082954407,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ],
+      "individually_choice_fixed_count": 32,
+      "omitted_positions": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31
+      ]
+    },
+    {
+      "kind": "joint_omission",
+      "sample": 0,
+      "layer": 0,
+      "operation": "ffn_residual",
+      "position": -1,
+      "term_piece": null,
+      "logits_offset": 8448000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 31908,
+      "target_order_changed_count": 91,
+      "choice_fixed": false,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 278,
+          "piece": " the",
+          "logit": 15.614418
+        },
+        {
+          "token": 304,
+          "piece": " to",
+          "logit": 14.3305063
+        },
+        {
+          "token": 263,
+          "piece": " a",
+          "logit": 13.2515192
+        },
+        {
+          "token": 322,
+          "piece": " and",
+          "logit": 13.0305691
+        },
+        {
+          "token": 373,
+          "piece": " on",
+          "logit": 12.4135056
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 278,
+          "piece": " the",
+          "with_update": 4.022707939147949,
+          "without_update": -10.271410465240479,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 373,
+          "piece": " on",
+          "with_update": 4.224235534667969,
+          "without_update": -7.070497989654541,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 701,
+          "piece": " up",
+          "with_update": 4.372673988342285,
+          "without_update": -4.5438361167907715,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 4802,
+          "piece": " big",
+          "with_update": 5.056581497192383,
+          "without_update": 2.5935707092285156,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 22696,
+          "piece": " hills",
+          "with_update": 5.165597915649414,
+          "without_update": -0.4558086395263672,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 278,
+          "piece": " the",
+          "with_update": 4.022707939147949,
+          "without_update": -10.271410465240479,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 373,
+          "piece": " on",
+          "with_update": 4.224235534667969,
+          "without_update": -7.070497989654541,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 701,
+          "piece": " up",
+          "with_update": 4.372673988342285,
+          "without_update": -4.5438361167907715,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 22696,
+          "piece": " hills",
+          "with_update": 5.165597915649414,
+          "without_update": -0.4558086395263672,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 599,
+          "piece": " all",
+          "with_update": 5.6365509033203125,
+          "without_update": -1.430023193359375,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ],
+      "individually_choice_fixed_count": 31,
+      "omitted_positions": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30
+      ]
+    },
+    {
+      "kind": "joint_omission",
+      "sample": 0,
+      "layer": 1,
+      "operation": "attention_residual",
+      "position": -1,
+      "term_piece": null,
+      "logits_offset": 12672000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 31996,
+      "target_order_changed_count": 3,
+      "choice_fixed": false,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 701,
+          "piece": " up",
+          "logit": 12.7602291
+        },
+        {
+          "token": 278,
+          "piece": " the",
+          "logit": 11.921773
+        },
+        {
+          "token": 322,
+          "piece": " and",
+          "logit": 11.3900604
+        },
+        {
+          "token": 10697,
+          "piece": " trees",
+          "logit": 10.3923588
+        },
+        {
+          "token": 1880,
+          "piece": " high",
+          "logit": 9.86211586
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 278,
+          "piece": " the",
+          "with_update": 4.022707939147949,
+          "without_update": -1.529414176940918,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 373,
+          "piece": " on",
+          "with_update": 4.224235534667969,
+          "without_update": 0.69580078125,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 701,
+          "piece": " up",
+          "with_update": 4.372673988342285,
+          "without_update": -2.367870330810547,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 4802,
+          "piece": " big",
+          "with_update": 5.056581497192383,
+          "without_update": 3.234523296356201,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 22696,
+          "piece": " hills",
+          "with_update": 5.165597915649414,
+          "without_update": 2.1876955032348633,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 278,
+          "piece": " the",
+          "with_update": 4.022707939147949,
+          "without_update": -1.529414176940918,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 701,
+          "piece": " up",
+          "with_update": 4.372673988342285,
+          "without_update": -2.367870330810547,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 322,
+          "piece": " and",
+          "with_update": 8.588920593261719,
+          "without_update": -0.9977016448974609,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ],
+      "individually_choice_fixed_count": 32,
+      "omitted_positions": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31
+      ]
+    },
+    {
+      "kind": "joint_omission",
+      "sample": 1,
+      "layer": 0,
+      "operation": "attention_residual",
+      "position": -1,
+      "term_piece": null,
+      "logits_offset": 55040000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 31994,
+      "target_order_changed_count": 5,
+      "choice_fixed": false,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 7569,
+          "piece": " Every",
+          "logit": 12.3731785
+        },
+        {
+          "token": 2296,
+          "piece": " She",
+          "logit": 12.1434441
+        },
+        {
+          "token": 739,
+          "piece": " It",
+          "logit": 11.1886587
+        },
+        {
+          "token": 450,
+          "piece": " The",
+          "logit": 10.8518391
+        },
+        {
+          "token": 13,
+          "piece": "<0x0A>",
+          "logit": 10.5371857
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 2296,
+          "piece": " She",
+          "with_update": 3.2125720977783203,
+          "without_update": -2.448883056640625,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 13,
+          "piece": "<0x0A>",
+          "with_update": 3.7117319107055664,
+          "without_update": -0.8426246643066406,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 3118,
+          "piece": " One",
+          "with_update": 5.102748870849609,
+          "without_update": 1.1470003128051758,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 7569,
+          "piece": " Every",
+          "with_update": 5.7829389572143555,
+          "without_update": -2.678617477416992,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 2178,
+          "piece": " All",
+          "with_update": 7.133342742919922,
+          "without_update": 1.3042974472045898,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 2296,
+          "piece": " She",
+          "with_update": 3.2125720977783203,
+          "without_update": -2.448883056640625,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 13,
+          "piece": "<0x0A>",
+          "with_update": 3.7117319107055664,
+          "without_update": -0.8426246643066406,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 7569,
+          "piece": " Every",
+          "with_update": 5.7829389572143555,
+          "without_update": -2.678617477416992,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 450,
+          "piece": " The",
+          "with_update": 7.3647871017456055,
+          "without_update": -1.157278060913086,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 739,
+          "piece": " It",
+          "with_update": 8.922210693359375,
+          "without_update": -1.4940977096557617,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ],
+      "individually_choice_fixed_count": 32,
+      "omitted_positions": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31
+      ]
+    },
+    {
+      "kind": "joint_omission",
+      "sample": 1,
+      "layer": 0,
+      "operation": "ffn_residual",
+      "position": -1,
+      "term_piece": null,
+      "logits_offset": 59264000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 31053,
+      "target_order_changed_count": 946,
+      "choice_fixed": false,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 10569,
+          "piece": " laugh",
+          "logit": 10.4250746
+        },
+        {
+          "token": 3271,
+          "piece": " home",
+          "logit": 9.14496994
+        },
+        {
+          "token": 9109,
+          "piece": " safe",
+          "logit": 9.13372517
+        },
+        {
+          "token": 18296,
+          "piece": " shop",
+          "logit": 9.05066204
+        },
+        {
+          "token": 995,
+          "piece": " value",
+          "logit": 8.93086338
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 2296,
+          "piece": " She",
+          "with_update": 3.2125720977783203,
+          "without_update": -0.7487339973449707,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 13,
+          "piece": "<0x0A>",
+          "with_update": 3.7117319107055664,
+          "without_update": -3.7721328735351562,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 3118,
+          "piece": " One",
+          "with_update": 5.102748870849609,
+          "without_update": -1.624765396118164,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 7569,
+          "piece": " Every",
+          "with_update": 5.7829389572143555,
+          "without_update": -1.6671075820922852,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 2178,
+          "piece": " All",
+          "with_update": 7.133342742919922,
+          "without_update": -0.37934303283691406,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 2296,
+          "piece": " She",
+          "with_update": 3.2125720977783203,
+          "without_update": -0.7487339973449707,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 13,
+          "piece": "<0x0A>",
+          "with_update": 3.7117319107055664,
+          "without_update": -3.7721328735351562,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 3118,
+          "piece": " One",
+          "with_update": 5.102748870849609,
+          "without_update": -1.624765396118164,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 7569,
+          "piece": " Every",
+          "with_update": 5.7829389572143555,
+          "without_update": -1.6671075820922852,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 2178,
+          "piece": " All",
+          "with_update": 7.133342742919922,
+          "without_update": -0.37934303283691406,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ],
+      "individually_choice_fixed_count": 31,
+      "omitted_positions": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31
+      ]
+    },
+    {
+      "kind": "joint_omission",
+      "sample": 1,
+      "layer": 1,
+      "operation": "ffn_residual",
+      "position": -1,
+      "term_piece": null,
+      "logits_offset": 67712000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 31998,
+      "target_order_changed_count": 1,
+      "choice_fixed": false,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 2296,
+          "piece": " She",
+          "logit": 13.0771818
+        },
+        {
+          "token": 360,
+          "piece": " D",
+          "logit": 12.3711128
+        },
+        {
+          "token": 739,
+          "piece": " It",
+          "logit": 11.5344658
+        },
+        {
+          "token": 365,
+          "piece": " L",
+          "logit": 10.876833
+        },
+        {
+          "token": 3118,
+          "piece": " One",
+          "logit": 10.2578325
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 2296,
+          "piece": " She",
+          "with_update": 3.2125720977783203,
+          "without_update": -0.7060689926147461,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 13,
+          "piece": "<0x0A>",
+          "with_update": 3.7117319107055664,
+          "without_update": 3.157093048095703,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 3118,
+          "piece": " One",
+          "with_update": 5.102748870849609,
+          "without_update": 2.1132802963256836,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 7569,
+          "piece": " Every",
+          "with_update": 5.7829389572143555,
+          "without_update": 5.078686714172363,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 2178,
+          "piece": " All",
+          "with_update": 7.133342742919922,
+          "without_update": 5.007104873657227,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 2296,
+          "piece": " She",
+          "with_update": 3.2125720977783203,
+          "without_update": -0.7060689926147461,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ],
+      "individually_choice_fixed_count": 32,
+      "omitted_positions": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31
+      ]
+    },
+    {
+      "kind": "joint_omission",
+      "sample": 1,
+      "layer": 2,
+      "operation": "attention_residual",
+      "position": -1,
+      "term_piece": null,
+      "logits_offset": 71936000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 31998,
+      "target_order_changed_count": 1,
+      "choice_fixed": false,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 2296,
+          "piece": " She",
+          "logit": 15.7368879
+        },
+        {
+          "token": 360,
+          "piece": " D",
+          "logit": 15.5534115
+        },
+        {
+          "token": 3118,
+          "piece": " One",
+          "logit": 14.6947927
+        },
+        {
+          "token": 13,
+          "piece": "<0x0A>",
+          "logit": 13.4735575
+        },
+        {
+          "token": 2178,
+          "piece": " All",
+          "logit": 11.8960752
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 2296,
+          "piece": " She",
+          "with_update": 3.2125720977783203,
+          "without_update": -0.18347644805908203,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 13,
+          "piece": "<0x0A>",
+          "with_update": 3.7117319107055664,
+          "without_update": 2.0798540115356445,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 3118,
+          "piece": " One",
+          "with_update": 5.102748870849609,
+          "without_update": 0.8586187362670898,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 7569,
+          "piece": " Every",
+          "with_update": 5.7829389572143555,
+          "without_update": 3.742990493774414,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 2178,
+          "piece": " All",
+          "with_update": 7.133342742919922,
+          "without_update": 3.6573362350463867,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 2296,
+          "piece": " She",
+          "with_update": 3.2125720977783203,
+          "without_update": -0.18347644805908203,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ],
+      "individually_choice_fixed_count": 32,
+      "omitted_positions": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31
+      ]
+    },
+    {
+      "kind": "joint_omission",
+      "sample": 2,
+      "layer": 0,
+      "operation": "attention_residual",
+      "position": -1,
+      "term_piece": null,
+      "logits_offset": 105856000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 31994,
+      "target_order_changed_count": 5,
+      "choice_fixed": false,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 8750,
+          "piece": " daughter",
+          "logit": 8.14467621
+        },
+        {
+          "token": 2211,
+          "piece": " three",
+          "logit": 6.67805195
+        },
+        {
+          "token": 29892,
+          "piece": ",",
+          "logit": 5.79082203
+        },
+        {
+          "token": 2217,
+          "piece": " little",
+          "logit": 5.18195248
+        },
+        {
+          "token": 322,
+          "piece": " and",
+          "logit": 5.04494905
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 29892,
+          "piece": ",",
+          "with_update": 5.647865295410156,
+          "without_update": -1.459752082824707,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 565,
+          "piece": " if",
+          "with_update": 7.545638084411621,
+          "without_update": 3.4266348481178284,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 263,
+          "piece": " a",
+          "with_update": 8.134235382080078,
+          "without_update": 3.4053231477737427,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 363,
+          "piece": " for",
+          "with_update": 8.723456382751465,
+          "without_update": 1.1668701171875,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 825,
+          "piece": " what",
+          "with_update": 9.206104278564453,
+          "without_update": 2.753304362297058,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 29892,
+          "piece": ",",
+          "with_update": 5.647865295410156,
+          "without_update": -1.459752082824707,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 2217,
+          "piece": " little",
+          "with_update": 13.268168449401855,
+          "without_update": -0.8508825302124023,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 8750,
+          "piece": " daughter",
+          "with_update": 13.726684093475342,
+          "without_update": -3.8136062622070312,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 2211,
+          "piece": " three",
+          "with_update": 14.019309043884277,
+          "without_update": -2.346982002258301,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 322,
+          "piece": " and",
+          "with_update": 16.076114177703857,
+          "without_update": -0.7138791084289551,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ],
+      "individually_choice_fixed_count": 32,
+      "omitted_positions": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31
+      ]
+    },
+    {
+      "kind": "joint_omission",
+      "sample": 2,
+      "layer": 0,
+      "operation": "ffn_residual",
+      "position": -1,
+      "term_piece": null,
+      "logits_offset": 110080000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 31996,
+      "target_order_changed_count": 3,
+      "choice_fixed": false,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 29889,
+          "piece": ".",
+          "logit": 8.92001057
+        },
+        {
+          "token": 29892,
+          "piece": ",",
+          "logit": 8.37713051
+        },
+        {
+          "token": 9796,
+          "piece": " happy",
+          "logit": 8.17901421
+        },
+        {
+          "token": 304,
+          "piece": " to",
+          "logit": 8.13414478
+        },
+        {
+          "token": 367,
+          "piece": " be",
+          "logit": 7.91010284
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 29892,
+          "piece": ",",
+          "with_update": 5.647865295410156,
+          "without_update": -0.24298572540283203,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 565,
+          "piece": " if",
+          "with_update": 7.545638084411621,
+          "without_update": 8.69079065322876,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 263,
+          "piece": " a",
+          "with_update": 8.134235382080078,
+          "without_update": 1.605727195739746,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 363,
+          "piece": " for",
+          "with_update": 8.723456382751465,
+          "without_update": 5.301986455917358,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 825,
+          "piece": " what",
+          "with_update": 9.206104278564453,
+          "without_update": 6.377228498458862,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 29892,
+          "piece": ",",
+          "with_update": 5.647865295410156,
+          "without_update": -0.24298572540283203,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 29889,
+          "piece": ".",
+          "with_update": 15.306225776672363,
+          "without_update": -0.7858657836914062,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 9796,
+          "piece": " happy",
+          "with_update": 17.046481132507324,
+          "without_update": -0.044869422912597656,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ],
+      "individually_choice_fixed_count": 32,
+      "omitted_positions": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31
+      ]
+    },
+    {
+      "kind": "joint_omission",
+      "sample": 3,
+      "layer": 0,
+      "operation": "attention_residual",
+      "position": -1,
+      "term_piece": null,
+      "logits_offset": 156672000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 31997,
+      "target_order_changed_count": 2,
+      "choice_fixed": false,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 450,
+          "piece": " The",
+          "logit": 14.0514832
+        },
+        {
+          "token": 2296,
+          "piece": " She",
+          "logit": 13.3615837
+        },
+        {
+          "token": 13,
+          "piece": "<0x0A>",
+          "logit": 12.9815521
+        },
+        {
+          "token": 739,
+          "piece": " It",
+          "logit": 12.7624321
+        },
+        {
+          "token": 940,
+          "piece": " He",
+          "logit": 12.5924196
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 940,
+          "piece": " He",
+          "with_update": 1.0692577362060547,
+          "without_update": 0.3891324996948242,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 450,
+          "piece": " The",
+          "with_update": 1.2126350402832031,
+          "without_update": -1.0699310302734375,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 3118,
+          "piece": " One",
+          "with_update": 3.1753158569335938,
+          "without_update": 3.051126480102539,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 1105,
+          "piece": " So",
+          "with_update": 4.691301345825195,
+          "without_update": 5.9644575119018555,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 2688,
+          "piece": " They",
+          "with_update": 4.938627243041992,
+          "without_update": 2.4336538314819336,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 450,
+          "piece": " The",
+          "with_update": 1.2126350402832031,
+          "without_update": -1.0699310302734375,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 2296,
+          "piece": " She",
+          "with_update": 8.544576644897461,
+          "without_update": -0.3800315856933594,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ],
+      "individually_choice_fixed_count": 31,
+      "omitted_positions": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31
+      ]
+    },
+    {
+      "kind": "joint_omission",
+      "sample": 3,
+      "layer": 0,
+      "operation": "ffn_residual",
+      "position": -1,
+      "term_piece": null,
+      "logits_offset": 160896000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 31998,
+      "target_order_changed_count": 1,
+      "choice_fixed": false,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 450,
+          "piece": " The",
+          "logit": 13.9216566
+        },
+        {
+          "token": 13,
+          "piece": "<0x0A>",
+          "logit": 13.7197828
+        },
+        {
+          "token": 739,
+          "piece": " It",
+          "logit": 13.2856359
+        },
+        {
+          "token": 29871,
+          "piece": " ",
+          "logit": 12.7831087
+        },
+        {
+          "token": 940,
+          "piece": " He",
+          "logit": 11.9048071
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 940,
+          "piece": " He",
+          "with_update": 1.0692577362060547,
+          "without_update": 1.8149757385253906,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 450,
+          "piece": " The",
+          "with_update": 1.2126350402832031,
+          "without_update": -0.201873779296875,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 3118,
+          "piece": " One",
+          "with_update": 3.1753158569335938,
+          "without_update": 3.4649858474731445,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 1105,
+          "piece": " So",
+          "with_update": 4.691301345825195,
+          "without_update": 2.9649734497070312,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 2688,
+          "piece": " They",
+          "with_update": 4.938627243041992,
+          "without_update": 2.119222640991211,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 450,
+          "piece": " The",
+          "with_update": 1.2126350402832031,
+          "without_update": -0.201873779296875,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ],
+      "individually_choice_fixed_count": 26,
+      "omitted_positions": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        13,
+        14,
+        15,
+        16,
+        17,
+        19,
+        20,
+        21,
+        22,
+        24,
+        25,
+        26,
+        27,
+        29
+      ]
+    },
+    {
+      "kind": "joint_omission",
+      "sample": 3,
+      "layer": 1,
+      "operation": "attention_residual",
+      "position": -1,
+      "term_piece": null,
+      "logits_offset": 165120000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 31997,
+      "target_order_changed_count": 2,
+      "choice_fixed": false,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 940,
+          "piece": " He",
+          "logit": 15.2232018
+        },
+        {
+          "token": 450,
+          "piece": " The",
+          "logit": 15.0162096
+        },
+        {
+          "token": 13,
+          "piece": "<0x0A>",
+          "logit": 14.3714418
+        },
+        {
+          "token": 1105,
+          "piece": " So",
+          "logit": 13.4940014
+        },
+        {
+          "token": 29871,
+          "piece": " ",
+          "logit": 13.2329445
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 940,
+          "piece": " He",
+          "with_update": 1.0692577362060547,
+          "without_update": -0.8517599105834961,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 450,
+          "piece": " The",
+          "with_update": 1.2126350402832031,
+          "without_update": -0.6447677612304688,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 3118,
+          "piece": " One",
+          "with_update": 3.1753158569335938,
+          "without_update": 2.3532657623291016,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 1105,
+          "piece": " So",
+          "with_update": 4.691301345825195,
+          "without_update": 0.8774404525756836,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 2688,
+          "piece": " They",
+          "with_update": 4.938627243041992,
+          "without_update": 4.016819953918457,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 940,
+          "piece": " He",
+          "with_update": 1.0692577362060547,
+          "without_update": -0.8517599105834961,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 450,
+          "piece": " The",
+          "with_update": 1.2126350402832031,
+          "without_update": -0.6447677612304688,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ],
+      "individually_choice_fixed_count": 32,
+      "omitted_positions": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31
+      ]
+    },
+    {
+      "kind": "joint_omission",
+      "sample": 3,
+      "layer": 1,
+      "operation": "ffn_residual",
+      "position": -1,
+      "term_piece": null,
+      "logits_offset": 169344000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 31998,
+      "target_order_changed_count": 1,
+      "choice_fixed": false,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 450,
+          "piece": " The",
+          "logit": 16.6385746
+        },
+        {
+          "token": 13,
+          "piece": "<0x0A>",
+          "logit": 16.2804317
+        },
+        {
+          "token": 940,
+          "piece": " He",
+          "logit": 15.65063
+        },
+        {
+          "token": 29871,
+          "piece": " ",
+          "logit": 14.3443327
+        },
+        {
+          "token": 3118,
+          "piece": " One",
+          "logit": 13.009141
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 940,
+          "piece": " He",
+          "with_update": 1.0692577362060547,
+          "without_update": 0.6298017501831055,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 450,
+          "piece": " The",
+          "with_update": 1.2126350402832031,
+          "without_update": -0.3581428527832031,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 3118,
+          "piece": " One",
+          "with_update": 3.1753158569335938,
+          "without_update": 3.2712907791137695,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 1105,
+          "piece": " So",
+          "with_update": 4.691301345825195,
+          "without_update": 3.3450403213500977,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 2688,
+          "piece": " They",
+          "with_update": 4.938627243041992,
+          "without_update": 5.384889602661133,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 450,
+          "piece": " The",
+          "with_update": 1.2126350402832031,
+          "without_update": -0.3581428527832031,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ],
+      "individually_choice_fixed_count": 31,
+      "omitted_positions": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        31
+      ]
+    },
+    {
+      "kind": "joint_omission",
+      "sample": 3,
+      "layer": 2,
+      "operation": "attention_residual",
+      "position": -1,
+      "term_piece": null,
+      "logits_offset": 173568000,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 31996,
+      "target_order_changed_count": 3,
+      "choice_fixed": false,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 450,
+          "piece": " The",
+          "logit": 17.4927082
+        },
+        {
+          "token": 940,
+          "piece": " He",
+          "logit": 16.4391613
+        },
+        {
+          "token": 3118,
+          "piece": " One",
+          "logit": 16.336504
+        },
+        {
+          "token": 13,
+          "piece": "<0x0A>",
+          "logit": 16.305687
+        },
+        {
+          "token": 1205,
+          "piece": " But",
+          "logit": 14.3858814
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 940,
+          "piece": " He",
+          "with_update": 1.0692577362060547,
+          "without_update": -0.13347434997558594,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 450,
+          "piece": " The",
+          "with_update": 1.2126350402832031,
+          "without_update": -1.187021255493164,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 3118,
+          "piece": " One",
+          "with_update": 3.1753158569335938,
+          "without_update": -0.030817031860351562,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 1105,
+          "piece": " So",
+          "with_update": 4.691301345825195,
+          "without_update": 2.6542739868164062,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 2688,
+          "piece": " They",
+          "with_update": 4.938627243041992,
+          "without_update": 2.0222854614257812,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 940,
+          "piece": " He",
+          "with_update": 1.0692577362060547,
+          "without_update": -0.13347434997558594,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 450,
+          "piece": " The",
+          "with_update": 1.2126350402832031,
+          "without_update": -1.187021255493164,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 3118,
+          "piece": " One",
+          "with_update": 3.1753158569335938,
+          "without_update": -0.030817031860351562,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ],
+      "individually_choice_fixed_count": 32,
+      "omitted_positions": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31
+      ]
+    }
+  ],
+  "scope": "Observed corpus points only. No grammar labels, inference reward, global eigenspace, or deployed rewrite are claimed."
+}

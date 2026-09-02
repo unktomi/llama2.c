@@ -153,6 +153,12 @@ cpsfixedpoints: cps_fixed_points.c run.c
 		-Wno-sign-compare -Wno-unused-variable -Wno-unused-function \
 		cps_fixed_points.c -lm -o cps_fixed_points
 
+.PHONY: cpsobserverfixedpoints
+cpsobserverfixedpoints: cps_observer_fixed_points.c cps_grammar_actions.c cps_fixed_points.c run.c
+	$(CC) -std=c11 -O3 -Wall -Wextra -Werror \
+		-Wno-sign-compare -Wno-unused-variable -Wno-unused-function \
+		cps_observer_fixed_points.c -lm -o cps_observer_fixed_points
+
 .PHONY: cpsaffinespectrum
 cpsaffinespectrum: cps_affine_spectrum.c cps_fixed_points.c run.c
 	$(CC) -std=c11 -O3 -Wall -Wextra -Werror \

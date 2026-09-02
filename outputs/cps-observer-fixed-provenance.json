@@ -1,0 +1,17 @@
+{
+  "measurement_scope": "Pointwise residual-addition omissions, not functional fixed-point or attention-interchange certificates",
+  "evaluator_source_sha256": "c4e83eb288423c49ebb91ce5aaff2c46d996e4d25e166878418037d0648b7f81",
+  "evaluator_binary_sha256": "2dcecb7e523c7849ac8af774119087051012742865620e2d04cbb6526cbd8b2b",
+  "build": "make cpsobserverfixedpoints CC=clang",
+  "raw_directory": "work_traces/observer_fixed_points",
+  "sha256": {
+    "stories15m-p32.jsonl": "086464fe96eb235ef18904f7d164772107b7c60bf4044a3dc78c05f57ea73a94",
+    "stories15m-p32.f32": "15d028bc65b1d60278ce4a2d352713faa0553d843e34cc8f3f6212d32a70870c",
+    "stories15m-p96-s4.jsonl": "63fdf09e41018795a712983a31cdf25e12a52df807bf18c57a5316b815717d35",
+    "stories15m-p96-s4.f32": "c3fec55d8345b84d3d706dba049e96559dcc8a5ffc0b546083e1472e0430f938",
+    "stories260k-p32.jsonl": "4dffcde95a64480dc8a156746e0dc600ec3749d1479e272f07a8df7b3394dc31",
+    "stories260k-p32.f32": "537d38a14071771732b63f9e04a29ec70c2b8ff006168bc816eb1ec5dfdc9630",
+    "stories260k-p96.jsonl": "5b09380a6e46a195509366067bf0cf5c1122fde7333b379d0da9d40e5d3aa9c1",
+    "stories260k-p96.f32": "2d772c44cedf03293dda808555cc4ba4cfa82015ddcbe2dc59a18f8ad581553b"
+  }
+}

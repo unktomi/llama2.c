@@ -1,0 +1,4590 @@
+{
+  "trace": "/Users/christopheroliver/Documents/Codex/2026-08-27/referenced-chatgpt-conversation-this-is-an-2/work/llama2-company-readout/work_traces/observer_fixed_points/stories260k-p96.jsonl",
+  "meta": {
+    "kind": "meta",
+    "schema_version": 1,
+    "measurement": "individual_residual_observer_fixed_points",
+    "model": "../llama2.c/test/stories260K.bin",
+    "corpus": "../data/TinyStories-valid.txt",
+    "logits_file": "work_traces/observer_fixed_points/stories260k-p96.f32",
+    "logits_dtype": "float32",
+    "byte_order": "little",
+    "layers": 5,
+    "dim": 64,
+    "vocabulary": 512,
+    "positions": 96,
+    "position_stride": 1,
+    "requested_samples": 8,
+    "start_story": 1,
+    "observer": "corpus-target contrasts, their signs, and full argmax set",
+    "equality": "exact recorded values; no tolerance",
+    "grammar_labels_supplied": false,
+    "optimization_enabled": false
+  },
+  "complete": true,
+  "summary": {
+    "kind": "summary",
+    "samples": 8,
+    "operations": 7680,
+    "structurally_unreachable": 1520,
+    "codata_fixed": 1520,
+    "target_order_fixed": 7622,
+    "choice_fixed": 7649,
+    "joint_groups": 80,
+    "joint_choice_changed": 9,
+    "cpu_seconds": 33.575528
+  },
+  "all_individual_updates": {
+    "operations": 7680,
+    "codata_fixed": 1520,
+    "choice_fixed": 7649,
+    "target_order_fixed": 7622,
+    "target_order_changed": 58
+  },
+  "excluding_structurally_unreachable": {
+    "operations": 6160,
+    "codata_fixed": 0,
+    "choice_fixed": 6129,
+    "target_order_fixed": 6102,
+    "target_order_changed": 58
+  },
+  "by_layer_and_operation": [
+    {
+      "layer": 0,
+      "operation": "attention_residual",
+      "operations": 768,
+      "codata_fixed": 0,
+      "choice_fixed": 766,
+      "target_order_fixed": 762,
+      "target_order_changed": 6
+    },
+    {
+      "layer": 0,
+      "operation": "ffn_residual",
+      "operations": 768,
+      "codata_fixed": 0,
+      "choice_fixed": 764,
+      "target_order_fixed": 761,
+      "target_order_changed": 7
+    },
+    {
+      "layer": 1,
+      "operation": "attention_residual",
+      "operations": 768,
+      "codata_fixed": 0,
+      "choice_fixed": 767,
+      "target_order_fixed": 763,
+      "target_order_changed": 5
+    },
+    {
+      "layer": 1,
+      "operation": "ffn_residual",
+      "operations": 768,
+      "codata_fixed": 0,
+      "choice_fixed": 765,
+      "target_order_fixed": 761,
+      "target_order_changed": 7
+    },
+    {
+      "layer": 2,
+      "operation": "attention_residual",
+      "operations": 768,
+      "codata_fixed": 0,
+      "choice_fixed": 766,
+      "target_order_fixed": 765,
+      "target_order_changed": 3
+    },
+    {
+      "layer": 2,
+      "operation": "ffn_residual",
+      "operations": 768,
+      "codata_fixed": 0,
+      "choice_fixed": 765,
+      "target_order_fixed": 761,
+      "target_order_changed": 7
+    },
+    {
+      "layer": 3,
+      "operation": "attention_residual",
+      "operations": 768,
+      "codata_fixed": 0,
+      "choice_fixed": 765,
+      "target_order_fixed": 762,
+      "target_order_changed": 6
+    },
+    {
+      "layer": 3,
+      "operation": "ffn_residual",
+      "operations": 768,
+      "codata_fixed": 0,
+      "choice_fixed": 763,
+      "target_order_fixed": 761,
+      "target_order_changed": 7
+    },
+    {
+      "layer": 4,
+      "operation": "attention_residual",
+      "operations": 8,
+      "codata_fixed": 0,
+      "choice_fixed": 4,
+      "target_order_fixed": 3,
+      "target_order_changed": 5
+    },
+    {
+      "layer": 4,
+      "operation": "ffn_residual",
+      "operations": 8,
+      "codata_fixed": 0,
+      "choice_fixed": 4,
+      "target_order_fixed": 3,
+      "target_order_changed": 5
+    }
+  ],
+  "joint_groups": 80,
+  "joint_choice_changed": 9,
+  "samples": [
+    {
+      "kind": "sample",
+      "sample": 0,
+      "story_index": 1,
+      "positions": 96,
+      "text": "Once upon a time, in a big forest, there lived a rhinoceros named Roxy. Roxy loved to climb. She climbed trees, rocks, and hills. One day, Roxy found an icy hill. She had never seen a",
+      "source_story": "Once upon a time, in a big forest, there lived a rhinoceros named Roxy. Roxy loved to climb. She climbed trees, rocks, and hills. One day, Roxy found an icy hill. She had never seen anything like it before. It was shiny and cold, and she wanted to climb it.\nRoxy tried to climb the icy hill, but it was very slippery. She tried again and again, but she kept falling down. Roxy was sad. She wanted to climb the icy hill so much. Then, she saw a little bird named Billy. Billy saw that Roxy was sad and asked, \"Why are you sad, Roxy?\"\nRoxy told Billy about the icy hill and how she couldn't climb it. Billy said, \"I have an idea! Let's find some big leaves to put under your feet. They will help you climb the icy hill.\" Roxy and Billy looked for big leaves and found some. Roxy put the leaves under her feet and tried to climb the icy hill again.\nThis time, Roxy didn't slip. She climbed and climbed until she reached the top of the icy hill. Roxy was so happy! She and Billy played on the icy hill all day. From that day on, Roxy and Billy were the best of friends, and they climbed and played together all the time. And Roxy learned that with a little help from a friend, she could climb anything.\n",
+      "target": 416,
+      "target_piece": "n",
+      "logits_offset": 0,
+      "top_with_update": [
+        {
+          "token": 416,
+          "piece": "n",
+          "logit": 11.4733229
+        },
+        {
+          "token": 282,
+          "piece": " p",
+          "logit": 10.4344196
+        },
+        {
+          "token": 268,
+          "piece": " b",
+          "logit": 10.3217058
+        },
+        {
+          "token": 370,
+          "piece": " big",
+          "logit": 10.2754993
+        },
+        {
+          "token": 262,
+          "piece": " s",
+          "logit": 10.1290359
+        }
+      ],
+      "tokens": [
+        1,
+        403,
+        407,
+        261,
+        378,
+        432,
+        322,
+        261,
+        370,
+        272,
+        414,
+        276,
+        356,
+        432,
+        383,
+        397,
+        396,
+        261,
+        352,
+        415,
+        271,
+        414,
+        429,
+        285,
+        414,
+        419,
+        395,
+        410,
+        461,
+        414,
+        444,
+        422,
+        426,
+        410,
+        461,
+        414,
+        444,
+        422,
+        401,
+        396,
+        267,
+        280,
+        421,
+        288,
+        430,
+        426,
+        338,
+        280,
+        421,
+        288,
+        430,
+        266,
+        259,
+        276,
+        406,
+        432,
+        352,
+        414,
+        340,
+        419,
+        432,
+        269,
+        270,
+        290,
+        421,
+        419,
+        426,
+        385,
+        328,
+        432,
+        410,
+        461,
+        414,
+        444,
+        422,
+        272,
+        277,
+        264,
+        261,
+        416,
+        410,
+        417,
+        429,
+        422,
+        270,
+        290,
+        421,
+        426,
+        338,
+        381,
+        404,
+        330,
+        262,
+        411,
+        302,
+        261
+      ]
+    },
+    {
+      "kind": "sample",
+      "sample": 1,
+      "story_index": 2,
+      "positions": 96,
+      "text": "Once upon a time, in a small yard, there was a small daisy. The daisy had a name. Her name was Daisy. Daisy was very small, but she was also very happy.<0x0A>One day, Daisy saw a dog. The dog was big and had a name too",
+      "source_story": "Once upon a time, in a small yard, there was a small daisy. The daisy had a name. Her name was Daisy. Daisy was very small, but she was also very happy.\nOne day, Daisy saw a dog. The dog was big and had a name too. His name was Max. Max liked to play in the yard. Daisy liked to watch Max play. Max and Daisy became friends.\nEvery day, Max would come to the yard to play. Daisy would watch and smile. They were very happy together. And even though Daisy was small, she knew that she had a big friend in Max.\n",
+      "target": 426,
+      "target_piece": ".",
+      "logits_offset": 1988608,
+      "top_with_update": [
+        {
+          "token": 426,
+          "piece": ".",
+          "logit": 15.6983528
+        },
+        {
+          "token": 443,
+          "piece": "!",
+          "logit": 11.0496597
+        },
+        {
+          "token": 433,
+          "piece": "k",
+          "logit": 9.49349117
+        },
+        {
+          "token": 272,
+          "piece": " f",
+          "logit": 9.16420746
+        },
+        {
+          "token": 450,
+          "piece": "?",
+          "logit": 8.98207855
+        }
+      ],
+      "tokens": [
+        1,
+        403,
+        407,
+        261,
+        378,
+        432,
+        322,
+        261,
+        262,
+        423,
+        388,
+        348,
+        295,
+        418,
+        432,
+        383,
+        286,
+        261,
+        262,
+        423,
+        388,
+        279,
+        412,
+        293,
+        422,
+        426,
+        291,
+        279,
+        412,
+        293,
+        422,
+        381,
+        261,
+        390,
+        411,
+        426,
+        320,
+        285,
+        390,
+        411,
+        286,
+        410,
+        455,
+        412,
+        293,
+        422,
+        426,
+        410,
+        455,
+        412,
+        293,
+        422,
+        286,
+        399,
+        262,
+        423,
+        388,
+        432,
+        398,
+        358,
+        286,
+        261,
+        421,
+        419,
+        414,
+        399,
+        393,
+        426,
+        13,
+        441,
+        416,
+        411,
+        328,
+        432,
+        410,
+        455,
+        412,
+        293,
+        422,
+        394,
+        261,
+        400,
+        428,
+        426,
+        291,
+        400,
+        428,
+        286,
+        370,
+        269,
+        381,
+        261,
+        390,
+        411,
+        267,
+        414
+      ]
+    },
+    {
+      "kind": "sample",
+      "sample": 2,
+      "story_index": 3,
+      "positions": 96,
+      "text": "Once upon a time, there was a thoughtful girl named Sue. Sue loved to help her mom around the house. One day, her mom asked her to wipe the table after they ate their lunch. Sue was happy to help.<0x0A>As Sue was w",
+      "source_story": "Once upon a time, there was a thoughtful girl named Sue. Sue loved to help her mom around the house. One day, her mom asked her to wipe the table after they ate their lunch. Sue was happy to help.\nAs Sue was wiping the table, she saw a pretty candle on the window sill. The candle was her mom's favorite. Sue wanted to do something nice for her mom, so she said, \"Mom, can I light the candle for you?\" Her mom said, \"Yes, but be very careful.\"\nSue carefully lit the candle and put it on the table. Her mom was so happy to see the pretty candle. They both sat and watched the candle burn. Sue's mom said, \"Thank you, Sue, for being so thoughtful and careful.\" Sue felt proud that she could help her mom.\nThe moral of the story is to always be thoughtful and careful when helping others.\n",
+      "target": 417,
+      "target_piece": "i",
+      "logits_offset": 3977216,
+      "top_with_update": [
+        {
+          "token": 304,
+          "piece": "or",
+          "logit": 16.1432304
+        },
+        {
+          "token": 420,
+          "piece": "r",
+          "logit": 14.1120386
+        },
+        {
+          "token": 415,
+          "piece": "h",
+          "logit": 13.9550438
+        },
+        {
+          "token": 316,
+          "piece": "et",
+          "logit": 13.4415064
+        },
+        {
+          "token": 414,
+          "piece": "o",
+          "logit": 12.1592684
+        }
+      ],
+      "tokens": [
+        1,
+        403,
+        407,
+        261,
+        378,
+        432,
+        383,
+        286,
+        261,
+        308,
+        277,
+        428,
+        415,
+        413,
+        431,
+        425,
+        421,
+        298,
+        315,
+        421,
+        395,
+        301,
+        425,
+        411,
+        426,
+        301,
+        425,
+        411,
+        401,
+        396,
+        267,
+        281,
+        421,
+        427,
+        311,
+        357,
+        261,
+        420,
+        277,
+        264,
+        265,
+        270,
+        277,
+        372,
+        426,
+        385,
+        328,
+        432,
+        311,
+        357,
+        261,
+        419,
+        355,
+        311,
+        267,
+        263,
+        417,
+        427,
+        411,
+        265,
+        259,
+        412,
+        430,
+        305,
+        261,
+        431,
+        413,
+        285,
+        366,
+        261,
+        413,
+        411,
+        265,
+        315,
+        278,
+        379,
+        402,
+        426,
+        301,
+        425,
+        411,
+        286,
+        393,
+        267,
+        281,
+        421,
+        427,
+        426,
+        13,
+        447,
+        419,
+        301,
+        425,
+        411,
+        286,
+        263
+      ]
+    },
+    {
+      "kind": "sample",
+      "sample": 3,
+      "story_index": 4,
+      "positions": 96,
+      "text": "Once upon a time, there was a kind farmer. He had a big cow. The cow was sad. The farmer did not know why.<0x0A>One day, a little boy came to the farm. He saw the sad cow. The boy kneeled down to talk to the c",
+      "source_story": "Once upon a time, there was a kind farmer. He had a big cow. The cow was sad. The farmer did not know why.\nOne day, a little boy came to the farm. He saw the sad cow. The boy kneeled down to talk to the cow. \"Why are you sad, cow?\" he asked. The cow said, \"I am lonely. I want a friend.\"\nThe kind farmer heard the cow. He wanted to help. So, he got another cow to be friends with the sad cow. The sad cow was happy now. They played together every day. And the kind farmer, the little boy, and the two cows all lived happily ever after.\n",
+      "target": 327,
+      "target_piece": "ow",
+      "logits_offset": 5965824,
+      "top_with_update": [
+        {
+          "token": 327,
+          "piece": "ow",
+          "logit": 13.5637817
+        },
+        {
+          "token": 294,
+          "piece": "at",
+          "logit": 10.1191778
+        },
+        {
+          "token": 295,
+          "piece": "ar",
+          "logit": 9.65223408
+        },
+        {
+          "token": 415,
+          "piece": "h",
+          "logit": 9.6343298
+        },
+        {
+          "token": 260,
+          "piece": "he",
+          "logit": 9.22567749
+        }
+      ],
+      "tokens": [
+        1,
+        403,
+        407,
+        261,
+        378,
+        432,
+        383,
+        286,
+        261,
+        409,
+        417,
+        264,
+        272,
+        295,
+        423,
+        285,
+        426,
+        346,
+        381,
+        261,
+        370,
+        280,
+        327,
+        426,
+        291,
+        280,
+        327,
+        286,
+        296,
+        418,
+        426,
+        291,
+        272,
+        295,
+        423,
+        285,
+        279,
+        292,
+        297,
+        309,
+        409,
+        416,
+        327,
+        263,
+        415,
+        422,
+        426,
+        13,
+        441,
+        416,
+        411,
+        328,
+        432,
+        261,
+        376,
+        268,
+        414,
+        422,
+        280,
+        314,
+        411,
+        267,
+        265,
+        272,
+        295,
+        423,
+        426,
+        346,
+        394,
+        265,
+        296,
+        418,
+        280,
+        327,
+        426,
+        291,
+        268,
+        414,
+        422,
+        409,
+        416,
+        411,
+        411,
+        421,
+        266,
+        279,
+        327,
+        416,
+        267,
+        259,
+        412,
+        421,
+        433,
+        267,
+        265,
+        280
+      ]
+    },
+    {
+      "kind": "sample",
+      "sample": 4,
+      "story_index": 5,
+      "positions": 96,
+      "text": "Once upon a time, there was a little girl named Lucy. She had a pet cat named Tom. They loved to play together in the big green park near their house. One sunny day, they went to the park to play.<0x0A>While playing, Tom saw a big sour lemon on the",
+      "source_story": "Once upon a time, there was a little girl named Lucy. She had a pet cat named Tom. They loved to play together in the big green park near their house. One sunny day, they went to the park to play.\nWhile playing, Tom saw a big sour lemon on the ground. He wanted to play with it, but when he touched it, it started to roll away. Tom ran after the lemon, trying to catch it. But as he ran, Tom got lost in the park. Lucy looked around, but she could not find Tom. She was very sad.\nLucy did not give up. She searched the park for her friend. At last, she found him near a big tree. Tom was trying to catch the lemon, but it vanished into a hole in the ground. Tom was happy to see Lucy again. They hugged and went back home together. They had a fun escape in the park, but they decided to leave the sour lemon behind.\n",
+      "target": 298,
+      "target_piece": " g",
+      "logits_offset": 7954432,
+      "top_with_update": [
+        {
+          "token": 298,
+          "piece": " g",
+          "logit": 15.442914
+        },
+        {
+          "token": 262,
+          "piece": " s",
+          "logit": 13.2216892
+        },
+        {
+          "token": 259,
+          "piece": " t",
+          "logit": 13.1979523
+        },
+        {
+          "token": 272,
+          "piece": " f",
+          "logit": 12.8791752
+        },
+        {
+          "token": 282,
+          "piece": " p",
+          "logit": 12.6811543
+        }
+      ],
+      "tokens": [
+        1,
+        403,
+        407,
+        261,
+        378,
+        432,
+        383,
+        286,
+        261,
+        376,
+        298,
+        315,
+        421,
+        395,
+        307,
+        425,
+        429,
+        422,
+        426,
+        338,
+        381,
+        261,
+        282,
+        316,
+        280,
+        294,
+        395,
+        274,
+        287,
+        426,
+        342,
+        401,
+        396,
+        267,
+        337,
+        267,
+        428,
+        316,
+        386,
+        322,
+        265,
+        370,
+        298,
+        276,
+        302,
+        282,
+        295,
+        433,
+        404,
+        295,
+        265,
+        315,
+        270,
+        277,
+        372,
+        426,
+        385,
+        262,
+        379,
+        416,
+        422,
+        328,
+        432,
+        366,
+        263,
+        377,
+        267,
+        265,
+        282,
+        295,
+        433,
+        267,
+        337,
+        426,
+        13,
+        448,
+        415,
+        290,
+        411,
+        337,
+        299,
+        432,
+        274,
+        287,
+        394,
+        261,
+        370,
+        262,
+        277,
+        420,
+        278,
+        411,
+        423,
+        289,
+        353,
+        265
+      ]
+    },
+    {
+      "kind": "sample",
+      "sample": 5,
+      "story_index": 6,
+      "positions": 96,
+      "text": "Once upon a time, there was a little brown dog named Spot. He loved to play with his ball in the park. One sunny day, Spot saw a big goal on the other side of the park. He wanted to get his ball into the goal.<0x0A>Spot ran fast with the",
+      "source_story": "Once upon a time, there was a little brown dog named Spot. He loved to play with his ball in the park. One sunny day, Spot saw a big goal on the other side of the park. He wanted to get his ball into the goal.\nSpot ran fast with the ball in his mouth. He tried to kick the ball into the goal, but he was too small. Spot started to struggle. He tried again and again, but the ball would not go in.\nThen, Spot had an idea. He asked his friend, a big brown horse named Buddy, for help. Buddy kicked the ball with his strong legs. The ball flew into the goal! Spot was so happy. He and Buddy played together all day long.\n",
+      "target": 268,
+      "target_piece": " b",
+      "logits_offset": 9943040,
+      "top_with_update": [
+        {
+          "token": 262,
+          "piece": " s",
+          "logit": 12.6080198
+        },
+        {
+          "token": 268,
+          "piece": " b",
+          "logit": 12.3233261
+        },
+        {
+          "token": 298,
+          "piece": " g",
+          "logit": 11.7336941
+        },
+        {
+          "token": 280,
+          "piece": " c",
+          "logit": 11.2835493
+        },
+        {
+          "token": 410,
+          "piece": " ",
+          "logit": 11.2814951
+        }
+      ],
+      "tokens": [
+        1,
+        403,
+        407,
+        261,
+        378,
+        432,
+        383,
+        286,
+        261,
+        376,
+        268,
+        420,
+        327,
+        416,
+        400,
+        428,
+        395,
+        301,
+        427,
+        309,
+        426,
+        346,
+        401,
+        396,
+        267,
+        337,
+        335,
+        345,
+        268,
+        388,
+        322,
+        265,
+        282,
+        295,
+        433,
+        426,
+        385,
+        262,
+        379,
+        416,
+        422,
+        328,
+        432,
+        301,
+        427,
+        309,
+        394,
+        261,
+        370,
+        298,
+        414,
+        412,
+        421,
+        353,
+        265,
+        410,
+        309,
+        386,
+        262,
+        292,
+        411,
+        373,
+        265,
+        282,
+        295,
+        433,
+        426,
+        346,
+        391,
+        266,
+        267,
+        298,
+        316,
+        345,
+        268,
+        388,
+        322,
+        413,
+        414,
+        265,
+        298,
+        414,
+        412,
+        421,
+        426,
+        13,
+        437,
+        427,
+        309,
+        352,
+        303,
+        272,
+        412,
+        356,
+        335,
+        265
+      ]
+    },
+    {
+      "kind": "sample",
+      "sample": 6,
+      "story_index": 7,
+      "positions": 96,
+      "text": "Once upon a time, there was a little boy named Tom. He loved to play with his red ball. One sunny day, Tom went outside to play with his ball in the land near his home.<0x0A>Tom kicked the ball high in the sky. The ball went far, far away.",
+      "source_story": "Once upon a time, there was a little boy named Tom. He loved to play with his red ball. One sunny day, Tom went outside to play with his ball in the land near his home.\nTom kicked the ball high in the sky. The ball went far, far away. Tom was sad because he could not find his ball. He walked and walked, looking for it. The land was big and sometimes dangerous. Tom knew he had to be careful.\nAt last, Tom found his ball near a big tree. He was very happy. Tom knew he should not kick the ball too hard next time. He went back home, holding his ball tightly. Tom played safely in his yard, away from the dangerous land.\n",
+      "target": 274,
+      "target_piece": " T",
+      "logits_offset": 11931648,
+      "top_with_update": [
+        {
+          "token": 274,
+          "piece": " T",
+          "logit": 18.1495953
+        },
+        {
+          "token": 291,
+          "piece": " The",
+          "logit": 16.7395382
+        },
+        {
+          "token": 410,
+          "piece": " ",
+          "logit": 16.4144344
+        },
+        {
+          "token": 359,
+          "piece": " I",
+          "logit": 15.9634867
+        },
+        {
+          "token": 346,
+          "piece": " He",
+          "logit": 15.6405058
+        }
+      ],
+      "tokens": [
+        1,
+        403,
+        407,
+        261,
+        378,
+        432,
+        383,
+        286,
+        261,
+        376,
+        268,
+        414,
+        422,
+        395,
+        274,
+        287,
+        426,
+        346,
+        401,
+        396,
+        267,
+        337,
+        335,
+        345,
+        352,
+        266,
+        268,
+        388,
+        426,
+        385,
+        262,
+        379,
+        416,
+        422,
+        328,
+        432,
+        274,
+        287,
+        263,
+        377,
+        410,
+        408,
+        419,
+        292,
+        411,
+        267,
+        337,
+        335,
+        345,
+        268,
+        388,
+        322,
+        265,
+        278,
+        412,
+        264,
+        404,
+        295,
+        345,
+        270,
+        287,
+        411,
+        426,
+        13,
+        434,
+        287,
+        409,
+        417,
+        340,
+        266,
+        265,
+        268,
+        388,
+        270,
+        333,
+        415,
+        322,
+        265,
+        262,
+        433,
+        422,
+        426,
+        291,
+        268,
+        388,
+        263,
+        377,
+        272,
+        295,
+        432,
+        272,
+        295,
+        261,
+        424,
+        283,
+        426
+      ]
+    },
+    {
+      "kind": "sample",
+      "sample": 7,
+      "story_index": 8,
+      "positions": 96,
+      "text": "Once upon a time, there was a big dog named Max. Max had a red collar that he wore every day. He loved to play and run in the park with his friends.<0x0A>One day, Max saw a cat on a tree. He wanted to be friends with the cat. So, Max tried to",
+      "source_story": "Once upon a time, there was a big dog named Max. Max had a red collar that he wore every day. He loved to play and run in the park with his friends.\nOne day, Max saw a cat on a tree. He wanted to be friends with the cat. So, Max tried to stretch up to reach the cat. But he was not tall enough. He tried again and again, but he just couldn't reach the cat.\nMax felt sad, but then he had an idea. He found a big box and put it under the tree. Max climbed on the box and stretched one more time. This time, he reached the cat! The cat and Max became good friends, and they played together every day.\n",
+      "target": 349,
+      "target_piece": " st",
+      "logits_offset": 13920256,
+      "top_with_update": [
+        {
+          "token": 280,
+          "piece": " c",
+          "logit": 13.6993952
+        },
+        {
+          "token": 272,
+          "piece": " f",
+          "logit": 12.9340591
+        },
+        {
+          "token": 282,
+          "piece": " p",
+          "logit": 12.9048195
+        },
+        {
+          "token": 298,
+          "piece": " g",
+          "logit": 12.8732376
+        },
+        {
+          "token": 410,
+          "piece": " ",
+          "logit": 12.7145491
+        }
+      ],
+      "tokens": [
+        1,
+        403,
+        407,
+        261,
+        378,
+        432,
+        383,
+        286,
+        261,
+        370,
+        400,
+        428,
+        395,
+        392,
+        412,
+        444,
+        426,
+        392,
+        412,
+        444,
+        381,
+        261,
+        352,
+        266,
+        280,
+        414,
+        306,
+        295,
+        351,
+        281,
+        263,
+        414,
+        276,
+        344,
+        363,
+        328,
+        426,
+        346,
+        401,
+        396,
+        267,
+        337,
+        269,
+        352,
+        379,
+        322,
+        265,
+        282,
+        295,
+        433,
+        335,
+        345,
+        374,
+        419,
+        426,
+        13,
+        441,
+        416,
+        411,
+        328,
+        432,
+        392,
+        412,
+        444,
+        394,
+        261,
+        280,
+        294,
+        353,
+        261,
+        259,
+        276,
+        411,
+        426,
+        346,
+        391,
+        266,
+        267,
+        329,
+        374,
+        419,
+        335,
+        265,
+        280,
+        294,
+        426,
+        301,
+        414,
+        432,
+        392,
+        412,
+        444,
+        259,
+        325,
+        266,
+        267
+      ]
+    }
+  ],
+  "first_changed_comparisons": [
+    {
+      "kind": "fixed_observation",
+      "sample": 0,
+      "layer": 1,
+      "operation": "ffn_residual",
+      "position": 91,
+      "term_piece": "ver",
+      "logits_offset": 784384,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 506,
+      "target_order_changed_count": 5,
+      "choice_fixed": false,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 370,
+          "piece": " big",
+          "logit": 11.2110291
+        },
+        {
+          "token": 262,
+          "piece": " s",
+          "logit": 10.8176394
+        },
+        {
+          "token": 282,
+          "piece": " p",
+          "logit": 10.7533722
+        },
+        {
+          "token": 280,
+          "piece": " c",
+          "logit": 10.2473469
+        },
+        {
+          "token": 268,
+          "piece": " b",
+          "logit": 10.2328329
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 282,
+          "piece": " p",
+          "with_update": 1.0389032363891602,
+          "without_update": -0.5823259353637695,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 268,
+          "piece": " b",
+          "with_update": 1.1516170501708984,
+          "without_update": -0.061786651611328125,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 370,
+          "piece": " big",
+          "with_update": 1.1978235244750977,
+          "without_update": -1.039982795715332,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 262,
+          "piece": " s",
+          "with_update": 1.3442869186401367,
+          "without_update": -0.6465930938720703,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 280,
+          "piece": " c",
+          "with_update": 1.5157690048217773,
+          "without_update": -0.07630062103271484,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 282,
+          "piece": " p",
+          "with_update": 1.0389032363891602,
+          "without_update": -0.5823259353637695,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 268,
+          "piece": " b",
+          "with_update": 1.1516170501708984,
+          "without_update": -0.061786651611328125,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 370,
+          "piece": " big",
+          "with_update": 1.1978235244750977,
+          "without_update": -1.039982795715332,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 262,
+          "piece": " s",
+          "with_update": 1.3442869186401367,
+          "without_update": -0.6465930938720703,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 280,
+          "piece": " c",
+          "with_update": 1.5157690048217773,
+          "without_update": -0.07630062103271484,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ]
+    },
+    {
+      "kind": "fixed_observation",
+      "sample": 0,
+      "layer": 2,
+      "operation": "ffn_residual",
+      "position": 91,
+      "term_piece": "ver",
+      "logits_offset": 1181696,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 508,
+      "target_order_changed_count": 3,
+      "choice_fixed": false,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 370,
+          "piece": " big",
+          "logit": 11.1675444
+        },
+        {
+          "token": 282,
+          "piece": " p",
+          "logit": 10.9537439
+        },
+        {
+          "token": 262,
+          "piece": " s",
+          "logit": 10.8559294
+        },
+        {
+          "token": 416,
+          "piece": "n",
+          "logit": 10.8460302
+        },
+        {
+          "token": 268,
+          "piece": " b",
+          "logit": 10.5557604
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 282,
+          "piece": " p",
+          "with_update": 1.0389032363891602,
+          "without_update": -0.10771369934082031,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 268,
+          "piece": " b",
+          "with_update": 1.1516170501708984,
+          "without_update": 0.2902698516845703,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 370,
+          "piece": " big",
+          "with_update": 1.1978235244750977,
+          "without_update": -0.3215141296386719,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 262,
+          "piece": " s",
+          "with_update": 1.3442869186401367,
+          "without_update": -0.009899139404296875,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 280,
+          "piece": " c",
+          "with_update": 1.5157690048217773,
+          "without_update": 0.3369150161743164,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 282,
+          "piece": " p",
+          "with_update": 1.0389032363891602,
+          "without_update": -0.10771369934082031,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 370,
+          "piece": " big",
+          "with_update": 1.1978235244750977,
+          "without_update": -0.3215141296386719,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 262,
+          "piece": " s",
+          "with_update": 1.3442869186401367,
+          "without_update": -0.009899139404296875,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ]
+    },
+    {
+      "kind": "fixed_observation",
+      "sample": 0,
+      "layer": 3,
+      "operation": "attention_residual",
+      "position": 95,
+      "term_piece": " a",
+      "logits_offset": 1388544,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 504,
+      "target_order_changed_count": 7,
+      "choice_fixed": false,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 306,
+          "piece": "ll",
+          "logit": 10.7832775
+        },
+        {
+          "token": 370,
+          "piece": " big",
+          "logit": 10.6739664
+        },
+        {
+          "token": 262,
+          "piece": " s",
+          "logit": 10.4952927
+        },
+        {
+          "token": 278,
+          "piece": " l",
+          "logit": 10.1787443
+        },
+        {
+          "token": 282,
+          "piece": " p",
+          "logit": 9.66371632
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 282,
+          "piece": " p",
+          "with_update": 1.0389032363891602,
+          "without_update": -0.5152568817138672,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 268,
+          "piece": " b",
+          "with_update": 1.1516170501708984,
+          "without_update": 0.05133056640625,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 370,
+          "piece": " big",
+          "with_update": 1.1978235244750977,
+          "without_update": -1.5255069732666016,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 262,
+          "piece": " s",
+          "with_update": 1.3442869186401367,
+          "without_update": -1.3468332290649414,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 280,
+          "piece": " c",
+          "with_update": 1.5157690048217773,
+          "without_update": 0.2646341323852539,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 282,
+          "piece": " p",
+          "with_update": 1.0389032363891602,
+          "without_update": -0.5152568817138672,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 370,
+          "piece": " big",
+          "with_update": 1.1978235244750977,
+          "without_update": -1.5255069732666016,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 262,
+          "piece": " s",
+          "with_update": 1.3442869186401367,
+          "without_update": -1.3468332290649414,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 259,
+          "piece": " t",
+          "with_update": 1.5605316162109375,
+          "without_update": -0.3219594955444336,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 278,
+          "piece": " l",
+          "with_update": 2.095966339111328,
+          "without_update": -1.0302848815917969,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ]
+    },
+    {
+      "kind": "fixed_observation",
+      "sample": 0,
+      "layer": 4,
+      "operation": "ffn_residual",
+      "position": 95,
+      "term_piece": " a",
+      "logits_offset": 1984512,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 509,
+      "target_order_changed_count": 2,
+      "choice_fixed": false,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 370,
+          "piece": " big",
+          "logit": 11.0914965
+        },
+        {
+          "token": 278,
+          "piece": " l",
+          "logit": 11.0753231
+        },
+        {
+          "token": 416,
+          "piece": "n",
+          "logit": 10.9745026
+        },
+        {
+          "token": 262,
+          "piece": " s",
+          "logit": 10.7989063
+        },
+        {
+          "token": 268,
+          "piece": " b",
+          "logit": 10.4565363
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 282,
+          "piece": " p",
+          "with_update": 1.0389032363891602,
+          "without_update": 1.125265121459961,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 268,
+          "piece": " b",
+          "with_update": 1.1516170501708984,
+          "without_update": 0.5179662704467773,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 370,
+          "piece": " big",
+          "with_update": 1.1978235244750977,
+          "without_update": -0.11699390411376953,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 262,
+          "piece": " s",
+          "with_update": 1.3442869186401367,
+          "without_update": 0.1755962371826172,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 280,
+          "piece": " c",
+          "with_update": 1.5157690048217773,
+          "without_update": 1.0965900421142578,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 370,
+          "piece": " big",
+          "with_update": 1.1978235244750977,
+          "without_update": -0.11699390411376953,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 278,
+          "piece": " l",
+          "with_update": 2.095966339111328,
+          "without_update": -0.10082054138183594,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ]
+    },
+    {
+      "kind": "fixed_observation",
+      "sample": 2,
+      "layer": 0,
+      "operation": "attention_residual",
+      "position": 94,
+      "term_piece": " was",
+      "logits_offset": 4171776,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 510,
+      "target_order_changed_count": 1,
+      "choice_fixed": true,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 304,
+          "piece": "or",
+          "logit": 15.9663305
+        },
+        {
+          "token": 415,
+          "piece": "h",
+          "logit": 14.1220741
+        },
+        {
+          "token": 420,
+          "piece": "r",
+          "logit": 13.9697733
+        },
+        {
+          "token": 316,
+          "piece": "et",
+          "logit": 13.4676771
+        },
+        {
+          "token": 414,
+          "piece": "o",
+          "logit": 11.9231958
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 304,
+          "piece": "or",
+          "with_update": -5.419883728027344,
+          "without_update": -5.588743209838867,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 420,
+          "piece": "r",
+          "with_update": -3.3886919021606445,
+          "without_update": -3.5921859741210938,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 415,
+          "piece": "h",
+          "with_update": -3.2316970825195312,
+          "without_update": -3.7444868087768555,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 316,
+          "piece": "et",
+          "with_update": -2.7181596755981445,
+          "without_update": -3.090089797973633,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 414,
+          "piece": "o",
+          "with_update": -1.4359216690063477,
+          "without_update": -1.5456085205078125,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 260,
+          "piece": "he",
+          "with_update": 0.582127571105957,
+          "without_update": -0.11533355712890625,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ]
+    },
+    {
+      "kind": "fixed_observation",
+      "sample": 2,
+      "layer": 0,
+      "operation": "attention_residual",
+      "position": 95,
+      "term_piece": " w",
+      "logits_offset": 4173824,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 510,
+      "target_order_changed_count": 1,
+      "choice_fixed": true,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 304,
+          "piece": "or",
+          "logit": 15.5663319
+        },
+        {
+          "token": 415,
+          "piece": "h",
+          "logit": 14.8647623
+        },
+        {
+          "token": 420,
+          "piece": "r",
+          "logit": 13.6394911
+        },
+        {
+          "token": 316,
+          "piece": "et",
+          "logit": 12.9981871
+        },
+        {
+          "token": 377,
+          "piece": "ent",
+          "logit": 12.5056829
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 304,
+          "piece": "or",
+          "with_update": -5.419883728027344,
+          "without_update": -4.118525505065918,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 420,
+          "piece": "r",
+          "with_update": -3.3886919021606445,
+          "without_update": -2.1916847229003906,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 415,
+          "piece": "h",
+          "with_update": -3.2316970825195312,
+          "without_update": -3.4169559478759766,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 316,
+          "piece": "et",
+          "with_update": -2.7181596755981445,
+          "without_update": -1.5503807067871094,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 414,
+          "piece": "o",
+          "with_update": -1.4359216690063477,
+          "without_update": -0.7913570404052734,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 260,
+          "piece": "he",
+          "with_update": 0.582127571105957,
+          "without_update": -0.4757041931152344,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ]
+    },
+    {
+      "kind": "fixed_observation",
+      "sample": 2,
+      "layer": 0,
+      "operation": "ffn_residual",
+      "position": 95,
+      "term_piece": " w",
+      "logits_offset": 4372480,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 503,
+      "target_order_changed_count": 8,
+      "choice_fixed": true,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 304,
+          "piece": "or",
+          "logit": 14.3047009
+        },
+        {
+          "token": 414,
+          "piece": "o",
+          "logit": 13.1021023
+        },
+        {
+          "token": 420,
+          "piece": "r",
+          "logit": 12.5543261
+        },
+        {
+          "token": 425,
+          "piece": "u",
+          "logit": 12.0278883
+        },
+        {
+          "token": 415,
+          "piece": "h",
+          "logit": 11.9574566
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 304,
+          "piece": "or",
+          "with_update": -5.419883728027344,
+          "without_update": -5.87481689453125,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 420,
+          "piece": "r",
+          "with_update": -3.3886919021606445,
+          "without_update": -4.124442100524902,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 415,
+          "piece": "h",
+          "with_update": -3.2316970825195312,
+          "without_update": -3.5275726318359375,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 316,
+          "piece": "et",
+          "with_update": -2.7181596755981445,
+          "without_update": -2.449512481689453,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 414,
+          "piece": "o",
+          "with_update": -1.4359216690063477,
+          "without_update": -4.672218322753906,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 271,
+          "piece": "in",
+          "with_update": 0.5620279312133789,
+          "without_update": -0.4056243896484375,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 425,
+          "piece": "u",
+          "with_update": 0.8961458206176758,
+          "without_update": -3.5980043411254883,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 412,
+          "piece": "a",
+          "with_update": 1.1956262588500977,
+          "without_update": -2.0986099243164062,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 347,
+          "piece": "oo",
+          "with_update": 1.1969585418701172,
+          "without_update": -0.5663442611694336,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 290,
+          "piece": "il",
+          "with_update": 1.3685712814331055,
+          "without_update": -1.098836898803711,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ]
+    },
+    {
+      "kind": "fixed_observation",
+      "sample": 2,
+      "layer": 1,
+      "operation": "attention_residual",
+      "position": 93,
+      "term_piece": "e",
+      "logits_offset": 4567040,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 510,
+      "target_order_changed_count": 1,
+      "choice_fixed": true,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 304,
+          "piece": "or",
+          "logit": 15.8015184
+        },
+        {
+          "token": 415,
+          "piece": "h",
+          "logit": 14.2953625
+        },
+        {
+          "token": 420,
+          "piece": "r",
+          "logit": 13.9211349
+        },
+        {
+          "token": 316,
+          "piece": "et",
+          "logit": 13.4988899
+        },
+        {
+          "token": 414,
+          "piece": "o",
+          "logit": 11.9022999
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 304,
+          "piece": "or",
+          "with_update": -5.419883728027344,
+          "without_update": -5.191086769104004,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 420,
+          "piece": "r",
+          "with_update": -3.3886919021606445,
+          "without_update": -3.3107032775878906,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 415,
+          "piece": "h",
+          "with_update": -3.2316970825195312,
+          "without_update": -3.6849308013916016,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 316,
+          "piece": "et",
+          "with_update": -2.7181596755981445,
+          "without_update": -2.888458251953125,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 414,
+          "piece": "o",
+          "with_update": -1.4359216690063477,
+          "without_update": -1.2918682098388672,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 260,
+          "piece": "he",
+          "with_update": 0.582127571105957,
+          "without_update": -0.3559112548828125,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ]
+    }
+  ],
+  "first_fixed_choice_changed_codata": [
+    {
+      "kind": "fixed_observation",
+      "sample": 0,
+      "layer": 0,
+      "operation": "attention_residual",
+      "position": 0,
+      "term_piece": "\n<s>\n",
+      "logits_offset": 2048,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 511,
+      "target_order_changed_count": 0,
+      "choice_fixed": true,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 416,
+          "piece": "n",
+          "logit": 11.4720564
+        },
+        {
+          "token": 282,
+          "piece": " p",
+          "logit": 10.4365139
+        },
+        {
+          "token": 268,
+          "piece": " b",
+          "logit": 10.315589
+        },
+        {
+          "token": 370,
+          "piece": " big",
+          "logit": 10.2766552
+        },
+        {
+          "token": 262,
+          "piece": " s",
+          "logit": 10.131669
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 282,
+          "piece": " p",
+          "with_update": 1.0389032363891602,
+          "without_update": 1.0355424880981445,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 268,
+          "piece": " b",
+          "with_update": 1.1516170501708984,
+          "without_update": 1.1564674377441406,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 370,
+          "piece": " big",
+          "with_update": 1.1978235244750977,
+          "without_update": 1.1954011917114258,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 262,
+          "piece": " s",
+          "with_update": 1.3442869186401367,
+          "without_update": 1.3403873443603516,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 280,
+          "piece": " c",
+          "with_update": 1.5157690048217773,
+          "without_update": 1.5234642028808594,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": []
+    },
+    {
+      "kind": "fixed_observation",
+      "sample": 0,
+      "layer": 0,
+      "operation": "attention_residual",
+      "position": 1,
+      "term_piece": "Once",
+      "logits_offset": 4096,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 511,
+      "target_order_changed_count": 0,
+      "choice_fixed": true,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 416,
+          "piece": "n",
+          "logit": 11.4837284
+        },
+        {
+          "token": 282,
+          "piece": " p",
+          "logit": 10.4289207
+        },
+        {
+          "token": 268,
+          "piece": " b",
+          "logit": 10.3231726
+        },
+        {
+          "token": 370,
+          "piece": " big",
+          "logit": 10.2800016
+        },
+        {
+          "token": 262,
+          "piece": " s",
+          "logit": 10.1284199
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 282,
+          "piece": " p",
+          "with_update": 1.0389032363891602,
+          "without_update": 1.0548076629638672,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 268,
+          "piece": " b",
+          "with_update": 1.1516170501708984,
+          "without_update": 1.1605558395385742,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 370,
+          "piece": " big",
+          "with_update": 1.1978235244750977,
+          "without_update": 1.2037267684936523,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 262,
+          "piece": " s",
+          "with_update": 1.3442869186401367,
+          "without_update": 1.3553085327148438,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 280,
+          "piece": " c",
+          "with_update": 1.5157690048217773,
+          "without_update": 1.5272836685180664,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": []
+    },
+    {
+      "kind": "fixed_observation",
+      "sample": 0,
+      "layer": 0,
+      "operation": "attention_residual",
+      "position": 2,
+      "term_piece": " upon",
+      "logits_offset": 6144,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 511,
+      "target_order_changed_count": 0,
+      "choice_fixed": true,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 416,
+          "piece": "n",
+          "logit": 11.4697504
+        },
+        {
+          "token": 282,
+          "piece": " p",
+          "logit": 10.433032
+        },
+        {
+          "token": 268,
+          "piece": " b",
+          "logit": 10.3208857
+        },
+        {
+          "token": 370,
+          "piece": " big",
+          "logit": 10.2786465
+        },
+        {
+          "token": 262,
+          "piece": " s",
+          "logit": 10.1251221
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 282,
+          "piece": " p",
+          "with_update": 1.0389032363891602,
+          "without_update": 1.0367183685302734,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 268,
+          "piece": " b",
+          "with_update": 1.1516170501708984,
+          "without_update": 1.14886474609375,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 370,
+          "piece": " big",
+          "with_update": 1.1978235244750977,
+          "without_update": 1.1911039352416992,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 262,
+          "piece": " s",
+          "with_update": 1.3442869186401367,
+          "without_update": 1.3446283340454102,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 280,
+          "piece": " c",
+          "with_update": 1.5157690048217773,
+          "without_update": 1.5124483108520508,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": []
+    },
+    {
+      "kind": "fixed_observation",
+      "sample": 0,
+      "layer": 0,
+      "operation": "attention_residual",
+      "position": 3,
+      "term_piece": " a",
+      "logits_offset": 8192,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 511,
+      "target_order_changed_count": 0,
+      "choice_fixed": true,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 416,
+          "piece": "n",
+          "logit": 11.472599
+        },
+        {
+          "token": 282,
+          "piece": " p",
+          "logit": 10.4327135
+        },
+        {
+          "token": 268,
+          "piece": " b",
+          "logit": 10.3206596
+        },
+        {
+          "token": 370,
+          "piece": " big",
+          "logit": 10.2723045
+        },
+        {
+          "token": 262,
+          "piece": " s",
+          "logit": 10.1290331
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 282,
+          "piece": " p",
+          "with_update": 1.0389032363891602,
+          "without_update": 1.0398855209350586,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 268,
+          "piece": " b",
+          "with_update": 1.1516170501708984,
+          "without_update": 1.1519393920898438,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 370,
+          "piece": " big",
+          "with_update": 1.1978235244750977,
+          "without_update": 1.2002944946289062,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 262,
+          "piece": " s",
+          "with_update": 1.3442869186401367,
+          "without_update": 1.3435659408569336,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 280,
+          "piece": " c",
+          "with_update": 1.5157690048217773,
+          "without_update": 1.5154838562011719,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": []
+    },
+    {
+      "kind": "fixed_observation",
+      "sample": 0,
+      "layer": 0,
+      "operation": "attention_residual",
+      "position": 4,
+      "term_piece": " time",
+      "logits_offset": 10240,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 511,
+      "target_order_changed_count": 0,
+      "choice_fixed": true,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 416,
+          "piece": "n",
+          "logit": 11.4697313
+        },
+        {
+          "token": 282,
+          "piece": " p",
+          "logit": 10.4345398
+        },
+        {
+          "token": 268,
+          "piece": " b",
+          "logit": 10.3185997
+        },
+        {
+          "token": 370,
+          "piece": " big",
+          "logit": 10.2727127
+        },
+        {
+          "token": 262,
+          "piece": " s",
+          "logit": 10.12817
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 282,
+          "piece": " p",
+          "with_update": 1.0389032363891602,
+          "without_update": 1.035191535949707,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 268,
+          "piece": " b",
+          "with_update": 1.1516170501708984,
+          "without_update": 1.1511316299438477,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 370,
+          "piece": " big",
+          "with_update": 1.1978235244750977,
+          "without_update": 1.1970186233520508,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 262,
+          "piece": " s",
+          "with_update": 1.3442869186401367,
+          "without_update": 1.3415613174438477,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 280,
+          "piece": " c",
+          "with_update": 1.5157690048217773,
+          "without_update": 1.5124139785766602,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": []
+    },
+    {
+      "kind": "fixed_observation",
+      "sample": 0,
+      "layer": 0,
+      "operation": "attention_residual",
+      "position": 5,
+      "term_piece": ",",
+      "logits_offset": 12288,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 511,
+      "target_order_changed_count": 0,
+      "choice_fixed": true,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 416,
+          "piece": "n",
+          "logit": 11.4602489
+        },
+        {
+          "token": 282,
+          "piece": " p",
+          "logit": 10.4412374
+        },
+        {
+          "token": 268,
+          "piece": " b",
+          "logit": 10.3177605
+        },
+        {
+          "token": 370,
+          "piece": " big",
+          "logit": 10.2495584
+        },
+        {
+          "token": 262,
+          "piece": " s",
+          "logit": 10.1246881
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 282,
+          "piece": " p",
+          "with_update": 1.0389032363891602,
+          "without_update": 1.0190114974975586,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 268,
+          "piece": " b",
+          "with_update": 1.1516170501708984,
+          "without_update": 1.1424884796142578,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 370,
+          "piece": " big",
+          "with_update": 1.1978235244750977,
+          "without_update": 1.2106904983520508,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 262,
+          "piece": " s",
+          "with_update": 1.3442869186401367,
+          "without_update": 1.3355607986450195,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 280,
+          "piece": " c",
+          "with_update": 1.5157690048217773,
+          "without_update": 1.4949750900268555,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": []
+    },
+    {
+      "kind": "fixed_observation",
+      "sample": 0,
+      "layer": 0,
+      "operation": "attention_residual",
+      "position": 6,
+      "term_piece": " in",
+      "logits_offset": 14336,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 511,
+      "target_order_changed_count": 0,
+      "choice_fixed": true,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 416,
+          "piece": "n",
+          "logit": 11.4747391
+        },
+        {
+          "token": 282,
+          "piece": " p",
+          "logit": 10.4329138
+        },
+        {
+          "token": 268,
+          "piece": " b",
+          "logit": 10.3213806
+        },
+        {
+          "token": 370,
+          "piece": " big",
+          "logit": 10.2759972
+        },
+        {
+          "token": 262,
+          "piece": " s",
+          "logit": 10.1257057
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 282,
+          "piece": " p",
+          "with_update": 1.0389032363891602,
+          "without_update": 1.041825294494629,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 268,
+          "piece": " b",
+          "with_update": 1.1516170501708984,
+          "without_update": 1.1533584594726562,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 370,
+          "piece": " big",
+          "with_update": 1.1978235244750977,
+          "without_update": 1.1987419128417969,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 262,
+          "piece": " s",
+          "with_update": 1.3442869186401367,
+          "without_update": 1.3490333557128906,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 280,
+          "piece": " c",
+          "with_update": 1.5157690048217773,
+          "without_update": 1.5142107009887695,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": []
+    },
+    {
+      "kind": "fixed_observation",
+      "sample": 0,
+      "layer": 0,
+      "operation": "attention_residual",
+      "position": 7,
+      "term_piece": " a",
+      "logits_offset": 16384,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 511,
+      "target_order_changed_count": 0,
+      "choice_fixed": true,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 416,
+          "piece": "n",
+          "logit": 11.4722824
+        },
+        {
+          "token": 282,
+          "piece": " p",
+          "logit": 10.4317122
+        },
+        {
+          "token": 268,
+          "piece": " b",
+          "logit": 10.3214016
+        },
+        {
+          "token": 370,
+          "piece": " big",
+          "logit": 10.2745085
+        },
+        {
+          "token": 262,
+          "piece": " s",
+          "logit": 10.1284046
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 282,
+          "piece": " p",
+          "with_update": 1.0389032363891602,
+          "without_update": 1.0405702590942383,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 268,
+          "piece": " b",
+          "with_update": 1.1516170501708984,
+          "without_update": 1.1508808135986328,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 370,
+          "piece": " big",
+          "with_update": 1.1978235244750977,
+          "without_update": 1.1977739334106445,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 262,
+          "piece": " s",
+          "with_update": 1.3442869186401367,
+          "without_update": 1.3438777923583984,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 280,
+          "piece": " c",
+          "with_update": 1.5157690048217773,
+          "without_update": 1.516087532043457,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": []
+    }
+  ],
+  "joint_choice_changes": [
+    {
+      "kind": "joint_omission",
+      "sample": 3,
+      "layer": 1,
+      "operation": "attention_residual",
+      "position": -1,
+      "term_piece": null,
+      "logits_offset": 6561792,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 510,
+      "target_order_changed_count": 1,
+      "choice_fixed": false,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 294,
+          "piece": "at",
+          "logit": 12.3348522
+        },
+        {
+          "token": 327,
+          "piece": "ow",
+          "logit": 11.5551367
+        },
+        {
+          "token": 415,
+          "piece": "h",
+          "logit": 11.3908997
+        },
+        {
+          "token": 295,
+          "piece": "ar",
+          "logit": 11.2668781
+        },
+        {
+          "token": 260,
+          "piece": "he",
+          "logit": 11.2058659
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 294,
+          "piece": "at",
+          "with_update": 3.44460391998291,
+          "without_update": -0.7797155380249023,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 295,
+          "piece": "ar",
+          "with_update": 3.9115476608276367,
+          "without_update": 0.28825855255126953,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 415,
+          "piece": "h",
+          "with_update": 3.9294519424438477,
+          "without_update": 0.16423702239990234,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 260,
+          "piece": "he",
+          "with_update": 4.338104248046875,
+          "without_update": 0.3492708206176758,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 421,
+          "piece": "l",
+          "with_update": 4.878470420837402,
+          "without_update": 0.5578641891479492,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 294,
+          "piece": "at",
+          "with_update": 3.44460391998291,
+          "without_update": -0.7797155380249023,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ],
+      "individually_choice_fixed_count": 96,
+      "omitted_positions": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57,
+        58,
+        59,
+        60,
+        61,
+        62,
+        63,
+        64,
+        65,
+        66,
+        67,
+        68,
+        69,
+        70,
+        71,
+        72,
+        73,
+        74,
+        75,
+        76,
+        77,
+        78,
+        79,
+        80,
+        81,
+        82,
+        83,
+        84,
+        85,
+        86,
+        87,
+        88,
+        89,
+        90,
+        91,
+        92,
+        93,
+        94,
+        95
+      ]
+    },
+    {
+      "kind": "joint_omission",
+      "sample": 3,
+      "layer": 1,
+      "operation": "ffn_residual",
+      "position": -1,
+      "term_piece": null,
+      "logits_offset": 6760448,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 510,
+      "target_order_changed_count": 1,
+      "choice_fixed": false,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 295,
+          "piece": "ar",
+          "logit": 11.6892433
+        },
+        {
+          "token": 327,
+          "piece": "ow",
+          "logit": 11.539073
+        },
+        {
+          "token": 414,
+          "piece": "o",
+          "logit": 11.4419823
+        },
+        {
+          "token": 420,
+          "piece": "r",
+          "logit": 11.1999435
+        },
+        {
+          "token": 415,
+          "piece": "h",
+          "logit": 10.3248997
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 294,
+          "piece": "at",
+          "with_update": 3.44460391998291,
+          "without_update": 1.7716083526611328,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 295,
+          "piece": "ar",
+          "with_update": 3.9115476608276367,
+          "without_update": -0.15017032623291016,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 415,
+          "piece": "h",
+          "with_update": 3.9294519424438477,
+          "without_update": 1.2141733169555664,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 260,
+          "piece": "he",
+          "with_update": 4.338104248046875,
+          "without_update": 1.2672853469848633,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 421,
+          "piece": "l",
+          "with_update": 4.878470420837402,
+          "without_update": 2.1024370193481445,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 295,
+          "piece": "ar",
+          "with_update": 3.9115476608276367,
+          "without_update": -0.15017032623291016,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ],
+      "individually_choice_fixed_count": 96,
+      "omitted_positions": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57,
+        58,
+        59,
+        60,
+        61,
+        62,
+        63,
+        64,
+        65,
+        66,
+        67,
+        68,
+        69,
+        70,
+        71,
+        72,
+        73,
+        74,
+        75,
+        76,
+        77,
+        78,
+        79,
+        80,
+        81,
+        82,
+        83,
+        84,
+        85,
+        86,
+        87,
+        88,
+        89,
+        90,
+        91,
+        92,
+        93,
+        94,
+        95
+      ]
+    },
+    {
+      "kind": "joint_omission",
+      "sample": 5,
+      "layer": 0,
+      "operation": "ffn_residual",
+      "position": -1,
+      "term_piece": null,
+      "logits_offset": 10340352,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 510,
+      "target_order_changed_count": 1,
+      "choice_fixed": false,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 268,
+          "piece": " b",
+          "logit": 13.4267797
+        },
+        {
+          "token": 298,
+          "piece": " g",
+          "logit": 13.2986269
+        },
+        {
+          "token": 262,
+          "piece": " s",
+          "logit": 12.7410965
+        },
+        {
+          "token": 259,
+          "piece": " t",
+          "logit": 12.5835276
+        },
+        {
+          "token": 263,
+          "piece": " w",
+          "logit": 12.3321476
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 262,
+          "piece": " s",
+          "with_update": -0.28469371795654297,
+          "without_update": 0.6856832504272461,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 298,
+          "piece": " g",
+          "with_update": 0.5896320343017578,
+          "without_update": 0.12815284729003906,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 280,
+          "piece": " c",
+          "with_update": 1.0397768020629883,
+          "without_update": 1.8600406646728516,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 410,
+          "piece": " ",
+          "with_update": 1.0418310165405273,
+          "without_update": 2.4763078689575195,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 282,
+          "piece": " p",
+          "with_update": 1.2089624404907227,
+          "without_update": 1.0958499908447266,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 262,
+          "piece": " s",
+          "with_update": -0.28469371795654297,
+          "without_update": 0.6856832504272461,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ],
+      "individually_choice_fixed_count": 93,
+      "omitted_positions": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57,
+        59,
+        60,
+        61,
+        62,
+        63,
+        64,
+        65,
+        66,
+        67,
+        68,
+        69,
+        70,
+        71,
+        72,
+        73,
+        74,
+        75,
+        76,
+        77,
+        78,
+        79,
+        80,
+        81,
+        82,
+        83,
+        84,
+        85,
+        86,
+        87,
+        88,
+        89,
+        90,
+        91,
+        92,
+        93,
+        94
+      ]
+    },
+    {
+      "kind": "joint_omission",
+      "sample": 5,
+      "layer": 1,
+      "operation": "attention_residual",
+      "position": -1,
+      "term_piece": null,
+      "logits_offset": 10539008,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 510,
+      "target_order_changed_count": 1,
+      "choice_fixed": false,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 268,
+          "piece": " b",
+          "logit": 11.5090637
+        },
+        {
+          "token": 262,
+          "piece": " s",
+          "logit": 11.4967108
+        },
+        {
+          "token": 298,
+          "piece": " g",
+          "logit": 11.3051739
+        },
+        {
+          "token": 410,
+          "piece": " ",
+          "logit": 11.0867338
+        },
+        {
+          "token": 282,
+          "piece": " p",
+          "logit": 10.9128275
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 262,
+          "piece": " s",
+          "with_update": -0.28469371795654297,
+          "without_update": 0.012352943420410156,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 298,
+          "piece": " g",
+          "with_update": 0.5896320343017578,
+          "without_update": 0.2038898468017578,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 280,
+          "piece": " c",
+          "with_update": 1.0397768020629883,
+          "without_update": 0.7301902770996094,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 410,
+          "piece": " ",
+          "with_update": 1.0418310165405273,
+          "without_update": 0.4223299026489258,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 282,
+          "piece": " p",
+          "with_update": 1.2089624404907227,
+          "without_update": 0.5962362289428711,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 262,
+          "piece": " s",
+          "with_update": -0.28469371795654297,
+          "without_update": 0.012352943420410156,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ],
+      "individually_choice_fixed_count": 95,
+      "omitted_positions": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        58,
+        59,
+        60,
+        61,
+        62,
+        63,
+        64,
+        65,
+        66,
+        67,
+        68,
+        69,
+        70,
+        71,
+        72,
+        73,
+        74,
+        75,
+        76,
+        77,
+        78,
+        79,
+        80,
+        81,
+        82,
+        83,
+        84,
+        85,
+        86,
+        87,
+        88,
+        89,
+        90,
+        91,
+        92,
+        93,
+        94,
+        95
+      ]
+    },
+    {
+      "kind": "joint_omission",
+      "sample": 5,
+      "layer": 2,
+      "operation": "attention_residual",
+      "position": -1,
+      "term_piece": null,
+      "logits_offset": 10936320,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 509,
+      "target_order_changed_count": 2,
+      "choice_fixed": false,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 282,
+          "piece": " p",
+          "logit": 12.0226727
+        },
+        {
+          "token": 268,
+          "piece": " b",
+          "logit": 11.6413431
+        },
+        {
+          "token": 262,
+          "piece": " s",
+          "logit": 11.535718
+        },
+        {
+          "token": 410,
+          "piece": " ",
+          "logit": 11.3825388
+        },
+        {
+          "token": 298,
+          "piece": " g",
+          "logit": 11.325841
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 262,
+          "piece": " s",
+          "with_update": -0.28469371795654297,
+          "without_update": 0.10562515258789062,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 298,
+          "piece": " g",
+          "with_update": 0.5896320343017578,
+          "without_update": 0.3155021667480469,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 280,
+          "piece": " c",
+          "with_update": 1.0397768020629883,
+          "without_update": 0.9227876663208008,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 410,
+          "piece": " ",
+          "with_update": 1.0418310165405273,
+          "without_update": 0.2588043212890625,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 282,
+          "piece": " p",
+          "with_update": 1.2089624404907227,
+          "without_update": -0.3813295364379883,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 262,
+          "piece": " s",
+          "with_update": -0.28469371795654297,
+          "without_update": 0.10562515258789062,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 282,
+          "piece": " p",
+          "with_update": 1.2089624404907227,
+          "without_update": -0.3813295364379883,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ],
+      "individually_choice_fixed_count": 95,
+      "omitted_positions": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57,
+        58,
+        59,
+        60,
+        61,
+        62,
+        63,
+        64,
+        65,
+        66,
+        67,
+        68,
+        69,
+        70,
+        71,
+        72,
+        73,
+        74,
+        75,
+        76,
+        77,
+        78,
+        79,
+        80,
+        81,
+        82,
+        83,
+        84,
+        85,
+        86,
+        87,
+        88,
+        89,
+        90,
+        91,
+        92,
+        93,
+        94,
+        95
+      ]
+    },
+    {
+      "kind": "joint_omission",
+      "sample": 6,
+      "layer": 0,
+      "operation": "ffn_residual",
+      "position": -1,
+      "term_piece": null,
+      "logits_offset": 12328960,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 510,
+      "target_order_changed_count": 1,
+      "choice_fixed": false,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 346,
+          "piece": " He",
+          "logit": 16.6430511
+        },
+        {
+          "token": 274,
+          "piece": " T",
+          "logit": 16.122118
+        },
+        {
+          "token": 291,
+          "piece": " The",
+          "logit": 15.9157515
+        },
+        {
+          "token": 410,
+          "piece": " ",
+          "logit": 15.7165651
+        },
+        {
+          "token": 359,
+          "piece": " I",
+          "logit": 15.3786974
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 291,
+          "piece": " The",
+          "with_update": 1.4100570678710938,
+          "without_update": 0.20636653900146484,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 410,
+          "piece": " ",
+          "with_update": 1.7351608276367188,
+          "without_update": 0.40555286407470703,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 359,
+          "piece": " I",
+          "with_update": 2.1861085891723633,
+          "without_update": 0.7434206008911133,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 346,
+          "piece": " He",
+          "with_update": 2.509089469909668,
+          "without_update": -0.5209331512451172,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 368,
+          "piece": " B",
+          "with_update": 2.9355897903442383,
+          "without_update": 2.0330677032470703,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 346,
+          "piece": " He",
+          "with_update": 2.509089469909668,
+          "without_update": -0.5209331512451172,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ],
+      "individually_choice_fixed_count": 96,
+      "omitted_positions": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57,
+        58,
+        59,
+        60,
+        61,
+        62,
+        63,
+        64,
+        65,
+        66,
+        67,
+        68,
+        69,
+        70,
+        71,
+        72,
+        73,
+        74,
+        75,
+        76,
+        77,
+        78,
+        79,
+        80,
+        81,
+        82,
+        83,
+        84,
+        85,
+        86,
+        87,
+        88,
+        89,
+        90,
+        91,
+        92,
+        93,
+        94,
+        95
+      ]
+    },
+    {
+      "kind": "joint_omission",
+      "sample": 6,
+      "layer": 3,
+      "operation": "ffn_residual",
+      "position": -1,
+      "term_piece": null,
+      "logits_offset": 13520896,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 510,
+      "target_order_changed_count": 1,
+      "choice_fixed": false,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 291,
+          "piece": " The",
+          "logit": 17.2172184
+        },
+        {
+          "token": 274,
+          "piece": " T",
+          "logit": 16.8456039
+        },
+        {
+          "token": 410,
+          "piece": " ",
+          "logit": 16.1009274
+        },
+        {
+          "token": 359,
+          "piece": " I",
+          "logit": 15.8053789
+        },
+        {
+          "token": 326,
+          "piece": " Tim",
+          "logit": 15.6334219
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 291,
+          "piece": " The",
+          "with_update": 1.4100570678710938,
+          "without_update": -0.3716144561767578,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 410,
+          "piece": " ",
+          "with_update": 1.7351608276367188,
+          "without_update": 0.7446765899658203,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 359,
+          "piece": " I",
+          "with_update": 2.1861085891723633,
+          "without_update": 1.0402250289916992,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 346,
+          "piece": " He",
+          "with_update": 2.509089469909668,
+          "without_update": 1.985708236694336,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 368,
+          "piece": " B",
+          "with_update": 2.9355897903442383,
+          "without_update": 1.4562854766845703,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 291,
+          "piece": " The",
+          "with_update": 1.4100570678710938,
+          "without_update": -0.3716144561767578,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ],
+      "individually_choice_fixed_count": 96,
+      "omitted_positions": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57,
+        58,
+        59,
+        60,
+        61,
+        62,
+        63,
+        64,
+        65,
+        66,
+        67,
+        68,
+        69,
+        70,
+        71,
+        72,
+        73,
+        74,
+        75,
+        76,
+        77,
+        78,
+        79,
+        80,
+        81,
+        82,
+        83,
+        84,
+        85,
+        86,
+        87,
+        88,
+        89,
+        90,
+        91,
+        92,
+        93,
+        94,
+        95
+      ]
+    },
+    {
+      "kind": "joint_omission",
+      "sample": 7,
+      "layer": 0,
+      "operation": "ffn_residual",
+      "position": -1,
+      "term_piece": null,
+      "logits_offset": 14317568,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 504,
+      "target_order_changed_count": 7,
+      "choice_fixed": false,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 334,
+          "piece": " o",
+          "logit": 12.6092796
+        },
+        {
+          "token": 329,
+          "piece": " be",
+          "logit": 11.1630678
+        },
+        {
+          "token": 280,
+          "piece": " c",
+          "logit": 11.1084194
+        },
+        {
+          "token": 298,
+          "piece": " g",
+          "logit": 10.7291632
+        },
+        {
+          "token": 272,
+          "piece": " f",
+          "logit": 10.6773386
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 280,
+          "piece": " c",
+          "with_update": -2.003141403198242,
+          "without_update": -1.5757741928100586,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 272,
+          "piece": " f",
+          "with_update": -1.2378053665161133,
+          "without_update": -1.144693374633789,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 282,
+          "piece": " p",
+          "with_update": -1.2085657119750977,
+          "without_update": -1.1332635879516602,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 298,
+          "piece": " g",
+          "with_update": -1.1769838333129883,
+          "without_update": -1.1965179443359375,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 410,
+          "piece": " ",
+          "with_update": -1.0182952880859375,
+          "without_update": -0.985560417175293,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 352,
+          "piece": " r",
+          "with_update": -0.6202106475830078,
+          "without_update": 0.06599235534667969,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 284,
+          "piece": " m",
+          "with_update": -0.3745412826538086,
+          "without_update": 0.95953369140625,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 337,
+          "piece": " play",
+          "with_update": -0.36579322814941406,
+          "without_update": 3.0345730781555176,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 334,
+          "piece": " o",
+          "with_update": 0.3065214157104492,
+          "without_update": -3.076634407043457,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 329,
+          "piece": " be",
+          "with_update": 0.8730363845825195,
+          "without_update": -1.630422592163086,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ],
+      "individually_choice_fixed_count": 96,
+      "omitted_positions": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57,
+        58,
+        59,
+        60,
+        61,
+        62,
+        63,
+        64,
+        65,
+        66,
+        67,
+        68,
+        69,
+        70,
+        71,
+        72,
+        73,
+        74,
+        75,
+        76,
+        77,
+        78,
+        79,
+        80,
+        81,
+        82,
+        83,
+        84,
+        85,
+        86,
+        87,
+        88,
+        89,
+        90,
+        91,
+        92,
+        93,
+        94,
+        95
+      ]
+    },
+    {
+      "kind": "joint_omission",
+      "sample": 7,
+      "layer": 1,
+      "operation": "ffn_residual",
+      "position": -1,
+      "term_piece": null,
+      "logits_offset": 14714880,
+      "codata_fixed": false,
+      "target_contrast_fixed_count": 0,
+      "target_order_fixed_count": 507,
+      "target_order_changed_count": 4,
+      "choice_fixed": false,
+      "structurally_unreachable": false,
+      "top_without_update": [
+        {
+          "token": 410,
+          "piece": " ",
+          "logit": 13.4649734
+        },
+        {
+          "token": 280,
+          "piece": " c",
+          "logit": 13.0650043
+        },
+        {
+          "token": 282,
+          "piece": " p",
+          "logit": 12.2590256
+        },
+        {
+          "token": 259,
+          "piece": " t",
+          "logit": 12.1301289
+        },
+        {
+          "token": 262,
+          "piece": " s",
+          "logit": 11.9836588
+        }
+      ],
+      "baseline_top_comparisons": [
+        {
+          "alternative": 280,
+          "piece": " c",
+          "with_update": -2.003141403198242,
+          "without_update": -2.2451419830322266,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 272,
+          "piece": " f",
+          "with_update": -1.2378053665161133,
+          "without_update": -1.0698251724243164,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 282,
+          "piece": " p",
+          "with_update": -1.2085657119750977,
+          "without_update": -1.4391632080078125,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 298,
+          "piece": " g",
+          "with_update": -1.1769838333129883,
+          "without_update": -1.0453033447265625,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        },
+        {
+          "alternative": 410,
+          "piece": " ",
+          "with_update": -1.0182952880859375,
+          "without_update": -2.645111083984375,
+          "contrast_fixed": false,
+          "ordering_fixed": true
+        }
+      ],
+      "changed_comparisons": [
+        {
+          "alternative": 284,
+          "piece": " m",
+          "with_update": -0.3745412826538086,
+          "without_update": 0.5261917114257812,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 337,
+          "piece": " play",
+          "with_update": -0.36579322814941406,
+          "without_update": 1.558598518371582,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 334,
+          "piece": " o",
+          "with_update": 0.3065214157104492,
+          "without_update": -1.114802360534668,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        },
+        {
+          "alternative": 270,
+          "piece": " h",
+          "with_update": 1.1991033554077148,
+          "without_update": -0.3920469284057617,
+          "contrast_fixed": false,
+          "ordering_fixed": false
+        }
+      ],
+      "individually_choice_fixed_count": 96,
+      "omitted_positions": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57,
+        58,
+        59,
+        60,
+        61,
+        62,
+        63,
+        64,
+        65,
+        66,
+        67,
+        68,
+        69,
+        70,
+        71,
+        72,
+        73,
+        74,
+        75,
+        76,
+        77,
+        78,
+        79,
+        80,
+        81,
+        82,
+        83,
+        84,
+        85,
+        86,
+        87,
+        88,
+        89,
+        90,
+        91,
+        92,
+        93,
+        94,
+        95
+      ]
+    }
+  ],
+  "scope": "Observed corpus points only. No grammar labels, inference reward, global eigenspace, or deployed rewrite are claimed."
+}
