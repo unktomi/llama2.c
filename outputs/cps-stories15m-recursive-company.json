@@ -2,10 +2,10 @@
   "schema_version": 1,
   "artifact": "recursive_dependent_polynomial_company",
   "model": "Stories15M",
-  "evaluator_commit": "b910bcb",
+  "evaluator_commit": "695d0b43a67d3ae01e19afeeef70c7848540e131",
   "input_sha256": {
     "polynomial_trace": "7793d10157999ddd2edcb27e2b92d2c8899f9b4c1640b3dac31877b98375889a",
-    "recursive_trace": "d773912d54ce40e0403b89c06857a827f16e74a8116a265260bd46739e3f9401"
+    "recursive_trace": "5624c0cbe9f9e6a6737a93269adde847f0caf5bd0f32b749519bf9cbe84351f4"
   },
   "term": {
     "roots": 176,
@@ -39,7 +39,8 @@
     "nonfinite_coordinates": 0,
     "probabilities_used": false,
     "scalar_reward_used": false,
-    "complete_paths_flattened": false
+    "complete_paths_flattened": false,
+    "path_likelihoods_summed": false
   },
   "codata_composition": {
     "codata_constructed_before_observation": true,
@@ -49,10 +50,1733 @@
     "edge_observation_defects": 0,
     "terminal_observation_defects": 0
   },
-  "selection_boundary": {
-    "whole_completion_order_defined": false,
-    "reason": "The model-derived codata observations are now composed into one root-consumed term. No selection function has yet been applied to that composed value."
+  "selection_product": {
+    "semantics": "escardo_dependent_product_full_company_diagonal",
+    "outcome": "complete terminal-frontier token codata row",
+    "local_selection": "for candidate x, recursively select its dependent suffix, then maximize the x coordinate of that complete outcome",
+    "demand_nodes": 2288,
+    "candidate_continuations_evaluated": 19008,
+    "root_mates": 176,
+    "exact_tie_nodes": 0,
+    "probabilities_used": false,
+    "path_scores_added": false,
+    "local_edge_logits_terminalized": false
   },
+  "agreement_number_control": {
+    "edge_ar_correct": 95,
+    "full_company_diagonal_correct": 93,
+    "different_outer_choice": 124,
+    "contexts": 176,
+    "by_corner": {
+      "A": {
+        "contexts": 44,
+        "edge_ar_correct": 2,
+        "full_company_diagonal_correct": 5,
+        "different_outer_choice": 35
+      },
+      "AC": {
+        "contexts": 44,
+        "edge_ar_correct": 44,
+        "full_company_diagonal_correct": 43,
+        "different_outer_choice": 32
+      },
+      "C": {
+        "contexts": 44,
+        "edge_ar_correct": 40,
+        "full_company_diagonal_correct": 42,
+        "different_outer_choice": 22
+      },
+      "x": {
+        "contexts": 44,
+        "edge_ar_correct": 9,
+        "full_company_diagonal_correct": 3,
+        "different_outer_choice": 35
+      }
+    },
+    "scope": "number agreement of the selected outer verb family only; not a whole-completion coherence score"
+  },
+  "sample_selected_completions": [
+    {
+      "root": "confirmation/by/boy-ball-moves::A",
+      "edge_ar_token": 1708,
+      "selected_token": 6057,
+      "selected_text": "\n<s>\nThe boy by the balls runs with",
+      "outer_candidates": [
+        {
+          "token": 12080,
+          "piece": " lives",
+          "terminal_row": 16009,
+          "diagonal_contrast": -3.53252506,
+          "selected": false,
+          "continuation_tokens": [
+            12080,
+            411
+          ]
+        },
+        {
+          "token": 5735,
+          "piece": " live",
+          "terminal_row": 16019,
+          "diagonal_contrast": -4.32652617,
+          "selected": false,
+          "continuation_tokens": [
+            5735,
+            491
+          ]
+        },
+        {
+          "token": 6057,
+          "piece": " runs",
+          "terminal_row": 16027,
+          "diagonal_contrast": 3.13258839,
+          "selected": true,
+          "continuation_tokens": [
+            6057,
+            411
+          ]
+        },
+        {
+          "token": 1065,
+          "piece": " run",
+          "terminal_row": 16036,
+          "diagonal_contrast": 2.58380747,
+          "selected": false,
+          "continuation_tokens": [
+            1065,
+            411
+          ]
+        },
+        {
+          "token": 1736,
+          "piece": " works",
+          "terminal_row": 16045,
+          "diagonal_contrast": -3.99699616,
+          "selected": false,
+          "continuation_tokens": [
+            1736,
+            411
+          ]
+        },
+        {
+          "token": 664,
+          "piece": " work",
+          "terminal_row": 16055,
+          "diagonal_contrast": 0.177033842,
+          "selected": false,
+          "continuation_tokens": [
+            664,
+            491
+          ]
+        },
+        {
+          "token": 13582,
+          "piece": " plays",
+          "terminal_row": 16064,
+          "diagonal_contrast": -4.44741201,
+          "selected": false,
+          "continuation_tokens": [
+            13582,
+            491
+          ]
+        },
+        {
+          "token": 1708,
+          "piece": " play",
+          "terminal_row": 16073,
+          "diagonal_contrast": -0.0376904011,
+          "selected": false,
+          "continuation_tokens": [
+            1708,
+            491
+          ]
+        },
+        {
+          "token": 16229,
+          "piece": " moves",
+          "terminal_row": 16081,
+          "diagonal_contrast": 1.61048388,
+          "selected": false,
+          "continuation_tokens": [
+            16229,
+            411
+          ]
+        },
+        {
+          "token": 4337,
+          "piece": " move",
+          "terminal_row": 16091,
+          "diagonal_contrast": -2.49370646,
+          "selected": false,
+          "continuation_tokens": [
+            4337,
+            491
+          ]
+        },
+        {
+          "token": 6911,
+          "piece": " helps",
+          "terminal_row": 16102,
+          "diagonal_contrast": -3.36117029,
+          "selected": false,
+          "continuation_tokens": [
+            6911,
+            372
+          ]
+        },
+        {
+          "token": 1371,
+          "piece": " help",
+          "terminal_row": 16108,
+          "diagonal_contrast": -0.20688048,
+          "selected": false,
+          "continuation_tokens": [
+            1371,
+            411
+          ]
+        }
+      ]
+    },
+    {
+      "root": "confirmation/by/boy-ball-moves::AC",
+      "edge_ar_token": 1708,
+      "selected_token": 1065,
+      "selected_text": "\n<s>\nThe boys by the balls run with",
+      "outer_candidates": [
+        {
+          "token": 12080,
+          "piece": " lives",
+          "terminal_row": 16225,
+          "diagonal_contrast": -2.515203,
+          "selected": false,
+          "continuation_tokens": [
+            12080,
+            411
+          ]
+        },
+        {
+          "token": 5735,
+          "piece": " live",
+          "terminal_row": 16232,
+          "diagonal_contrast": -1.61983466,
+          "selected": false,
+          "continuation_tokens": [
+            5735,
+            25970
+          ]
+        },
+        {
+          "token": 6057,
+          "piece": " runs",
+          "terminal_row": 16243,
+          "diagonal_contrast": 2.80591774,
+          "selected": false,
+          "continuation_tokens": [
+            6057,
+            411
+          ]
+        },
+        {
+          "token": 1065,
+          "piece": " run",
+          "terminal_row": 16252,
+          "diagonal_contrast": 3.58126879,
+          "selected": true,
+          "continuation_tokens": [
+            1065,
+            411
+          ]
+        },
+        {
+          "token": 1736,
+          "piece": " works",
+          "terminal_row": 16261,
+          "diagonal_contrast": -4.67949867,
+          "selected": false,
+          "continuation_tokens": [
+            1736,
+            411
+          ]
+        },
+        {
+          "token": 664,
+          "piece": " work",
+          "terminal_row": 16270,
+          "diagonal_contrast": 1.27075839,
+          "selected": false,
+          "continuation_tokens": [
+            664,
+            411
+          ]
+        },
+        {
+          "token": 13582,
+          "piece": " plays",
+          "terminal_row": 16279,
+          "diagonal_contrast": -1.81538737,
+          "selected": false,
+          "continuation_tokens": [
+            13582,
+            411
+          ]
+        },
+        {
+          "token": 1708,
+          "piece": " play",
+          "terminal_row": 16288,
+          "diagonal_contrast": 2.85540009,
+          "selected": false,
+          "continuation_tokens": [
+            1708,
+            411
+          ]
+        },
+        {
+          "token": 16229,
+          "piece": " moves",
+          "terminal_row": 16297,
+          "diagonal_contrast": 2.17636442,
+          "selected": false,
+          "continuation_tokens": [
+            16229,
+            411
+          ]
+        },
+        {
+          "token": 4337,
+          "piece": " move",
+          "terminal_row": 16306,
+          "diagonal_contrast": 1.89663839,
+          "selected": false,
+          "continuation_tokens": [
+            4337,
+            411
+          ]
+        },
+        {
+          "token": 6911,
+          "piece": " helps",
+          "terminal_row": 16318,
+          "diagonal_contrast": -2.38616061,
+          "selected": false,
+          "continuation_tokens": [
+            6911,
+            372
+          ]
+        },
+        {
+          "token": 1371,
+          "piece": " help",
+          "terminal_row": 16324,
+          "diagonal_contrast": -0.584679008,
+          "selected": false,
+          "continuation_tokens": [
+            1371,
+            411
+          ]
+        }
+      ]
+    },
+    {
+      "root": "confirmation/by/boy-ball-moves::C",
+      "edge_ar_token": 1708,
+      "selected_token": 1065,
+      "selected_text": "\n<s>\nThe boys by the ball run with",
+      "outer_candidates": [
+        {
+          "token": 12080,
+          "piece": " lives",
+          "terminal_row": 16117,
+          "diagonal_contrast": -3.11894846,
+          "selected": false,
+          "continuation_tokens": [
+            12080,
+            411
+          ]
+        },
+        {
+          "token": 5735,
+          "piece": " live",
+          "terminal_row": 16127,
+          "diagonal_contrast": -5.67410278,
+          "selected": false,
+          "continuation_tokens": [
+            5735,
+            491
+          ]
+        },
+        {
+          "token": 6057,
+          "piece": " runs",
+          "terminal_row": 16135,
+          "diagonal_contrast": 2.42945766,
+          "selected": false,
+          "continuation_tokens": [
+            6057,
+            411
+          ]
+        },
+        {
+          "token": 1065,
+          "piece": " run",
+          "terminal_row": 16144,
+          "diagonal_contrast": 3.22387385,
+          "selected": true,
+          "continuation_tokens": [
+            1065,
+            411
+          ]
+        },
+        {
+          "token": 1736,
+          "piece": " works",
+          "terminal_row": 16153,
+          "diagonal_contrast": -4.3311286,
+          "selected": false,
+          "continuation_tokens": [
+            1736,
+            411
+          ]
+        },
+        {
+          "token": 664,
+          "piece": " work",
+          "terminal_row": 16162,
+          "diagonal_contrast": 1.81281519,
+          "selected": false,
+          "continuation_tokens": [
+            664,
+            411
+          ]
+        },
+        {
+          "token": 13582,
+          "piece": " plays",
+          "terminal_row": 16171,
+          "diagonal_contrast": -2.14380407,
+          "selected": false,
+          "continuation_tokens": [
+            13582,
+            411
+          ]
+        },
+        {
+          "token": 1708,
+          "piece": " play",
+          "terminal_row": 16180,
+          "diagonal_contrast": 2.41482067,
+          "selected": false,
+          "continuation_tokens": [
+            1708,
+            411
+          ]
+        },
+        {
+          "token": 16229,
+          "piece": " moves",
+          "terminal_row": 16189,
+          "diagonal_contrast": 2.47281742,
+          "selected": false,
+          "continuation_tokens": [
+            16229,
+            411
+          ]
+        },
+        {
+          "token": 4337,
+          "piece": " move",
+          "terminal_row": 16198,
+          "diagonal_contrast": 1.73633921,
+          "selected": false,
+          "continuation_tokens": [
+            4337,
+            411
+          ]
+        },
+        {
+          "token": 6911,
+          "piece": " helps",
+          "terminal_row": 16209,
+          "diagonal_contrast": -2.69380188,
+          "selected": false,
+          "continuation_tokens": [
+            6911,
+            278
+          ]
+        },
+        {
+          "token": 1371,
+          "piece": " help",
+          "terminal_row": 16217,
+          "diagonal_contrast": -1.46225905,
+          "selected": false,
+          "continuation_tokens": [
+            1371,
+            491
+          ]
+        }
+      ]
+    },
+    {
+      "root": "confirmation/by/boy-ball-moves::x",
+      "edge_ar_token": 1708,
+      "selected_token": 16229,
+      "selected_text": "\n<s>\nThe boy by the ball moves with",
+      "outer_candidates": [
+        {
+          "token": 12080,
+          "piece": " lives",
+          "terminal_row": 15901,
+          "diagonal_contrast": -4.86095285,
+          "selected": false,
+          "continuation_tokens": [
+            12080,
+            411
+          ]
+        },
+        {
+          "token": 5735,
+          "piece": " live",
+          "terminal_row": 15911,
+          "diagonal_contrast": -4.77368212,
+          "selected": false,
+          "continuation_tokens": [
+            5735,
+            491
+          ]
+        },
+        {
+          "token": 6057,
+          "piece": " runs",
+          "terminal_row": 15920,
+          "diagonal_contrast": -2.93314075,
+          "selected": false,
+          "continuation_tokens": [
+            6057,
+            491
+          ]
+        },
+        {
+          "token": 1065,
+          "piece": " run",
+          "terminal_row": 15928,
+          "diagonal_contrast": 1.97819984,
+          "selected": false,
+          "continuation_tokens": [
+            1065,
+            411
+          ]
+        },
+        {
+          "token": 1736,
+          "piece": " works",
+          "terminal_row": 15937,
+          "diagonal_contrast": -3.63892388,
+          "selected": false,
+          "continuation_tokens": [
+            1736,
+            411
+          ]
+        },
+        {
+          "token": 664,
+          "piece": " work",
+          "terminal_row": 15946,
+          "diagonal_contrast": 1.95625806,
+          "selected": false,
+          "continuation_tokens": [
+            664,
+            411
+          ]
+        },
+        {
+          "token": 13582,
+          "piece": " plays",
+          "terminal_row": 15956,
+          "diagonal_contrast": -3.67602468,
+          "selected": false,
+          "continuation_tokens": [
+            13582,
+            491
+          ]
+        },
+        {
+          "token": 1708,
+          "piece": " play",
+          "terminal_row": 15965,
+          "diagonal_contrast": 0.596469998,
+          "selected": false,
+          "continuation_tokens": [
+            1708,
+            491
+          ]
+        },
+        {
+          "token": 16229,
+          "piece": " moves",
+          "terminal_row": 15973,
+          "diagonal_contrast": 2.01965666,
+          "selected": true,
+          "continuation_tokens": [
+            16229,
+            411
+          ]
+        },
+        {
+          "token": 4337,
+          "piece": " move",
+          "terminal_row": 15983,
+          "diagonal_contrast": -1.7137202,
+          "selected": false,
+          "continuation_tokens": [
+            4337,
+            491
+          ]
+        },
+        {
+          "token": 6911,
+          "piece": " helps",
+          "terminal_row": 15994,
+          "diagonal_contrast": -3.79721403,
+          "selected": false,
+          "continuation_tokens": [
+            6911,
+            372
+          ]
+        },
+        {
+          "token": 1371,
+          "piece": " help",
+          "terminal_row": 16001,
+          "diagonal_contrast": -0.935353518,
+          "selected": false,
+          "continuation_tokens": [
+            1371,
+            491
+          ]
+        }
+      ]
+    },
+    {
+      "root": "confirmation/by/boy-brother-helps::A",
+      "edge_ar_token": 1708,
+      "selected_token": 1065,
+      "selected_text": "\n<s>\nThe boy by the brothers run with",
+      "outer_candidates": [
+        {
+          "token": 12080,
+          "piece": " lives",
+          "terminal_row": 16441,
+          "diagonal_contrast": -4.41133785,
+          "selected": false,
+          "continuation_tokens": [
+            12080,
+            411
+          ]
+        },
+        {
+          "token": 5735,
+          "piece": " live",
+          "terminal_row": 16450,
+          "diagonal_contrast": -4.61130047,
+          "selected": false,
+          "continuation_tokens": [
+            5735,
+            411
+          ]
+        },
+        {
+          "token": 6057,
+          "piece": " runs",
+          "terminal_row": 16459,
+          "diagonal_contrast": 1.44781041,
+          "selected": false,
+          "continuation_tokens": [
+            6057,
+            411
+          ]
+        },
+        {
+          "token": 1065,
+          "piece": " run",
+          "terminal_row": 16468,
+          "diagonal_contrast": 3.21516705,
+          "selected": true,
+          "continuation_tokens": [
+            1065,
+            411
+          ]
+        },
+        {
+          "token": 1736,
+          "piece": " works",
+          "terminal_row": 16477,
+          "diagonal_contrast": -3.10691833,
+          "selected": false,
+          "continuation_tokens": [
+            1736,
+            411
+          ]
+        },
+        {
+          "token": 664,
+          "piece": " work",
+          "terminal_row": 16486,
+          "diagonal_contrast": 1.6277411,
+          "selected": false,
+          "continuation_tokens": [
+            664,
+            411
+          ]
+        },
+        {
+          "token": 13582,
+          "piece": " plays",
+          "terminal_row": 16495,
+          "diagonal_contrast": 0.401164293,
+          "selected": false,
+          "continuation_tokens": [
+            13582,
+            411
+          ]
+        },
+        {
+          "token": 1708,
+          "piece": " play",
+          "terminal_row": 16504,
+          "diagonal_contrast": 2.70765042,
+          "selected": false,
+          "continuation_tokens": [
+            1708,
+            411
+          ]
+        },
+        {
+          "token": 16229,
+          "piece": " moves",
+          "terminal_row": 16513,
+          "diagonal_contrast": 1.14960551,
+          "selected": false,
+          "continuation_tokens": [
+            16229,
+            411
+          ]
+        },
+        {
+          "token": 4337,
+          "piece": " move",
+          "terminal_row": 16524,
+          "diagonal_contrast": 2.07119083,
+          "selected": false,
+          "continuation_tokens": [
+            4337,
+            278
+          ]
+        },
+        {
+          "token": 6911,
+          "piece": " helps",
+          "terminal_row": 16532,
+          "diagonal_contrast": -3.76313114,
+          "selected": false,
+          "continuation_tokens": [
+            6911,
+            491
+          ]
+        },
+        {
+          "token": 1371,
+          "piece": " help",
+          "terminal_row": 16540,
+          "diagonal_contrast": 2.87002134,
+          "selected": false,
+          "continuation_tokens": [
+            1371,
+            411
+          ]
+        }
+      ]
+    },
+    {
+      "root": "confirmation/by/boy-brother-helps::AC",
+      "edge_ar_token": 1708,
+      "selected_token": 1065,
+      "selected_text": "\n<s>\nThe boys by the brothers run with",
+      "outer_candidates": [
+        {
+          "token": 12080,
+          "piece": " lives",
+          "terminal_row": 16657,
+          "diagonal_contrast": -1.61262476,
+          "selected": false,
+          "continuation_tokens": [
+            12080,
+            411
+          ]
+        },
+        {
+          "token": 5735,
+          "piece": " live",
+          "terminal_row": 16666,
+          "diagonal_contrast": -3.75321054,
+          "selected": false,
+          "continuation_tokens": [
+            5735,
+            411
+          ]
+        },
+        {
+          "token": 6057,
+          "piece": " runs",
+          "terminal_row": 16675,
+          "diagonal_contrast": 1.32896209,
+          "selected": false,
+          "continuation_tokens": [
+            6057,
+            411
+          ]
+        },
+        {
+          "token": 1065,
+          "piece": " run",
+          "terminal_row": 16684,
+          "diagonal_contrast": 4.01869249,
+          "selected": true,
+          "continuation_tokens": [
+            1065,
+            411
+          ]
+        },
+        {
+          "token": 1736,
+          "piece": " works",
+          "terminal_row": 16693,
+          "diagonal_contrast": -4.26696539,
+          "selected": false,
+          "continuation_tokens": [
+            1736,
+            411
+          ]
+        },
+        {
+          "token": 664,
+          "piece": " work",
+          "terminal_row": 16702,
+          "diagonal_contrast": 1.33482528,
+          "selected": false,
+          "continuation_tokens": [
+            664,
+            411
+          ]
+        },
+        {
+          "token": 13582,
+          "piece": " plays",
+          "terminal_row": 16711,
+          "diagonal_contrast": 0.449210405,
+          "selected": false,
+          "continuation_tokens": [
+            13582,
+            411
+          ]
+        },
+        {
+          "token": 1708,
+          "piece": " play",
+          "terminal_row": 16720,
+          "diagonal_contrast": 3.19446421,
+          "selected": false,
+          "continuation_tokens": [
+            1708,
+            411
+          ]
+        },
+        {
+          "token": 16229,
+          "piece": " moves",
+          "terminal_row": 16729,
+          "diagonal_contrast": 1.94475186,
+          "selected": false,
+          "continuation_tokens": [
+            16229,
+            411
+          ]
+        },
+        {
+          "token": 4337,
+          "piece": " move",
+          "terminal_row": 16740,
+          "diagonal_contrast": 2.71689796,
+          "selected": false,
+          "continuation_tokens": [
+            4337,
+            278
+          ]
+        },
+        {
+          "token": 6911,
+          "piece": " helps",
+          "terminal_row": 16748,
+          "diagonal_contrast": -4.00141191,
+          "selected": false,
+          "continuation_tokens": [
+            6911,
+            491
+          ]
+        },
+        {
+          "token": 1371,
+          "piece": " help",
+          "terminal_row": 16756,
+          "diagonal_contrast": 2.04393053,
+          "selected": false,
+          "continuation_tokens": [
+            1371,
+            411
+          ]
+        }
+      ]
+    },
+    {
+      "root": "confirmation/by/boy-brother-helps::C",
+      "edge_ar_token": 1708,
+      "selected_token": 1708,
+      "selected_text": "\n<s>\nThe boys by the brother play with",
+      "outer_candidates": [
+        {
+          "token": 12080,
+          "piece": " lives",
+          "terminal_row": 16549,
+          "diagonal_contrast": -2.73830843,
+          "selected": false,
+          "continuation_tokens": [
+            12080,
+            411
+          ]
+        },
+        {
+          "token": 5735,
+          "piece": " live",
+          "terminal_row": 16558,
+          "diagonal_contrast": -2.71956563,
+          "selected": false,
+          "continuation_tokens": [
+            5735,
+            411
+          ]
+        },
+        {
+          "token": 6057,
+          "piece": " runs",
+          "terminal_row": 16567,
+          "diagonal_contrast": 0.971524954,
+          "selected": false,
+          "continuation_tokens": [
+            6057,
+            411
+          ]
+        },
+        {
+          "token": 1065,
+          "piece": " run",
+          "terminal_row": 16576,
+          "diagonal_contrast": 2.01496601,
+          "selected": false,
+          "continuation_tokens": [
+            1065,
+            411
+          ]
+        },
+        {
+          "token": 1736,
+          "piece": " works",
+          "terminal_row": 16585,
+          "diagonal_contrast": -3.81616282,
+          "selected": false,
+          "continuation_tokens": [
+            1736,
+            411
+          ]
+        },
+        {
+          "token": 664,
+          "piece": " work",
+          "terminal_row": 16594,
+          "diagonal_contrast": 1.33983088,
+          "selected": false,
+          "continuation_tokens": [
+            664,
+            411
+          ]
+        },
+        {
+          "token": 13582,
+          "piece": " plays",
+          "terminal_row": 16603,
+          "diagonal_contrast": -1.08437514,
+          "selected": false,
+          "continuation_tokens": [
+            13582,
+            411
+          ]
+        },
+        {
+          "token": 1708,
+          "piece": " play",
+          "terminal_row": 16612,
+          "diagonal_contrast": 2.97354817,
+          "selected": true,
+          "continuation_tokens": [
+            1708,
+            411
+          ]
+        },
+        {
+          "token": 16229,
+          "piece": " moves",
+          "terminal_row": 16621,
+          "diagonal_contrast": 1.10129786,
+          "selected": false,
+          "continuation_tokens": [
+            16229,
+            411
+          ]
+        },
+        {
+          "token": 4337,
+          "piece": " move",
+          "terminal_row": 16632,
+          "diagonal_contrast": 1.11398768,
+          "selected": false,
+          "continuation_tokens": [
+            4337,
+            278
+          ]
+        },
+        {
+          "token": 6911,
+          "piece": " helps",
+          "terminal_row": 16640,
+          "diagonal_contrast": -4.59639645,
+          "selected": false,
+          "continuation_tokens": [
+            6911,
+            491
+          ]
+        },
+        {
+          "token": 1371,
+          "piece": " help",
+          "terminal_row": 16648,
+          "diagonal_contrast": 0.31740728,
+          "selected": false,
+          "continuation_tokens": [
+            1371,
+            411
+          ]
+        }
+      ]
+    },
+    {
+      "root": "confirmation/by/boy-brother-helps::x",
+      "edge_ar_token": 1708,
+      "selected_token": 1708,
+      "selected_text": "\n<s>\nThe boy by the brother play with",
+      "outer_candidates": [
+        {
+          "token": 12080,
+          "piece": " lives",
+          "terminal_row": 16333,
+          "diagonal_contrast": -3.8915267,
+          "selected": false,
+          "continuation_tokens": [
+            12080,
+            411
+          ]
+        },
+        {
+          "token": 5735,
+          "piece": " live",
+          "terminal_row": 16342,
+          "diagonal_contrast": -3.1810894,
+          "selected": false,
+          "continuation_tokens": [
+            5735,
+            411
+          ]
+        },
+        {
+          "token": 6057,
+          "piece": " runs",
+          "terminal_row": 16351,
+          "diagonal_contrast": 0.934370279,
+          "selected": false,
+          "continuation_tokens": [
+            6057,
+            411
+          ]
+        },
+        {
+          "token": 1065,
+          "piece": " run",
+          "terminal_row": 16360,
+          "diagonal_contrast": 0.864117265,
+          "selected": false,
+          "continuation_tokens": [
+            1065,
+            411
+          ]
+        },
+        {
+          "token": 1736,
+          "piece": " works",
+          "terminal_row": 16369,
+          "diagonal_contrast": -3.05253649,
+          "selected": false,
+          "continuation_tokens": [
+            1736,
+            411
+          ]
+        },
+        {
+          "token": 664,
+          "piece": " work",
+          "terminal_row": 16378,
+          "diagonal_contrast": 1.31903529,
+          "selected": false,
+          "continuation_tokens": [
+            664,
+            411
+          ]
+        },
+        {
+          "token": 13582,
+          "piece": " plays",
+          "terminal_row": 16387,
+          "diagonal_contrast": -0.519894719,
+          "selected": false,
+          "continuation_tokens": [
+            13582,
+            411
+          ]
+        },
+        {
+          "token": 1708,
+          "piece": " play",
+          "terminal_row": 16396,
+          "diagonal_contrast": 2.61892986,
+          "selected": true,
+          "continuation_tokens": [
+            1708,
+            411
+          ]
+        },
+        {
+          "token": 16229,
+          "piece": " moves",
+          "terminal_row": 16405,
+          "diagonal_contrast": 0.45364821,
+          "selected": false,
+          "continuation_tokens": [
+            16229,
+            411
+          ]
+        },
+        {
+          "token": 4337,
+          "piece": " move",
+          "terminal_row": 16417,
+          "diagonal_contrast": -2.53635144,
+          "selected": false,
+          "continuation_tokens": [
+            4337,
+            372
+          ]
+        },
+        {
+          "token": 6911,
+          "piece": " helps",
+          "terminal_row": 16424,
+          "diagonal_contrast": -4.53832817,
+          "selected": false,
+          "continuation_tokens": [
+            6911,
+            491
+          ]
+        },
+        {
+          "token": 1371,
+          "piece": " help",
+          "terminal_row": 16432,
+          "diagonal_contrast": 1.43241358,
+          "selected": false,
+          "continuation_tokens": [
+            1371,
+            411
+          ]
+        }
+      ]
+    },
+    {
+      "root": "confirmation/by/car-thing-moves::A",
+      "edge_ar_token": 4337,
+      "selected_token": 4337,
+      "selected_text": "\n<s>\nThe car by the things move the",
+      "outer_candidates": [
+        {
+          "token": 12080,
+          "piece": " lives",
+          "terminal_row": 16873,
+          "diagonal_contrast": -2.16080761,
+          "selected": false,
+          "continuation_tokens": [
+            12080,
+            411
+          ]
+        },
+        {
+          "token": 5735,
+          "piece": " live",
+          "terminal_row": 16880,
+          "diagonal_contrast": -4.30187702,
+          "selected": false,
+          "continuation_tokens": [
+            5735,
+            25970
+          ]
+        },
+        {
+          "token": 6057,
+          "piece": " runs",
+          "terminal_row": 16892,
+          "diagonal_contrast": -5.41896915,
+          "selected": false,
+          "continuation_tokens": [
+            6057,
+            491
+          ]
+        },
+        {
+          "token": 1065,
+          "piece": " run",
+          "terminal_row": 16900,
+          "diagonal_contrast": 0.503636122,
+          "selected": false,
+          "continuation_tokens": [
+            1065,
+            411
+          ]
+        },
+        {
+          "token": 1736,
+          "piece": " works",
+          "terminal_row": 16911,
+          "diagonal_contrast": -1.20190001,
+          "selected": false,
+          "continuation_tokens": [
+            1736,
+            278
+          ]
+        },
+        {
+          "token": 664,
+          "piece": " work",
+          "terminal_row": 16918,
+          "diagonal_contrast": 2.21978235,
+          "selected": false,
+          "continuation_tokens": [
+            664,
+            411
+          ]
+        },
+        {
+          "token": 13582,
+          "piece": " plays",
+          "terminal_row": 16929,
+          "diagonal_contrast": 1.78318369,
+          "selected": false,
+          "continuation_tokens": [
+            13582,
+            278
+          ]
+        },
+        {
+          "token": 1708,
+          "piece": " play",
+          "terminal_row": 16936,
+          "diagonal_contrast": -0.129322231,
+          "selected": false,
+          "continuation_tokens": [
+            1708,
+            411
+          ]
+        },
+        {
+          "token": 16229,
+          "piece": " moves",
+          "terminal_row": 16945,
+          "diagonal_contrast": 3.90334535,
+          "selected": false,
+          "continuation_tokens": [
+            16229,
+            411
+          ]
+        },
+        {
+          "token": 4337,
+          "piece": " move",
+          "terminal_row": 16956,
+          "diagonal_contrast": 3.97473812,
+          "selected": true,
+          "continuation_tokens": [
+            4337,
+            278
+          ]
+        },
+        {
+          "token": 6911,
+          "piece": " helps",
+          "terminal_row": 16966,
+          "diagonal_contrast": -3.88991618,
+          "selected": false,
+          "continuation_tokens": [
+            6911,
+            372
+          ]
+        },
+        {
+          "token": 1371,
+          "piece": " help",
+          "terminal_row": 16974,
+          "diagonal_contrast": 3.27902174,
+          "selected": false,
+          "continuation_tokens": [
+            1371,
+            278
+          ]
+        }
+      ]
+    },
+    {
+      "root": "confirmation/by/car-thing-moves::AC",
+      "edge_ar_token": 4337,
+      "selected_token": 664,
+      "selected_text": "\n<s>\nThe cars by the things work with",
+      "outer_candidates": [
+        {
+          "token": 12080,
+          "piece": " lives",
+          "terminal_row": 17089,
+          "diagonal_contrast": -0.49002564,
+          "selected": false,
+          "continuation_tokens": [
+            12080,
+            411
+          ]
+        },
+        {
+          "token": 5735,
+          "piece": " live",
+          "terminal_row": 17096,
+          "diagonal_contrast": -3.96830344,
+          "selected": false,
+          "continuation_tokens": [
+            5735,
+            25970
+          ]
+        },
+        {
+          "token": 6057,
+          "piece": " runs",
+          "terminal_row": 17107,
+          "diagonal_contrast": 1.69123769,
+          "selected": false,
+          "continuation_tokens": [
+            6057,
+            411
+          ]
+        },
+        {
+          "token": 1065,
+          "piece": " run",
+          "terminal_row": 17116,
+          "diagonal_contrast": 2.38354421,
+          "selected": false,
+          "continuation_tokens": [
+            1065,
+            411
+          ]
+        },
+        {
+          "token": 1736,
+          "piece": " works",
+          "terminal_row": 17125,
+          "diagonal_contrast": -1.38905954,
+          "selected": false,
+          "continuation_tokens": [
+            1736,
+            411
+          ]
+        },
+        {
+          "token": 664,
+          "piece": " work",
+          "terminal_row": 17134,
+          "diagonal_contrast": 4.09332752,
+          "selected": true,
+          "continuation_tokens": [
+            664,
+            411
+          ]
+        },
+        {
+          "token": 13582,
+          "piece": " plays",
+          "terminal_row": 17143,
+          "diagonal_contrast": -1.68947339,
+          "selected": false,
+          "continuation_tokens": [
+            13582,
+            411
+          ]
+        },
+        {
+          "token": 1708,
+          "piece": " play",
+          "terminal_row": 17152,
+          "diagonal_contrast": 0.00679624081,
+          "selected": false,
+          "continuation_tokens": [
+            1708,
+            411
+          ]
+        },
+        {
+          "token": 16229,
+          "piece": " moves",
+          "terminal_row": 17161,
+          "diagonal_contrast": 3.98364091,
+          "selected": false,
+          "continuation_tokens": [
+            16229,
+            411
+          ]
+        },
+        {
+          "token": 4337,
+          "piece": " move",
+          "terminal_row": 17172,
+          "diagonal_contrast": 2.80934596,
+          "selected": false,
+          "continuation_tokens": [
+            4337,
+            278
+          ]
+        },
+        {
+          "token": 6911,
+          "piece": " helps",
+          "terminal_row": 17181,
+          "diagonal_contrast": -2.00588679,
+          "selected": false,
+          "continuation_tokens": [
+            6911,
+            278
+          ]
+        },
+        {
+          "token": 1371,
+          "piece": " help",
+          "terminal_row": 17188,
+          "diagonal_contrast": 0.943876326,
+          "selected": false,
+          "continuation_tokens": [
+            1371,
+            411
+          ]
+        }
+      ]
+    },
+    {
+      "root": "confirmation/by/car-thing-moves::C",
+      "edge_ar_token": 4337,
+      "selected_token": 664,
+      "selected_text": "\n<s>\nThe cars by the thing work with",
+      "outer_candidates": [
+        {
+          "token": 12080,
+          "piece": " lives",
+          "terminal_row": 16979,
+          "diagonal_contrast": -4.95113277,
+          "selected": false,
+          "continuation_tokens": [
+            12080,
+            25970
+          ]
+        },
+        {
+          "token": 5735,
+          "piece": " live",
+          "terminal_row": 16988,
+          "diagonal_contrast": -4.29831028,
+          "selected": false,
+          "continuation_tokens": [
+            5735,
+            25970
+          ]
+        },
+        {
+          "token": 6057,
+          "piece": " runs",
+          "terminal_row": 16999,
+          "diagonal_contrast": 2.22628117,
+          "selected": false,
+          "continuation_tokens": [
+            6057,
+            411
+          ]
+        },
+        {
+          "token": 1065,
+          "piece": " run",
+          "terminal_row": 17008,
+          "diagonal_contrast": 2.40574574,
+          "selected": false,
+          "continuation_tokens": [
+            1065,
+            411
+          ]
+        },
+        {
+          "token": 1736,
+          "piece": " works",
+          "terminal_row": 17017,
+          "diagonal_contrast": -2.26505852,
+          "selected": false,
+          "continuation_tokens": [
+            1736,
+            411
+          ]
+        },
+        {
+          "token": 664,
+          "piece": " work",
+          "terminal_row": 17026,
+          "diagonal_contrast": 3.77015924,
+          "selected": true,
+          "continuation_tokens": [
+            664,
+            411
+          ]
+        },
+        {
+          "token": 13582,
+          "piece": " plays",
+          "terminal_row": 17035,
+          "diagonal_contrast": -2.00506306,
+          "selected": false,
+          "continuation_tokens": [
+            13582,
+            411
+          ]
+        },
+        {
+          "token": 1708,
+          "piece": " play",
+          "terminal_row": 17045,
+          "diagonal_contrast": -2.0613935,
+          "selected": false,
+          "continuation_tokens": [
+            1708,
+            491
+          ]
+        },
+        {
+          "token": 16229,
+          "piece": " moves",
+          "terminal_row": 17055,
+          "diagonal_contrast": 1.64898753,
+          "selected": false,
+          "continuation_tokens": [
+            16229,
+            278
+          ]
+        },
+        {
+          "token": 4337,
+          "piece": " move",
+          "terminal_row": 17064,
+          "diagonal_contrast": 1.97171187,
+          "selected": false,
+          "continuation_tokens": [
+            4337,
+            278
+          ]
+        },
+        {
+          "token": 6911,
+          "piece": " helps",
+          "terminal_row": 17073,
+          "diagonal_contrast": -2.08638096,
+          "selected": false,
+          "continuation_tokens": [
+            6911,
+            278
+          ]
+        },
+        {
+          "token": 1371,
+          "piece": " help",
+          "terminal_row": 17082,
+          "diagonal_contrast": 2.4689846,
+          "selected": false,
+          "continuation_tokens": [
+            1371,
+            278
+          ]
+        }
+      ]
+    },
+    {
+      "root": "confirmation/by/car-thing-moves::x",
+      "edge_ar_token": 4337,
+      "selected_token": 4337,
+      "selected_text": "\n<s>\nThe car by the thing move the",
+      "outer_candidates": [
+        {
+          "token": 12080,
+          "piece": " lives",
+          "terminal_row": 16765,
+          "diagonal_contrast": -3.60876918,
+          "selected": false,
+          "continuation_tokens": [
+            12080,
+            411
+          ]
+        },
+        {
+          "token": 5735,
+          "piece": " live",
+          "terminal_row": 16772,
+          "diagonal_contrast": -4.50253773,
+          "selected": false,
+          "continuation_tokens": [
+            5735,
+            25970
+          ]
+        },
+        {
+          "token": 6057,
+          "piece": " runs",
+          "terminal_row": 16784,
+          "diagonal_contrast": -6.60781384,
+          "selected": false,
+          "continuation_tokens": [
+            6057,
+            491
+          ]
+        },
+        {
+          "token": 1065,
+          "piece": " run",
+          "terminal_row": 16793,
+          "diagonal_contrast": -5.1204772,
+          "selected": false,
+          "continuation_tokens": [
+            1065,
+            491
+          ]
+        },
+        {
+          "token": 1736,
+          "piece": " works",
+          "terminal_row": 16801,
+          "diagonal_contrast": -3.06291318,
+          "selected": false,
+          "continuation_tokens": [
+            1736,
+            411
+          ]
+        },
+        {
+          "token": 664,
+          "piece": " work",
+          "terminal_row": 16812,
+          "diagonal_contrast": -2.07022429,
+          "selected": false,
+          "continuation_tokens": [
+            664,
+            278
+          ]
+        },
+        {
+          "token": 13582,
+          "piece": " plays",
+          "terminal_row": 16819,
+          "diagonal_contrast": -1.23814428,
+          "selected": false,
+          "continuation_tokens": [
+            13582,
+            411
+          ]
+        },
+        {
+          "token": 1708,
+          "piece": " play",
+          "terminal_row": 16828,
+          "diagonal_contrast": 0.446035087,
+          "selected": false,
+          "continuation_tokens": [
+            1708,
+            411
+          ]
+        },
+        {
+          "token": 16229,
+          "piece": " moves",
+          "terminal_row": 16839,
+          "diagonal_contrast": 1.45219612,
+          "selected": false,
+          "continuation_tokens": [
+            16229,
+            278
+          ]
+        },
+        {
+          "token": 4337,
+          "piece": " move",
+          "terminal_row": 16848,
+          "diagonal_contrast": 3.0166831,
+          "selected": true,
+          "continuation_tokens": [
+            4337,
+            278
+          ]
+        },
+        {
+          "token": 6911,
+          "piece": " helps",
+          "terminal_row": 16857,
+          "diagonal_contrast": -2.24354124,
+          "selected": false,
+          "continuation_tokens": [
+            6911,
+            278
+          ]
+        },
+        {
+          "token": 1371,
+          "piece": " help",
+          "terminal_row": 16866,
+          "diagonal_contrast": 2.26553059,
+          "selected": false,
+          "continuation_tokens": [
+            1371,
+            278
+          ]
+        }
+      ]
+    }
+  ],
   "sample_terminal_observations": [
     {
       "root": "exploration/near/animal-flower-lives::x",

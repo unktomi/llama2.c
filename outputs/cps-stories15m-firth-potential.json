@@ -18,10 +18,10 @@
   },
   "provenance": {
     "model": "Stories15M",
-    "evaluator_commit": "b910bcb5629f0718203e16ffbaa834c951a7cadd",
-    "analyzer_commit": "884f542ad2e43aba384c7e110d5fb6b8f222101f",
+    "evaluator_commit": "695d0b43a67d3ae01e19afeeef70c7848540e131",
+    "analyzer_commit": "695d0b43a67d3ae01e19afeeef70c7848540e131",
     "source_trace": "/Users/christopheroliver/Documents/Codex/2026-08-27/referenced-chatgpt-conversation-this-is-an-2/work/llama2-company-readout/work_traces/recursive_company/recursive-company.jsonl",
-    "source_trace_sha256": "b253a0cf95b877bed2a250aa9a213eebc592b44796fc8cf420fb644070adef39",
+    "source_trace_sha256": "5624c0cbe9f9e6a6737a93269adde847f0caf5bd0f32b749519bf9cbe84351f4",
     "detailed_cells": "/Users/christopheroliver/Documents/Codex/2026-08-27/referenced-chatgpt-conversation-this-is-an-2/work/llama2-company-readout/work_traces/firth_potential/cells.jsonl",
     "detailed_cells_sha256": "553e87a80a36390eec4171fee6fbf07a000b1ba27f397fb5f793b1962b83717d"
   },
@@ -124,14 +124,19 @@
       "family_filler_calls": 57,
       "maximum_calls_per_filler": 1,
       "family_scalar_reads": 15210144,
-      "backend": "metal"
+      "backend": "metal",
+      "root_observer_runs": 1,
+      "observations_composed": true
     },
     "check": {
       "roots": 176,
       "depth": 2,
       "demand_nodes": 2288,
       "complete_branches": 16896,
-      "maximum_calls_per_filler": 1
+      "maximum_calls_per_filler": 1,
+      "root_observer_runs": 1,
+      "composed_observations": 16896,
+      "composition_steps": 33792
     },
     "outer_demands": 176,
     "inner_demands": 2112,
