@@ -9,6 +9,7 @@
     "gauge": "every edge subtracts two coordinates of one token-codata vector, eliminating its common logit gauge",
     "hodge": "equal-edge-metric orthogonal decomposition on each four-edge constructor square",
     "backward_completion": "hold the measured later-selector edges fixed and add the minimum-L2 reciprocal mixed response demanded of the earlier continuation",
+    "actual_backward_continuation": "retain q_E(d) as the result of each outer candidate; its cross-d coordinate differences supply the reciprocal outer edges",
     "probabilities_used": false,
     "absolute_logits_combined": false,
     "path_likelihoods_summed": false,
@@ -18,11 +19,11 @@
   "provenance": {
     "model": "Stories15M",
     "evaluator_commit": "b910bcb5629f0718203e16ffbaa834c951a7cadd",
-    "analyzer_commit": "a6f57a3107dc99019c72946e4e0e3565f52eae8b",
+    "analyzer_commit": "884f542ad2e43aba384c7e110d5fb6b8f222101f",
     "source_trace": "/Users/christopheroliver/Documents/Codex/2026-08-27/referenced-chatgpt-conversation-this-is-an-2/work/llama2-company-readout/work_traces/recursive_company/recursive-company.jsonl",
     "source_trace_sha256": "b253a0cf95b877bed2a250aa9a213eebc592b44796fc8cf420fb644070adef39",
     "detailed_cells": "/Users/christopheroliver/Documents/Codex/2026-08-27/referenced-chatgpt-conversation-this-is-an-2/work/llama2-company-readout/work_traces/firth_potential/cells.jsonl",
-    "detailed_cells_sha256": "f3e3816d2f48ed0e5f0809c3317aae4b4b0749fa0c35f53395384fc7a85b0a96"
+    "detailed_cells_sha256": "553e87a80a36390eec4171fee6fbf07a000b1ba27f397fb5f793b1962b83717d"
   },
   "term": {
     "roots": 176,
@@ -204,6 +205,52 @@
         "q75": 0.0,
         "q90": 0.0,
         "q99": 0.0
+      }
+    },
+    "actual_later_codata_pullback_closure_defect": {
+      "count": 325248,
+      "exact_zero": 233733,
+      "negative": 45391,
+      "positive": 46124,
+      "minimum": -7.105427357601002e-15,
+      "median": 0.0,
+      "mean": 1.0237838223776935e-18,
+      "maximum": 5.329070518200751e-15,
+      "minimum_absolute": 0.0,
+      "median_absolute": 0.0,
+      "mean_absolute": 2.2913360600102843e-16,
+      "maximum_absolute": 7.105427357601002e-15,
+      "absolute_quantiles": {
+        "q01": 0.0,
+        "q10": 0.0,
+        "q25": 0.0,
+        "q50": 0.0,
+        "q75": 4.440892098500626e-16,
+        "q90": 8.881784197001252e-16,
+        "q99": 1.7763568394002505e-15
+      }
+    },
+    "actual_later_codata_pullback_reciprocity_defect": {
+      "count": 325248,
+      "exact_zero": 216611,
+      "negative": 54468,
+      "positive": 54169,
+      "minimum": -3.552713678800501e-15,
+      "median": 0.0,
+      "mean": -7.558694012428457e-19,
+      "maximum": 3.552713678800501e-15,
+      "minimum_absolute": 0.0,
+      "median_absolute": 0.0,
+      "mean_absolute": 2.2543293938859864e-16,
+      "maximum_absolute": 3.552713678800501e-15,
+      "absolute_quantiles": {
+        "q01": 0.0,
+        "q10": 0.0,
+        "q25": 0.0,
+        "q50": 0.0,
+        "q75": 4.440892098500626e-16,
+        "q90": 8.881784197001252e-16,
+        "q99": 1.7763568394002505e-15
       }
     },
     "exactly_closed_cells": 0,
@@ -2778,7 +2825,21 @@
           "inner_then_outer": -2.869357334
         },
         "preference_circulation": 19.416551665999997,
-        "circulation_fraction": 0.562079427625419
+        "circulation_fraction": 0.562079427625419,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -12.00440192,
+            "outer_at_inner_to": 7.412149746,
+            "inner_at_outer_from": -2.318539696,
+            "inner_at_outer_to": 17.098011969999998
+          },
+          "outer_mixed_response": 19.416551666,
+          "inner_mixed_response": 19.416551665999997,
+          "reciprocity_defect": 3.552713678800501e-15,
+          "closure_defect": -8.881784197001252e-16,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/near/horse-car-moves::AC",
@@ -2867,7 +2928,21 @@
           "inner_then_outer": -2.88114095
         },
         "preference_circulation": 18.96312089,
-        "circulation_fraction": 0.5358282444129638
+        "circulation_fraction": 0.5358282444129638,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -10.42272949,
+            "outer_at_inner_to": 8.5403914,
+            "inner_at_outer_from": -1.4444537199999998,
+            "inner_at_outer_to": 17.51866717
+          },
+          "outer_mixed_response": 18.96312089,
+          "inner_mixed_response": 18.96312089,
+          "reciprocity_defect": 0.0,
+          "closure_defect": -4.440892098500626e-16,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/with/horse-car-moves::A",
@@ -2956,7 +3031,21 @@
           "inner_then_outer": -1.8087682700000003
         },
         "preference_circulation": 18.798887200000003,
-        "circulation_fraction": 0.4969498486339273
+        "circulation_fraction": 0.4969498486339273,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -11.47570681,
+            "outer_at_inner_to": 7.323180390000001,
+            "inner_at_outer_from": -0.049104210000000315,
+            "inner_at_outer_to": 18.74978299
+          },
+          "outer_mixed_response": 18.798887200000003,
+          "inner_mixed_response": 18.7988872,
+          "reciprocity_defect": 3.552713678800501e-15,
+          "closure_defect": -8.881784197001252e-16,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/with/horse-car-moves::AC",
@@ -3045,7 +3134,21 @@
           "inner_then_outer": -3.7662913700000002
         },
         "preference_circulation": 18.64920866,
-        "circulation_fraction": 0.553532582785046
+        "circulation_fraction": 0.553532582785046,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -12.26127624,
+            "outer_at_inner_to": 6.38793242,
+            "inner_at_outer_from": -2.10180437,
+            "inner_at_outer_to": 16.54740429
+          },
+          "outer_mixed_response": 18.64920866,
+          "inner_mixed_response": 18.64920866,
+          "reciprocity_defect": 0.0,
+          "closure_defect": -1.7763568394002505e-15,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/near/dog-horse-runs::x",
@@ -3134,7 +3237,21 @@
           "inner_then_outer": -7.15277779
         },
         "preference_circulation": 18.55483126,
-        "circulation_fraction": 0.4523591800336157
+        "circulation_fraction": 0.4523591800336157,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -9.38990498,
+            "outer_at_inner_to": 9.16492628,
+            "inner_at_outer_from": -0.4054486800000001,
+            "inner_at_outer_to": 18.14938258
+          },
+          "outer_mixed_response": 18.55483126,
+          "inner_mixed_response": 18.55483126,
+          "reciprocity_defect": 0.0,
+          "closure_defect": 8.881784197001252e-16,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "confirmation/by/car-thing-moves::AC",
@@ -3223,7 +3340,21 @@
           "inner_then_outer": 1.7748164530000001
         },
         "preference_circulation": 18.494566265,
-        "circulation_fraction": 0.5215160317798455
+        "circulation_fraction": 0.5215160317798455,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -11.069157599999999,
+            "outer_at_inner_to": 7.425408665,
+            "inner_at_outer_from": -1.396554295,
+            "inner_at_outer_to": 17.098011969999998
+          },
+          "outer_mixed_response": 18.494566265,
+          "inner_mixed_response": 18.494566265,
+          "reciprocity_defect": 0.0,
+          "closure_defect": -4.440892098500626e-16,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/near/dog-animal-lives::AC",
@@ -3312,7 +3443,21 @@
           "inner_then_outer": -6.198495858
         },
         "preference_circulation": 18.343462464,
-        "circulation_fraction": 0.5670915326406155
+        "circulation_fraction": 0.5670915326406155,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -11.12295675,
+            "outer_at_inner_to": 7.220505714,
+            "inner_at_outer_from": -3.089093204,
+            "inner_at_outer_to": 15.25436926
+          },
+          "outer_mixed_response": 18.343462463999998,
+          "inner_mixed_response": 18.343462464,
+          "reciprocity_defect": -3.552713678800501e-15,
+          "closure_defect": 8.881784197001252e-16,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/near/dog-horse-runs::C",
@@ -3401,7 +3546,21 @@
           "inner_then_outer": -8.552459958
         },
         "preference_circulation": 18.291867498000002,
-        "circulation_fraction": 0.44829058435691654
+        "circulation_fraction": 0.44829058435691654,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -8.99018836,
+            "outer_at_inner_to": 9.301679138,
+            "inner_at_outer_from": -0.9659087679999999,
+            "inner_at_outer_to": 17.32595873
+          },
+          "outer_mixed_response": 18.291867498000002,
+          "inner_mixed_response": 18.291867498,
+          "reciprocity_defect": 3.552713678800501e-15,
+          "closure_defect": -3.3306690738754696e-16,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "confirmation/by/horse-boat-moves::AC",
@@ -3490,7 +3649,21 @@
           "inner_then_outer": -4.8553016190000005
         },
         "preference_circulation": 18.101891039,
-        "circulation_fraction": 0.5982734993153977
+        "circulation_fraction": 0.5982734993153977,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -9.14778757,
+            "outer_at_inner_to": 8.954103469,
+            "inner_at_outer_from": -3.509757519,
+            "inner_at_outer_to": 14.59213352
+          },
+          "outer_mixed_response": 18.101891039,
+          "inner_mixed_response": 18.101891039,
+          "reciprocity_defect": 0.0,
+          "closure_defect": 8.881784197001252e-16,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/near/horse-car-moves::AC",
@@ -3579,7 +3752,21 @@
           "inner_then_outer": -4.639649987
         },
         "preference_circulation": 18.095949046999998,
-        "circulation_fraction": 0.5887383352748777
+        "circulation_fraction": 0.5887383352748777,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -10.42272949,
+            "outer_at_inner_to": 7.6732195569999995,
+            "inner_at_outer_from": -3.202962757,
+            "inner_at_outer_to": 14.89298629
+          },
+          "outer_mixed_response": 18.095949046999998,
+          "inner_mixed_response": 18.095949046999998,
+          "reciprocity_defect": 0.0,
+          "closure_defect": 0.0,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/near/animal-flower-lives::AC",
@@ -3668,7 +3855,21 @@
           "inner_then_outer": -2.8395864989999997
         },
         "preference_circulation": 17.818830249,
-        "circulation_fraction": 0.555017779072645
+        "circulation_fraction": 0.555017779072645,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -10.86077451,
+            "outer_at_inner_to": 6.958055739,
+            "inner_at_outer_from": -1.934826609,
+            "inner_at_outer_to": 15.88400364
+          },
+          "outer_mixed_response": 17.818830249,
+          "inner_mixed_response": 17.818830249,
+          "reciprocity_defect": 0.0,
+          "closure_defect": -8.881784197001252e-16,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/near/dog-animal-lives::x",
@@ -3757,7 +3958,21 @@
           "inner_then_outer": -6.991741481000001
         },
         "preference_circulation": 17.804256381,
-        "circulation_fraction": 0.46709976976939327
+        "circulation_fraction": 0.46709976976939327,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -9.162303210000001,
+            "outer_at_inner_to": 8.641953170999999,
+            "inner_at_outer_from": -0.8569154109999999,
+            "inner_at_outer_to": 16.94734097
+          },
+          "outer_mixed_response": 17.804256381000002,
+          "inner_mixed_response": 17.804256381,
+          "reciprocity_defect": 3.552713678800501e-15,
+          "closure_defect": -1.1102230246251565e-15,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/near/dog-animal-lives::C",
@@ -3846,7 +4061,21 @@
           "inner_then_outer": -8.623270988
         },
         "preference_circulation": 17.730027438,
-        "circulation_fraction": 0.4572041328560897
+        "circulation_fraction": 0.4572041328560897,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -9.134686230000002,
+            "outer_at_inner_to": 8.595341208,
+            "inner_at_outer_from": -1.3495171080000001,
+            "inner_at_outer_to": 16.38051033
+          },
+          "outer_mixed_response": 17.730027438,
+          "inner_mixed_response": 17.730027438,
+          "reciprocity_defect": 0.0,
+          "closure_defect": -2.220446049250313e-15,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/with/horse-car-moves::A",
@@ -3935,7 +4164,21 @@
           "inner_then_outer": 0.60415054
         },
         "preference_circulation": 17.67139143,
-        "circulation_fraction": 0.47016536324121133
+        "circulation_fraction": 0.47016536324121133,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -10.28999781,
+            "outer_at_inner_to": 7.381393620000001,
+            "inner_at_outer_from": 1.07839156,
+            "inner_at_outer_to": 18.74978299
+          },
+          "outer_mixed_response": 17.67139143,
+          "inner_mixed_response": 17.67139143,
+          "reciprocity_defect": 0.0,
+          "closure_defect": 0.0,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/near/teacher-friend-helps::AC",
@@ -4024,7 +4267,21 @@
           "inner_then_outer": 1.1293449300000002
         },
         "preference_circulation": 17.666888219999997,
-        "circulation_fraction": 0.4879693227249167
+        "circulation_fraction": 0.4879693227249167,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -13.33292864,
+            "outer_at_inner_to": 4.33395958,
+            "inner_at_outer_from": 0.40184116000000003,
+            "inner_at_outer_to": 18.06872938
+          },
+          "outer_mixed_response": 17.66688822,
+          "inner_mixed_response": 17.66688822,
+          "reciprocity_defect": 0.0,
+          "closure_defect": 0.0,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/under/horse-car-moves::AC",
@@ -4113,7 +4370,21 @@
           "inner_then_outer": -3.0967128299999995
         },
         "preference_circulation": 17.58663416,
-        "circulation_fraction": 0.49373018290578213
+        "circulation_fraction": 0.49373018290578213,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -9.50461244,
+            "outer_at_inner_to": 8.08202172,
+            "inner_at_outer_from": -0.24197435,
+            "inner_at_outer_to": 17.34465981
+          },
+          "outer_mixed_response": 17.586634160000003,
+          "inner_mixed_response": 17.58663416,
+          "reciprocity_defect": 3.552713678800501e-15,
+          "closure_defect": -1.3322676295501878e-15,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/near/animal-flower-lives::AC",
@@ -4202,7 +4473,21 @@
           "inner_then_outer": -0.5598716799999996
         },
         "preference_circulation": 17.57144308,
-        "circulation_fraction": 0.48903911698615105
+        "circulation_fraction": 0.48903911698615105,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -10.86077451,
+            "outer_at_inner_to": 6.71066857,
+            "inner_at_outer_from": 0.34488821000000014,
+            "inner_at_outer_to": 17.916331290000002
+          },
+          "outer_mixed_response": 17.57144308,
+          "inner_mixed_response": 17.57144308,
+          "reciprocity_defect": 0.0,
+          "closure_defect": 1.3322676295501878e-15,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/with/animal-flower-lives::A",
@@ -4291,7 +4576,21 @@
           "inner_then_outer": -2.0806090900000003
         },
         "preference_circulation": 17.54786111,
-        "circulation_fraction": 0.5052958599908459
+        "circulation_fraction": 0.5052958599908459,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -11.462114340000001,
+            "outer_at_inner_to": 6.08574677,
+            "inner_at_outer_from": -0.35917378000000033,
+            "inner_at_outer_to": 17.18868733
+          },
+          "outer_mixed_response": 17.54786111,
+          "inner_mixed_response": 17.54786111,
+          "reciprocity_defect": 0.0,
+          "closure_defect": -4.440892098500626e-16,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/under/dog-horse-runs::x",
@@ -4380,7 +4679,21 @@
           "inner_then_outer": -8.041683436
         },
         "preference_circulation": 17.528450724000002,
-        "circulation_fraction": 0.4828713771553322
+        "circulation_fraction": 0.4828713771553322,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -9.48509216,
+            "outer_at_inner_to": 8.043358564,
+            "inner_at_outer_from": -1.783184764,
+            "inner_at_outer_to": 15.745265960000001
+          },
+          "outer_mixed_response": 17.528450724000002,
+          "inner_mixed_response": 17.528450724000002,
+          "reciprocity_defect": 0.0,
+          "closure_defect": 4.440892098500626e-16,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/near/bird-dog-runs::x",
@@ -4469,7 +4782,21 @@
           "inner_then_outer": -1.4784700899999996
         },
         "preference_circulation": 17.43352985,
-        "circulation_fraction": 0.5077072077736721
+        "circulation_fraction": 0.5077072077736721,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -10.08958245,
+            "outer_at_inner_to": 7.343947399999999,
+            "inner_at_outer_from": -0.34331416999999975,
+            "inner_at_outer_to": 17.09021568
+          },
+          "outer_mixed_response": 17.43352985,
+          "inner_mixed_response": 17.43352985,
+          "reciprocity_defect": 0.0,
+          "closure_defect": 4.440892098500626e-16,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "confirmation/by/car-thing-moves::C",
@@ -4558,7 +4885,21 @@
           "inner_then_outer": -1.5481935189999998
         },
         "preference_circulation": 17.430482153,
-        "circulation_fraction": 0.5454486403442497
+        "circulation_fraction": 0.5454486403442497,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -9.65526212,
+            "outer_at_inner_to": 7.775220033,
+            "inner_at_outer_from": -1.5253779929999998,
+            "inner_at_outer_to": 15.90510416
+          },
+          "outer_mixed_response": 17.430482153,
+          "inner_mixed_response": 17.430482153,
+          "reciprocity_defect": 0.0,
+          "closure_defect": 4.440892098500626e-16,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/near/horse-car-moves::C",
@@ -4647,7 +4988,21 @@
           "inner_then_outer": -3.2012167599000003
         },
         "preference_circulation": 17.42956484,
-        "circulation_fraction": 0.5224101757951147
+        "circulation_fraction": 0.5224101757951147,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -9.50522518,
+            "outer_at_inner_to": 7.924339659999999,
+            "inner_at_outer_from": -1.0592559600000002,
+            "inner_at_outer_to": 16.37030888
+          },
+          "outer_mixed_response": 17.429564839999998,
+          "inner_mixed_response": 17.42956484,
+          "reciprocity_defect": -3.552713678800501e-15,
+          "closure_defect": 4.440892098500626e-16,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/with/animal-flower-lives::A",
@@ -4736,7 +5091,21 @@
           "inner_then_outer": -1.3841746000000006
         },
         "preference_circulation": 17.38680459,
-        "circulation_fraction": 0.5085944512686089
+        "circulation_fraction": 0.5085944512686089,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -10.75963879,
+            "outer_at_inner_to": 6.6271658,
+            "inner_at_outer_from": -0.35917378000000033,
+            "inner_at_outer_to": 17.027630809999998
+          },
+          "outer_mixed_response": 17.38680459,
+          "inner_mixed_response": 17.386804589999997,
+          "reciprocity_defect": 3.552713678800501e-15,
+          "closure_defect": -2.220446049250313e-15,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/near/dog-horse-runs::AC",
@@ -4825,7 +5194,21 @@
           "inner_then_outer": -7.612735755
         },
         "preference_circulation": 17.343719725,
-        "circulation_fraction": 0.516788474555454
+        "circulation_fraction": 0.516788474555454,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -10.12577486,
+            "outer_at_inner_to": 7.217944865,
+            "inner_at_outer_from": -2.440235855,
+            "inner_at_outer_to": 14.903483869999999
+          },
+          "outer_mixed_response": 17.343719725,
+          "inner_mixed_response": 17.343719725,
+          "reciprocity_defect": 0.0,
+          "closure_defect": -8.881784197001252e-16,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/under/animal-flower-lives::AC",
@@ -4914,7 +5297,21 @@
           "inner_then_outer": -3.3820715000000003
         },
         "preference_circulation": 17.334632399999997,
-        "circulation_fraction": 0.5420637735191578
+        "circulation_fraction": 0.5420637735191578,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -11.380160329999999,
+            "outer_at_inner_to": 5.95447207,
+            "inner_at_outer_from": -1.6234207200000002,
+            "inner_at_outer_to": 15.711211679999998
+          },
+          "outer_mixed_response": 17.334632399999997,
+          "inner_mixed_response": 17.334632399999997,
+          "reciprocity_defect": 0.0,
+          "closure_defect": -2.220446049250313e-16,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/near/bird-dog-runs::x",
@@ -5003,7 +5400,21 @@
           "inner_then_outer": -2.7468664599999997
         },
         "preference_circulation": 17.32446765,
-        "circulation_fraction": 0.4961959256106145
+        "circulation_fraction": 0.4961959256106145,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -9.81054926,
+            "outer_at_inner_to": 7.513918389999999,
+            "inner_at_outer_from": -0.23425196999999987,
+            "inner_at_outer_to": 17.09021568
+          },
+          "outer_mixed_response": 17.32446765,
+          "inner_mixed_response": 17.32446765,
+          "reciprocity_defect": 0.0,
+          "closure_defect": 8.881784197001252e-16,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/near/horse-car-moves::A",
@@ -5092,7 +5503,21 @@
           "inner_then_outer": -1.3504674399999999
         },
         "preference_circulation": 17.3202791,
-        "circulation_fraction": 0.5022125009713423
+        "circulation_fraction": 0.5022125009713423,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -10.052982329999999,
+            "outer_at_inner_to": 7.267296770000001,
+            "inner_at_outer_from": -0.15949820999999975,
+            "inner_at_outer_to": 17.16078089
+          },
+          "outer_mixed_response": 17.3202791,
+          "inner_mixed_response": 17.3202791,
+          "reciprocity_defect": 0.0,
+          "closure_defect": 1.7763568394002505e-15,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/under/dog-animal-lives::x",
@@ -5181,7 +5606,21 @@
           "inner_then_outer": -6.978164551
         },
         "preference_circulation": 17.319291233,
-        "circulation_fraction": 0.5043519392474182
+        "circulation_fraction": 0.5043519392474182,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -10.049261569999999,
+            "outer_at_inner_to": 7.270029663000001,
+            "inner_at_outer_from": -1.860773203,
+            "inner_at_outer_to": 15.45851803
+          },
+          "outer_mixed_response": 17.319291233,
+          "inner_mixed_response": 17.319291233,
+          "reciprocity_defect": 0.0,
+          "closure_defect": 8.881784197001252e-16,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/with/dog-horse-runs::A",
@@ -5270,7 +5709,21 @@
           "inner_then_outer": -7.645672070000001
         },
         "preference_circulation": 17.31645012,
-        "circulation_fraction": 0.5039513819612609
+        "circulation_fraction": 0.5039513819612609,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -10.80558944,
+            "outer_at_inner_to": 6.5108606799999995,
+            "inner_at_outer_from": -2.14735412,
+            "inner_at_outer_to": 15.169096
+          },
+          "outer_mixed_response": 17.31645012,
+          "inner_mixed_response": 17.31645012,
+          "reciprocity_defect": 0.0,
+          "closure_defect": 0.0,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/near/teacher-friend-helps::A",
@@ -5359,7 +5812,21 @@
           "inner_then_outer": -0.06403493999999954
         },
         "preference_circulation": 17.263252729999998,
-        "circulation_fraction": 0.48018540394570425
+        "circulation_fraction": 0.48018540394570425,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -13.14104914,
+            "outer_at_inner_to": 4.12220359,
+            "inner_at_outer_from": 0.6698641799999998,
+            "inner_at_outer_to": 17.93311691
+          },
+          "outer_mixed_response": 17.263252729999998,
+          "inner_mixed_response": 17.263252729999998,
+          "reciprocity_defect": 0.0,
+          "closure_defect": -4.440892098500626e-16,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "confirmation/by/horse-boat-moves::AC",
@@ -5448,7 +5915,21 @@
           "inner_then_outer": -1.55811477
         },
         "preference_circulation": 17.231142560000002,
-        "circulation_fraction": 0.503071325423729
+        "circulation_fraction": 0.503071325423729,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -9.14778757,
+            "outer_at_inner_to": 8.08335499,
+            "inner_at_outer_from": -0.21257066999999985,
+            "inner_at_outer_to": 17.01857189
+          },
+          "outer_mixed_response": 17.231142560000002,
+          "inner_mixed_response": 17.231142560000002,
+          "reciprocity_defect": 0.0,
+          "closure_defect": 0.0,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/near/dog-animal-lives::AC",
@@ -5537,7 +6018,21 @@
           "inner_then_outer": -8.625501868
         },
         "preference_circulation": 17.187734594000002,
-        "circulation_fraction": 0.5233766470296761
+        "circulation_fraction": 0.5233766470296761,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -10.24898004,
+            "outer_at_inner_to": 6.938754554,
+            "inner_at_outer_from": -3.089093204,
+            "inner_at_outer_to": 14.098641390000001
+          },
+          "outer_mixed_response": 17.187734594,
+          "inner_mixed_response": 17.187734594000002,
+          "reciprocity_defect": -3.552713678800501e-15,
+          "closure_defect": 1.7763568394002505e-15,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       }
     ],
     "smallest_nonzero_absolute_cells": [
@@ -5628,7 +6123,21 @@
           "inner_then_outer": 2.2575202
         },
         "preference_circulation": 1.0010000000004737e-05,
-        "circulation_fraction": 1.5696511856017587e-06
+        "circulation_fraction": 1.5696511856017587e-06,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -0.1772868599999997,
+            "outer_at_inner_to": -0.1772768499999997,
+            "inner_at_outer_from": 0.0028367000000000253,
+            "inner_at_outer_to": 0.00284671000000003
+          },
+          "outer_mixed_response": 1.0010000000004737e-05,
+          "inner_mixed_response": 1.0010000000004737e-05,
+          "reciprocity_defect": 0.0,
+          "closure_defect": 0.0,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/near/child-boy-plays::AC",
@@ -5717,7 +6226,21 @@
           "inner_then_outer": 0.8722021670000002
         },
         "preference_circulation": -1.2397000000330394e-05,
-        "circulation_fraction": 8.913762237863385e-07
+        "circulation_fraction": 8.913762237863385e-07,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": 2.229287627,
+            "outer_at_inner_to": 2.22927523,
+            "inner_at_outer_from": 3.885573627,
+            "inner_at_outer_to": 3.8855612299999995
+          },
+          "outer_mixed_response": -1.2397000000330394e-05,
+          "inner_mixed_response": -1.2397000000330394e-05,
+          "reciprocity_defect": 0.0,
+          "closure_defect": 4.440892098500626e-16,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/with/girl-child-plays::A",
@@ -5806,7 +6329,21 @@
           "inner_then_outer": -2.4177122100000012
         },
         "preference_circulation": 2.4320000000521702e-05,
-        "circulation_fraction": 4.253067421433414e-06
+        "circulation_fraction": 4.253067421433414e-06,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -0.6790609400000003,
+            "outer_at_inner_to": -0.6790366199999998,
+            "inner_at_outer_from": -1.9719567300000005,
+            "inner_at_outer_to": -1.97193241
+          },
+          "outer_mixed_response": 2.4320000000521702e-05,
+          "inner_mixed_response": 2.4320000000521702e-05,
+          "reciprocity_defect": 0.0,
+          "closure_defect": 0.0,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/near/student-teacher-works::x",
@@ -5895,7 +6432,21 @@
           "inner_then_outer": -6.727068308
         },
         "preference_circulation": -2.7180000000015525e-05,
-        "circulation_fraction": 1.6957188669170298e-06
+        "circulation_fraction": 1.6957188669170298e-06,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -0.24099015999999995,
+            "outer_at_inner_to": -0.24101733999999997,
+            "inner_at_outer_from": -1.1854906099999996,
+            "inner_at_outer_to": -1.1855177899999996
+          },
+          "outer_mixed_response": -2.7180000000015525e-05,
+          "inner_mixed_response": -2.7180000000015525e-05,
+          "reciprocity_defect": 0.0,
+          "closure_defect": 0.0,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/under/dog-horse-runs::AC",
@@ -5984,7 +6535,21 @@
           "inner_then_outer": 1.0265713979999993
         },
         "preference_circulation": -3.5167999999696775e-05,
-        "circulation_fraction": 3.4262553717431017e-06
+        "circulation_fraction": 3.4262553717431017e-06,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": 0.7466398479999999,
+            "outer_at_inner_to": 0.7466046800000001,
+            "inner_at_outer_from": -2.000914212,
+            "inner_at_outer_to": -2.0009493799999998
+          },
+          "outer_mixed_response": -3.51679999998078e-05,
+          "inner_mixed_response": -3.5167999999696775e-05,
+          "reciprocity_defect": -1.1102230246251565e-16,
+          "closure_defect": 4.440892098500626e-16,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/with/dog-horse-runs::AC",
@@ -6073,7 +6638,21 @@
           "inner_then_outer": -7.496930839999999
         },
         "preference_circulation": -3.611000000081077e-05,
-        "circulation_fraction": 2.4063765276880724e-06
+        "circulation_fraction": 2.4063765276880724e-06,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -0.5799927799999995,
+            "outer_at_inner_to": -0.5800288900000001,
+            "inner_at_outer_from": -3.89887047,
+            "inner_at_outer_to": -3.8989065800000002
+          },
+          "outer_mixed_response": -3.611000000058873e-05,
+          "inner_mixed_response": -3.611000000036668e-05,
+          "reciprocity_defect": -2.220446049250313e-16,
+          "closure_defect": 4.440892098500626e-16,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/under/horse-car-moves::C",
@@ -6162,7 +6741,21 @@
           "inner_then_outer": -3.3686668799999997
         },
         "preference_circulation": -4.602000000053508e-05,
-        "circulation_fraction": 5.5443211062575324e-06
+        "circulation_fraction": 5.5443211062575324e-06,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": 1.2568717000000005,
+            "outer_at_inner_to": 1.25682568,
+            "inner_at_outer_from": -2.89634776,
+            "inner_at_outer_to": -2.8963937800000004
+          },
+          "outer_mixed_response": -4.602000000053508e-05,
+          "inner_mixed_response": -4.602000000053508e-05,
+          "reciprocity_defect": 0.0,
+          "closure_defect": 0.0,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/with/teacher-friend-helps::A",
@@ -6251,7 +6844,21 @@
           "inner_then_outer": -6.3922541200000005
         },
         "preference_circulation": -4.767999999977235e-05,
-        "circulation_fraction": 3.1275380861145527e-06
+        "circulation_fraction": 3.1275380861145527e-06,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -1.0358591100000005,
+            "outer_at_inner_to": -1.0359067899999999,
+            "inner_at_outer_from": -5.272346740000001,
+            "inner_at_outer_to": -5.2723944199999995
+          },
+          "outer_mixed_response": -4.767999999932826e-05,
+          "inner_mixed_response": -4.767999999888417e-05,
+          "reciprocity_defect": -4.440892098500626e-16,
+          "closure_defect": 8.881784197001252e-16,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/near/teacher-friend-helps::C",
@@ -6340,7 +6947,21 @@
           "inner_then_outer": 2.9799411300000003
         },
         "preference_circulation": -4.959000000059888e-05,
-        "circulation_fraction": 6.249623528133768e-06
+        "circulation_fraction": 6.249623528133768e-06,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -0.09541129999999942,
+            "outer_at_inner_to": -0.09546089000000002,
+            "inner_at_outer_from": 0.18033886,
+            "inner_at_outer_to": 0.1802892699999994
+          },
+          "outer_mixed_response": -4.959000000059888e-05,
+          "inner_mixed_response": -4.959000000059888e-05,
+          "reciprocity_defect": 0.0,
+          "closure_defect": 0.0,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "confirmation/by/teacher-woman-works::x",
@@ -6429,7 +7050,21 @@
           "inner_then_outer": 6.19771242
         },
         "preference_circulation": 6.555999999946494e-05,
-        "circulation_fraction": 4.061443131049933e-06
+        "circulation_fraction": 4.061443131049933e-06,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -5.73105025,
+            "outer_at_inner_to": -5.73098469,
+            "inner_at_outer_from": 5.68386221,
+            "inner_at_outer_to": 5.68392777
+          },
+          "outer_mixed_response": 6.556000000035311e-05,
+          "inner_mixed_response": 6.556000000035311e-05,
+          "reciprocity_defect": 0.0,
+          "closure_defect": 0.0,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/near/bird-dog-runs::AC",
@@ -6518,7 +7153,21 @@
           "inner_then_outer": -1.4000408599999998
         },
         "preference_circulation": -7.295999999978875e-05,
-        "circulation_fraction": 1.0515090139534517e-05
+        "circulation_fraction": 1.0515090139534517e-05,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -0.19255543000000008,
+            "outer_at_inner_to": -0.19262838999999987,
+            "inner_at_outer_from": 0.88711977,
+            "inner_at_outer_to": 0.8870468100000002
+          },
+          "outer_mixed_response": -7.295999999978875e-05,
+          "inner_mixed_response": -7.295999999978875e-05,
+          "reciprocity_defect": 0.0,
+          "closure_defect": 0.0,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/under/teacher-friend-helps::A",
@@ -6607,7 +7256,21 @@
           "inner_then_outer": -0.63888693
         },
         "preference_circulation": -9.821999999948261e-05,
-        "circulation_fraction": 8.040774576294055e-06
+        "circulation_fraction": 8.040774576294055e-06,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -0.33912564000000067,
+            "outer_at_inner_to": -0.33922386000000015,
+            "inner_at_outer_from": -3.3564729700000004,
+            "inner_at_outer_to": -3.35657119
+          },
+          "outer_mixed_response": -9.821999999948261e-05,
+          "inner_mixed_response": -9.821999999948261e-05,
+          "reciprocity_defect": 0.0,
+          "closure_defect": 0.0,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/with/student-teacher-works::C",
@@ -6696,7 +7359,21 @@
           "inner_then_outer": -1.8709721700000004
         },
         "preference_circulation": -0.00013111999999981805,
-        "circulation_fraction": 3.1712601543160956e-05
+        "circulation_fraction": 3.1712601543160956e-05,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": 1.9575233399999998,
+            "outer_at_inner_to": 1.95739222,
+            "inner_at_outer_from": -0.4958462800000003,
+            "inner_at_outer_to": -0.4959774000000001
+          },
+          "outer_mixed_response": -0.00013111999999981805,
+          "inner_mixed_response": -0.00013111999999981805,
+          "reciprocity_defect": 0.0,
+          "closure_defect": 0.0,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/near/animal-flower-lives::x",
@@ -6785,7 +7462,21 @@
           "inner_then_outer": 9.729534856999999
         },
         "preference_circulation": 0.0001420999999997008,
-        "circulation_fraction": 4.731629316404005e-06
+        "circulation_fraction": 4.731629316404005e-06,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": 0.5970497100000003,
+            "outer_at_inner_to": 0.59719181,
+            "inner_at_outer_from": 10.58343148,
+            "inner_at_outer_to": 10.58357358
+          },
+          "outer_mixed_response": 0.0001420999999997008,
+          "inner_mixed_response": 0.0001420999999997008,
+          "reciprocity_defect": 0.0,
+          "closure_defect": 0.0,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/under/horse-car-moves::x",
@@ -6874,7 +7565,21 @@
           "inner_then_outer": -3.9388451499999997
         },
         "preference_circulation": -0.00014640000000021303,
-        "circulation_fraction": 1.8562624678699802e-05
+        "circulation_fraction": 1.8562624678699802e-05,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -1.46237468,
+            "outer_at_inner_to": -1.4625210800000001,
+            "inner_at_outer_from": -1.8753278199999999,
+            "inner_at_outer_to": -1.87547422
+          },
+          "outer_mixed_response": -0.00014640000000021303,
+          "inner_mixed_response": -0.00014640000000021303,
+          "reciprocity_defect": 0.0,
+          "closure_defect": 0.0,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "confirmation/by/boy-ball-moves::x",
@@ -6963,7 +7668,21 @@
           "inner_then_outer": -3.199751788000001
         },
         "preference_circulation": 0.00014687000000002115,
-        "circulation_fraction": 2.144422506754455e-05
+        "circulation_fraction": 2.144422506754455e-05,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -0.10365438999999999,
+            "outer_at_inner_to": -0.10350751999999996,
+            "inner_at_outer_from": -0.9897856700000007,
+            "inner_at_outer_to": -0.9896388000000007
+          },
+          "outer_mixed_response": 0.00014687000000002115,
+          "inner_mixed_response": 0.00014687000000002115,
+          "reciprocity_defect": 0.0,
+          "closure_defect": 0.0,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/near/dog-animal-lives::C",
@@ -7052,7 +7771,21 @@
           "inner_then_outer": 1.6852686399999994
         },
         "preference_circulation": 0.0001616500000016785,
-        "circulation_fraction": 6.989403545627001e-06
+        "circulation_fraction": 6.989403545627001e-06,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": 3.523038869999999,
+            "outer_at_inner_to": 3.5232005200000005,
+            "inner_at_outer_from": -4.8776369100000005,
+            "inner_at_outer_to": -4.877475259999999
+          },
+          "outer_mixed_response": 0.0001616500000016785,
+          "inner_mixed_response": 0.0001616500000016785,
+          "reciprocity_defect": 0.0,
+          "closure_defect": 0.0,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/near/horse-car-moves::x",
@@ -7141,7 +7874,21 @@
           "inner_then_outer": -1.4246196600000003
         },
         "preference_circulation": 0.00017546999999984436,
-        "circulation_fraction": 2.090487642116521e-05
+        "circulation_fraction": 2.090487642116521e-05,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -1.57246065,
+            "outer_at_inner_to": -1.5722851800000002,
+            "inner_at_outer_from": -2.68620824,
+            "inner_at_outer_to": -2.68603277
+          },
+          "outer_mixed_response": 0.00017546999999984436,
+          "inner_mixed_response": 0.00017546999999984436,
+          "reciprocity_defect": 0.0,
+          "closure_defect": -4.440892098500626e-16,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/under/horse-car-moves::x",
@@ -7230,7 +7977,21 @@
           "inner_then_outer": 7.43051624
         },
         "preference_circulation": -0.00018166999999991162,
-        "circulation_fraction": 9.837790706472504e-06
+        "circulation_fraction": 9.837790706472504e-06,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": 3.0095250599999996,
+            "outer_at_inner_to": 3.0093433899999997,
+            "inner_at_outer_from": 6.45583701,
+            "inner_at_outer_to": 6.45565534
+          },
+          "outer_mixed_response": -0.00018166999999991162,
+          "inner_mixed_response": -0.00018166999999991162,
+          "reciprocity_defect": 0.0,
+          "closure_defect": 0.0,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/near/dog-horse-runs::A",
@@ -7319,7 +8080,21 @@
           "inner_then_outer": 0.10308074999999972
         },
         "preference_circulation": 0.00019837000000033633,
-        "circulation_fraction": 3.989018977217715e-05
+        "circulation_fraction": 3.989018977217715e-05,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -1.5605011,
+            "outer_at_inner_to": -1.5603027299999996,
+            "inner_at_outer_from": 1.2936453799999996,
+            "inner_at_outer_to": 1.29384375
+          },
+          "outer_mixed_response": 0.00019837000000033633,
+          "inner_mixed_response": 0.00019837000000033633,
+          "reciprocity_defect": 0.0,
+          "closure_defect": 0.0,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "confirmation/by/friend-lady-lives::A",
@@ -7408,7 +8183,21 @@
           "inner_then_outer": -4.2257995600000005
         },
         "preference_circulation": 0.00020646000000024145,
-        "circulation_fraction": 2.395882455144449e-05
+        "circulation_fraction": 2.395882455144449e-05,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": 0.31012773999999954,
+            "outer_at_inner_to": 0.3103341999999998,
+            "inner_at_outer_from": -1.6922712300000002,
+            "inner_at_outer_to": -1.69206477
+          },
+          "outer_mixed_response": 0.00020646000000024145,
+          "inner_mixed_response": 0.00020646000000024145,
+          "reciprocity_defect": 0.0,
+          "closure_defect": 0.0,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/under/boy-girl-works::A",
@@ -7497,7 +8286,21 @@
           "inner_then_outer": 0.5246069399999995
         },
         "preference_circulation": -0.0002145799999997422,
-        "circulation_fraction": 3.484777397488314e-05
+        "circulation_fraction": 3.484777397488314e-05,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": 2.6882562599999993,
+            "outer_at_inner_to": 2.6880416799999995,
+            "inner_at_outer_from": -1.2545499800000002,
+            "inner_at_outer_to": -1.25476456
+          },
+          "outer_mixed_response": -0.0002145799999997422,
+          "inner_mixed_response": -0.0002145799999997422,
+          "reciprocity_defect": 0.0,
+          "closure_defect": 0.0,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/under/animal-flower-lives::C",
@@ -7586,7 +8389,21 @@
           "inner_then_outer": 2.4262973619999997
         },
         "preference_circulation": -0.00023983999999988015,
-        "circulation_fraction": 2.8682478551099424e-05
+        "circulation_fraction": 2.8682478551099424e-05,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": 1.6678497700000001,
+            "outer_at_inner_to": 1.66760993,
+            "inner_at_outer_from": -0.48928976999999985,
+            "inner_at_outer_to": -0.48952960999999995
+          },
+          "outer_mixed_response": -0.0002398400000001022,
+          "inner_mixed_response": -0.0002398400000001022,
+          "reciprocity_defect": 0.0,
+          "closure_defect": 0.0,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/with/bird-dog-runs::AC",
@@ -7675,7 +8492,21 @@
           "inner_then_outer": -0.9411613999999995
         },
         "preference_circulation": -0.0002400800000001979,
-        "circulation_fraction": 2.0180359899639035e-05
+        "circulation_fraction": 2.0180359899639035e-05,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": 0.6862859700000001,
+            "outer_at_inner_to": 0.6860458899999999,
+            "inner_at_outer_from": -3.4072258499999997,
+            "inner_at_outer_to": -3.40746593
+          },
+          "outer_mixed_response": -0.0002400800000001979,
+          "inner_mixed_response": -0.0002400800000001979,
+          "reciprocity_defect": 0.0,
+          "closure_defect": 0.0,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/under/animal-flower-lives::x",
@@ -7764,7 +8595,21 @@
           "inner_then_outer": 4.131303963999999
         },
         "preference_circulation": 0.00025153000000077697,
-        "circulation_fraction": 1.8526280949610234e-05
+        "circulation_fraction": 1.8526280949610234e-05,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": 2.93757248,
+            "outer_at_inner_to": 2.9378240100000004,
+            "inner_at_outer_from": -0.6276681400000004,
+            "inner_at_outer_to": -0.62741661
+          },
+          "outer_mixed_response": 0.0002515300000003329,
+          "inner_mixed_response": 0.0002515300000003329,
+          "reciprocity_defect": 0.0,
+          "closure_defect": 0.0,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/under/friend-bird-lives::AC",
@@ -7853,7 +8698,21 @@
           "inner_then_outer": -5.4755563700000005
         },
         "preference_circulation": -0.00027203999999958484,
-        "circulation_fraction": 2.4654230714683935e-05
+        "circulation_fraction": 2.4654230714683935e-05,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": 0.5804009499999996,
+            "outer_at_inner_to": 0.58012891,
+            "inner_at_outer_from": -3.0750710900000002,
+            "inner_at_outer_to": -3.07534313
+          },
+          "outer_mixed_response": -0.00027203999999958484,
+          "inner_mixed_response": -0.00027203999999958484,
+          "reciprocity_defect": 0.0,
+          "closure_defect": 0.0,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/near/girl-child-plays::A",
@@ -7942,7 +8801,21 @@
           "inner_then_outer": -7.94797969
         },
         "preference_circulation": 0.0002987400000007412,
-        "circulation_fraction": 1.8519707359137796e-05
+        "circulation_fraction": 1.8519707359137796e-05,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": 3.5623865099999996,
+            "outer_at_inner_to": 3.56268525,
+            "inner_at_outer_from": -4.6602995400000005,
+            "inner_at_outer_to": -4.6600008
+          },
+          "outer_mixed_response": 0.0002987400000002971,
+          "inner_mixed_response": 0.0002987400000007412,
+          "reciprocity_defect": -4.440892098500626e-16,
+          "closure_defect": 0.0,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "confirmation/by/dog-person-lives::AC",
@@ -8031,7 +8904,21 @@
           "inner_then_outer": -1.216081386
         },
         "preference_circulation": -0.0003032630000006087,
-        "circulation_fraction": 2.7081861604677006e-05
+        "circulation_fraction": 2.7081861604677006e-05,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -1.518932107,
+            "outer_at_inner_to": -1.5192353700000005,
+            "inner_at_outer_from": 2.1246914800000005,
+            "inner_at_outer_to": 2.124388217
+          },
+          "outer_mixed_response": -0.0003032630000006087,
+          "inner_mixed_response": -0.0003032630000006087,
+          "reciprocity_defect": 0.0,
+          "closure_defect": 0.0,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "confirmation/by/boy-ball-moves::x",
@@ -8120,7 +9007,21 @@
           "inner_then_outer": 5.79896486
         },
         "preference_circulation": -0.0003036220000005585,
-        "circulation_fraction": 2.4621168356457197e-05
+        "circulation_fraction": 2.4621168356457197e-05,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": 1.012598392,
+            "outer_at_inner_to": 1.01229477,
+            "inner_at_outer_from": 3.94738447,
+            "inner_at_outer_to": 3.9470808479999997
+          },
+          "outer_mixed_response": -0.00030362199999989237,
+          "inner_mixed_response": -0.0003036220000001144,
+          "reciprocity_defect": 2.220446049250313e-16,
+          "closure_defect": 0.0,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/under/animal-flower-lives::C",
@@ -8209,7 +9110,21 @@
           "inner_then_outer": 1.165403312
         },
         "preference_circulation": 0.00032138999999986595,
-        "circulation_fraction": 9.026039631842597e-05
+        "circulation_fraction": 9.026039631842597e-05,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": -0.10507988999999984,
+            "outer_at_inner_to": -0.10475849999999998,
+            "inner_at_outer_from": -0.09026478999999998,
+            "inner_at_outer_to": -0.08994340000000012
+          },
+          "outer_mixed_response": 0.00032138999999986595,
+          "inner_mixed_response": 0.00032138999999986595,
+          "reciprocity_defect": 0.0,
+          "closure_defect": 0.0,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/near/child-boy-plays::AC",
@@ -8298,7 +9213,21 @@
           "inner_then_outer": -1.57388687
         },
         "preference_circulation": -0.0003247299999999953,
-        "circulation_fraction": 7.44589244214419e-05
+        "circulation_fraction": 7.44589244214419e-05,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": 2.2979168900000007,
+            "outer_at_inner_to": 2.2975921600000007,
+            "inner_at_outer_from": -1.5414114000000003,
+            "inner_at_outer_to": -1.5417361300000003
+          },
+          "outer_mixed_response": -0.0003247299999999953,
+          "inner_mixed_response": -0.0003247299999999953,
+          "reciprocity_defect": 0.0,
+          "closure_defect": 0.0,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       },
       {
         "root": "exploration/under/child-boy-plays::x",
@@ -8387,13 +9316,27 @@
           "inner_then_outer": -1.5308427849999995
         },
         "preference_circulation": -0.0003333049999998394,
-        "circulation_fraction": 4.0627217696041806e-05
+        "circulation_fraction": 4.0627217696041806e-05,
+        "actual_later_codata_pullback": {
+          "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+          "preference_one_form": {
+            "outer_at_inner_from": 3.8089706899999998,
+            "outer_at_inner_to": 3.808637385,
+            "inner_at_outer_from": -2.6681218149999997,
+            "inner_at_outer_to": -2.6684551199999995
+          },
+          "outer_mixed_response": -0.0003333049999998394,
+          "inner_mixed_response": -0.0003333049999998394,
+          "reciprocity_defect": 0.0,
+          "closure_defect": 0.0,
+          "gauge_scope": "individual outer edges use the retained reference-token section; equality of mixed responses is invariant under an arbitrary common translation of each q_E(d) fiber"
+        }
       }
     ]
   },
   "scope": {
     "establishes": "whether the two edge-local final-unembedding Firth selectors in the retained recursive constructor company are restrictions of one exact scalar potential on each sampled D/E square",
     "does_not_establish": "whether the full scale-indexed CPS ballot family becomes a potential after higher-scale continuations vote",
-    "next_if_nonclosed": "retain the same one-form after each typed suffix pullback; test whether higher-scale reciprocal terms cancel the measured circulation"
+    "next_if_nonclosed": "compose the full nested codata through selection strength without discarding the cross-candidate continuation coordinates"
   }
 }
