@@ -23,6 +23,12 @@ def arguments() -> argparse.Namespace:
         default="",
         help="comma-separated constructor token IDs; empty means the root demand",
     )
+    parser.add_argument(
+        "--view",
+        choices=("codata", "selection", "completion"),
+        default="codata",
+        help="local edge codata, continuation-composed selection, or selected root",
+    )
     parser.add_argument("--top", type=int, default=16)
     return parser.parse_args()
 
@@ -55,16 +61,24 @@ def main() -> None:
             if kind == "recursive_company_meta":
                 meta = row
                 continue
-            if kind not in {
-                "recursive_company_demand",
-                "recursive_company_terminal",
-            }:
+            retained_kinds = {
+                "codata": {
+                    "recursive_company_demand",
+                    "recursive_company_terminal",
+                },
+                "selection": {"recursive_company_selection"},
+                "completion": {"recursive_company_selected_completion"},
+            }[args.view]
+            if kind not in retained_kinds:
                 continue
             root = str(row["root"])
             roots.add(root)
             if args.root not in root:
                 continue
-            if tuple(int(token) for token in row["path_tokens"]) != requested_path:
+            if (
+                args.view != "completion"
+                and tuple(int(token) for token in row["path_tokens"]) != requested_path
+            ):
                 continue
             matches.append(row)
     if meta is None:
@@ -84,6 +98,39 @@ def main() -> None:
             f"root {exact_root!r} has no unique observation at path {requested_path}"
         )
     row = matches[0]
+    if args.view == "completion":
+        print(f"root: {exact_root}")
+        print(f"path: {row['path_tokens']}")
+        print(f"text: {row['text']!r}")
+        print(f"terminal row: {row['terminal_row']}")
+        print("depth\ttoken\tdiagonal_contrast")
+        for ballot in row["position_ballots"]:
+            print(
+                f"{ballot['depth']}\t{ballot['token']}\t"
+                f"{float(ballot['diagonal_contrast']):.9g}"
+            )
+        return
+    if args.view == "selection":
+        candidates = sorted(
+            row["candidates"],
+            key=lambda candidate: (
+                -float(candidate["diagonal_contrast"]),
+                int(candidate["token"]),
+            ),
+        )
+        print(f"root: {exact_root}")
+        print(f"path: {list(requested_path)}")
+        print(f"text: {row['text']!r}")
+        print(f"observation: {row['observer']}")
+        print("rank\ttoken\tdiagonal_contrast\tpiece\tselected continuation")
+        for rank, candidate in enumerate(candidates[: args.top], start=1):
+            marker = "*" if candidate["selected"] else ""
+            print(
+                f"{rank}\t{candidate['token']}\t"
+                f"{float(candidate['diagonal_contrast']):.9g}\t"
+                f"{candidate['piece']!r}\t{marker}{candidate['continuation_tokens']}"
+            )
+        return
     field = (
         "candidates"
         if row["kind"] == "recursive_company_demand"

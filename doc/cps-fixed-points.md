@@ -1806,3 +1806,85 @@ python3 browse_firth_potential.py \
   --root 'confirmation/by/car-thing-moves::AC' \
   --top 8
 ```
+
+#### Finite full-company diagonal selection
+
+`cps_recursive_company.c` now also lowers the retained constructor tree to the
+finite dependent product of selection functions. For a demand at scale `s`,
+candidate `x`, and candidate-specific recursively selected suffix `b(x)`, let
+`r_x` be the terminal-frontier codata row for the complete retained outcome:
+
+```text
+b(x) = select(child_x)
+r_x  = p(x, b(x))
+epsilon_s = argmax_x q[r_x][x].
+```
+
+The code memoizes `b(x)` at each demand. The value `r_x` remains a handle to
+the complete vocabulary codata; only the active selection projects its
+candidate-matching coordinate. Scores from different positions are never
+added, no probabilities are formed, and the original edge-local logits are
+not used to terminate an internal selection. The root observation over all
+19,352 rows still runs once after all 57 learned fillers have each been
+applied once.
+
+The retained Stories15M run contains:
+
+| Quantity | Result |
+|---|---:|
+| dependent selection nodes | 2,288 |
+| candidate continuations evaluated | 19,008 |
+| root mates | 176 |
+| exact float tie nodes | 0 |
+| roots whose outer choice differs from edge-local AR | 124/176 |
+| edge-local AR controller-number agreement | 95/176 |
+| full-company diagonal controller-number agreement | 93/176 |
+
+The per-corner comparison is informative rather than uniformly positive:
+
+| Corner | Edge-local AR | Full-company diagonal |
+|---|---:|---:|
+| `x` | 9/44 | 3/44 |
+| `A` | 2/44 | 5/44 |
+| `C` | 40/44 | 42/44 |
+| `AC` | 44/44 | 43/44 |
+
+Thus the implementation is not reproducing AR: its candidate-specific suffix
+continuations change 70% of the outer choices and improve two intervention
+corners. But the ordinary final output-head diagonal is not yet a sound
+Firth-company observer. It slightly worsens the controlled aggregate and can
+select malformed fragments. For example:
+
+```text
+The animal near the flower
+
+  help   1.99916291   -> help the
+  moves  1.58138299   -> moves with
+  move   0.877504706  -> move with
+  run    0.596477985  -> run with
+  runs   0.214131832  -> runs with
+
+selected: The animal near the flower help the
+```
+
+This localizes the remaining error. Applying the ordinary next-token
+unembedding to the final carrier conflates constructor inertia (the selected
+tokens remain present in the residual representation) with contextual
+compliance (whether those tokens approve of their company). The closed
+later-codata squares establish that reciprocal interaction coordinates exist;
+this run shows that their raw diagonal plus unary carrier terms is not the
+required observer. A subsequent observer must quotient or separate those
+terms before selection. The code and trace do not conceal that failure with a
+likelihood fallback.
+
+Browse the complete flushed ballots or the chosen witness with:
+
+```bash
+python3 browse_recursive_company.py \
+  --root 'exploration/near/animal-flower-lives::x' \
+  --view selection --top 12
+
+python3 browse_recursive_company.py \
+  --root 'exploration/near/animal-flower-lives::x' \
+  --view completion
+```

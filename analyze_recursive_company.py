@@ -5,7 +5,9 @@ The prior two-level polynomial trace independently observed root verb codata
 and every verb-indexed hole codata on the CPU path. This analyzer verifies
 that the recursive Metal company preserves those parent observations while
 actually consuming every hole constructor and retaining every resulting
-terminal codata vector. It does not order complete branches.
+terminal codata vector. It then validates the memoized dependent selection
+product and compares it with the original edge-local AR choice on the
+controlled number-agreement family.
 """
 
 from __future__ import annotations
@@ -115,6 +117,9 @@ def main() -> None:
     terminal_codata: dict[
         tuple[str, tuple[int, ...]], tuple[tuple[int, float], ...]
     ] = {}
+    terminal_rows: dict[tuple[str, tuple[int, ...]], int] = {}
+    selections: dict[tuple[str, tuple[int, ...]], dict[str, Any]] = {}
+    selected_completions: dict[str, dict[str, Any]] = {}
     terminal_family: tuple[int, ...] | None = None
     sample_terminals: list[dict[str, Any]] = []
     nonfinite_coordinates = 0
@@ -187,6 +192,7 @@ def main() -> None:
                 require(tokens == terminal_family, "terminal family changes by branch")
                 values = [float(candidate["contrast"]) for candidate in candidates]
                 terminal_codata[key] = tuple(zip(tokens, values))
+                terminal_rows[key] = int(row["row"])
                 nonfinite_coordinates += sum(not math.isfinite(value) for value in values)
                 if len(sample_terminals) < 4:
                     ranked = sorted(
@@ -236,6 +242,19 @@ def main() -> None:
                     composed_terminal == terminal_codata[key],
                     "composed terminal observation differs from terminal codata",
                 )
+            elif kind == "recursive_company_selection":
+                root = str(row["root"])
+                path = tuple(int(token) for token in row["path_tokens"])
+                key = (root, path)
+                require(key not in selections, f"duplicate selection {key}")
+                selections[key] = row
+            elif kind == "recursive_company_selected_completion":
+                root = str(row["root"])
+                require(
+                    root not in selected_completions,
+                    f"duplicate selected completion {root}",
+                )
+                selected_completions[root] = row
 
     require(meta is not None, "recursive trace has no meta")
     require(check is not None, "recursive trace has no check")
@@ -251,6 +270,20 @@ def main() -> None:
         "recursive run terminalized complete paths",
     )
     require(meta.get("complete_paths_flattened") is False, "paths were flattened")
+    require(meta.get("completion_selected") is True, "selection product was not run")
+    require(
+        meta.get("selection_semantics")
+        == "escardo_dependent_product_full_company_diagonal",
+        "selection semantics differ",
+    )
+    require(
+        meta.get("local_edge_logits_terminalized") is False,
+        "selection terminalized local edge logits",
+    )
+    require(
+        meta.get("path_likelihoods_summed") is False,
+        "selection summed path likelihoods",
+    )
     require(
         meta.get("observation_semantics") == "continuation_composed_codata",
         "recursive codata observations were not continuation-composed",
@@ -282,6 +315,205 @@ def main() -> None:
     )
     require(nonfinite_coordinates == 0, "recursive trace contains non-finite codata")
     require(terminal_family is not None, "recursive trace has no terminal family")
+
+    require(set(selections) == set(demand_codata), "selection demand coverage differs")
+    selection_candidate_count = 0
+    selection_exact_tie_nodes = 0
+    for key, row in selections.items():
+        root, path = key
+        depth = int(row["depth"])
+        require(depth == len(path), f"selection depth differs for {key}")
+        require(
+            row.get("observer") == "full_company_diagonal",
+            f"selection observer differs for {key}",
+        )
+        candidates = row["candidates"]
+        selection_candidate_count += len(candidates)
+        tokens = tuple(int(candidate["token"]) for candidate in candidates)
+        require(
+            set(tokens) == set(demand_codata[key]),
+            f"selection family differs for {key}",
+        )
+        values = [float(candidate["diagonal_contrast"]) for candidate in candidates]
+        require(
+            all(math.isfinite(value) for value in values),
+            f"selection contains nonfinite diagonal codata for {key}",
+        )
+        best_index = min(
+            range(len(candidates)),
+            key=lambda index: (-values[index], tokens[index]),
+        )
+        selected_indices = [
+            index for index, candidate in enumerate(candidates)
+            if bool(candidate["selected"])
+        ]
+        require(selected_indices == [best_index], f"selection argmax differs for {key}")
+        selected = candidates[best_index]
+        require(
+            int(row["selected_token"]) == int(selected["token"]),
+            f"selected token differs for {key}",
+        )
+        require(
+            int(row["selected_terminal_row"]) == int(selected["terminal_row"]),
+            f"selected terminal row differs for {key}",
+        )
+        require(
+            float(row["selected_diagonal_contrast"])
+            == float(selected["diagonal_contrast"]),
+            f"selected diagonal differs for {key}",
+        )
+        exact_ties = sum(value == values[best_index] for value in values)
+        require(
+            int(row["exact_argmax_size"]) == exact_ties,
+            f"exact argmax set differs for {key}",
+        )
+        selection_exact_tie_nodes += exact_ties > 1
+        for candidate in candidates:
+            continuation = tuple(
+                int(token) for token in candidate["continuation_tokens"]
+            )
+            require(
+                len(continuation) == int(meta["depth"]) - depth,
+                f"candidate continuation length differs for {key}",
+            )
+            require(
+                continuation[0] == int(candidate["token"]),
+                f"candidate continuation lost its head for {key}",
+            )
+            complete_key = (root, path + continuation)
+            require(
+                complete_key in terminal_rows,
+                f"candidate continuation has no terminal outcome for {key}",
+            )
+            require(
+                int(candidate["terminal_row"]) == terminal_rows[complete_key],
+                f"candidate continuation terminal row differs for {key}",
+            )
+            if depth + 1 < int(meta["depth"]):
+                child_key = (root, path + (int(candidate["token"]),))
+                require(child_key in selections, f"selection child is absent for {key}")
+                require(
+                    continuation[1:]
+                    == tuple(
+                        int(token)
+                        for token in selections[child_key]["candidates"][
+                            min(
+                                range(len(selections[child_key]["candidates"])),
+                                key=lambda index: (
+                                    -float(
+                                        selections[child_key]["candidates"][index][
+                                            "diagonal_contrast"
+                                        ]
+                                    ),
+                                    int(
+                                        selections[child_key]["candidates"][index][
+                                            "token"
+                                        ]
+                                    ),
+                                ),
+                            )
+                        ]["continuation_tokens"]
+                    ),
+                    f"selection child witness differs for {key}",
+                )
+
+    require(
+        len(selected_completions) == int(meta["roots"]),
+        "selected root coverage differs",
+    )
+    for root, row in selected_completions.items():
+        path = tuple(int(token) for token in row["path_tokens"])
+        require(len(path) == int(meta["depth"]), f"selected path depth differs for {root}")
+        root_selection = selections[(root, ())]
+        root_candidate = next(
+            candidate
+            for candidate in root_selection["candidates"]
+            if bool(candidate["selected"])
+        )
+        require(
+            tuple(int(token) for token in root_candidate["continuation_tokens"]) == path,
+            f"root selection witness differs for {root}",
+        )
+        require(
+            int(row["terminal_row"]) == terminal_rows[(root, path)],
+            f"selected completion terminal row differs for {root}",
+        )
+        ballots = row["position_ballots"]
+        require(len(ballots) == len(path), f"selected ballots differ for {root}")
+        for depth, ballot in enumerate(ballots):
+            node = selections[(root, path[:depth])]
+            require(int(ballot["depth"]) == depth, f"ballot depth differs for {root}")
+            require(int(ballot["token"]) == path[depth], f"ballot token differs for {root}")
+            require(
+                float(ballot["diagonal_contrast"])
+                == float(node["selected_diagonal_contrast"]),
+                f"ballot diagonal differs for {root}",
+            )
+            require(
+                int(node["selected_terminal_row"]) == int(row["terminal_row"]),
+                f"ballot outcome row differs for {root}",
+            )
+
+    singular_verbs = {12080, 6057, 1736, 13582, 16229, 6911}
+    plural_verbs = {5735, 1065, 664, 1708, 4337, 1371}
+    first_root = next(iter(selected_completions))
+    require(
+        singular_verbs | plural_verbs == set(demand_codata[(first_root, ())]),
+        "root verb family differs from the agreement audit",
+    )
+    agreement = {
+        "edge_ar_correct": 0,
+        "full_company_diagonal_correct": 0,
+        "different_outer_choice": 0,
+    }
+    agreement_by_corner: dict[str, Counter[str]] = defaultdict(Counter)
+    selection_samples: list[dict[str, Any]] = []
+    for root in sorted(selected_completions):
+        _, corner = split_root(root)
+        root_codata = demand_codata[(root, ())]
+        edge_ar = min(root_codata, key=lambda token: (-root_codata[token], token))
+        selected = int(selections[(root, ())]["selected_token"])
+        expected = plural_verbs if "C" in corner else singular_verbs
+        edge_correct = edge_ar in expected
+        selected_correct = selected in expected
+        agreement["edge_ar_correct"] += edge_correct
+        agreement["full_company_diagonal_correct"] += selected_correct
+        agreement["different_outer_choice"] += edge_ar != selected
+        agreement_by_corner[corner].update(
+            {
+                "contexts": 1,
+                "edge_ar_correct": edge_correct,
+                "full_company_diagonal_correct": selected_correct,
+                "different_outer_choice": edge_ar != selected,
+            }
+        )
+        if len(selection_samples) < 12:
+            selection_samples.append(
+                {
+                    "root": root,
+                    "edge_ar_token": edge_ar,
+                    "selected_token": selected,
+                    "selected_text": selected_completions[root]["text"],
+                    "outer_candidates": selections[(root, ())]["candidates"],
+                }
+            )
+
+    require(
+        check.get("selection_nodes") == len(selections),
+        "selection-node count differs",
+    )
+    require(
+        check.get("selection_candidate_evaluations") == selection_candidate_count,
+        "selection-candidate count differs",
+    )
+    require(
+        check.get("selection_root_mates") == len(selected_completions),
+        "selection root-mate count differs",
+    )
+    require(
+        check.get("selection_exact_tie_nodes") == selection_exact_tie_nodes,
+        "selection exact-tie count differs",
+    )
 
     result = {
         "schema_version": 1,
@@ -319,6 +551,7 @@ def main() -> None:
             "probabilities_used": False,
             "scalar_reward_used": False,
             "complete_paths_flattened": False,
+            "path_likelihoods_summed": False,
         },
         "codata_composition": {
             "codata_constructed_before_observation": True,
@@ -328,14 +561,34 @@ def main() -> None:
             "edge_observation_defects": 0,
             "terminal_observation_defects": 0,
         },
-        "selection_boundary": {
-            "whole_completion_order_defined": False,
-            "reason": (
-                "The model-derived codata observations are now composed into "
-                "one root-consumed term. No selection function has yet been "
-                "applied to that composed value."
+        "selection_product": {
+            "semantics": meta["selection_semantics"],
+            "outcome": "complete terminal-frontier token codata row",
+            "local_selection": (
+                "for candidate x, recursively select its dependent suffix, "
+                "then maximize the x coordinate of that complete outcome"
+            ),
+            "demand_nodes": len(selections),
+            "candidate_continuations_evaluated": selection_candidate_count,
+            "root_mates": len(selected_completions),
+            "exact_tie_nodes": selection_exact_tie_nodes,
+            "probabilities_used": False,
+            "path_scores_added": False,
+            "local_edge_logits_terminalized": False,
+        },
+        "agreement_number_control": {
+            **agreement,
+            "contexts": len(selected_completions),
+            "by_corner": {
+                corner: dict(counts)
+                for corner, counts in sorted(agreement_by_corner.items())
+            },
+            "scope": (
+                "number agreement of the selected outer verb family only; "
+                "not a whole-completion coherence score"
             ),
         },
+        "sample_selected_completions": selection_samples,
         "sample_terminal_observations": sample_terminals,
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -345,6 +598,10 @@ def main() -> None:
         f"roots=176 demands={sum(depth_counts.values())} "
         f"leaves={len(terminal_paths)} nonfinite={nonfinite_coordinates} "
         f"composed={len(composed_paths)} "
+        f"selected={len(selected_completions)} "
+        f"edge_ar_agreement={agreement['edge_ar_correct']}/{len(selected_completions)} "
+        "full_company_agreement="
+        f"{agreement['full_company_diagonal_correct']}/{len(selected_completions)} "
         f"max_parent_relative_defect={maximum_relative_parent_defect:.9g}"
     )
 
