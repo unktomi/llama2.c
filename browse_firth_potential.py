@@ -151,6 +151,19 @@ def main() -> None:
             "required backward outer correction: "
             f"E0={float(correction[0]):.9g}, E1={float(correction[1]):.9g}"
         )
+        actual = row["actual_later_codata_pullback"]
+        actual_edges = actual["preference_one_form"]
+        print(
+            "actual q_E pullback outer edges: "
+            f"E0={float(actual_edges['outer_at_inner_from']):.9g}, "
+            f"E1={float(actual_edges['outer_at_inner_to']):.9g}"
+        )
+        print(
+            "actual q_E pullback: "
+            f"mixed={float(actual['outer_mixed_response']):.9g}, "
+            f"reciprocity_defect={float(actual['reciprocity_defect']):.9g}, "
+            f"closure_defect={float(actual['closure_defect']):.9g}"
+        )
 
 
 if __name__ == "__main__":

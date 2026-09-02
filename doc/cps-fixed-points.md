@@ -1716,11 +1716,12 @@ The retained `176 * choose(12,2) * choose(8,2) = 325,248` squares give:
 | maximum circulating fraction | 0.707106765 |
 | response of the outer edge to the unobserved future injection | exactly 0 in 325,248/325,248 cells |
 
-This is a structural causal result, not a numerical failure. The earlier
+This first result diagnoses the wrong observer composition. The earlier
 selector is evaluated before the inner injection and therefore has identical
 edges on both inner fibers. The later selector has consumed the outer
 injection, and its preference between two inner constructors generally changes
-with that injection. Their mixed responses are consequently nonreciprocal.
+with that injection. If `q_D` and `q_E` are terminalized separately, their
+mixed responses are consequently nonreciprocal.
 
 For example, in
 `confirmation/by/car-thing-moves::AC`, changing the outer injection from
@@ -1747,13 +1748,51 @@ mixed response of the later selection, and its largest closure defect is
 `5.33e-15`. This correction is labelled as a demanded backward continuation;
 the analyzer does not claim that it is already present in `q_D`.
 
-The result rules out only the two edge-local final-unembedding selectors as
-the restrictions of one scalar energy. It does not rule out the stronger
-hypothesis that the complete scale-indexed CPS ballots close after the suffix
-continuations propagate later interactions back to earlier selections. It
-instead gives that hypothesis a concrete next requirement: the typed
-pullbacks must supply the missing reciprocal mixed response measured in every
-cell.
+The demanded reciprocal response is not missing from the retained company.
+For a fixed root, retain the complete later codata as a function of the outer
+constructor and define the measured cell
+
+```text
+Phi_E(d,e) = q_E(root,d)[e].
+```
+
+The outer edges are now coordinatewise differences across `d`, while the
+inner edges are coordinatewise differences across `e`:
+
+```text
+D_E(d0 -> d1 | e) = Phi_E(d1,e) - Phi_E(d0,e)
+E_D(e0 -> e1 | d) = Phi_E(d,e1) - Phi_E(d,e0).
+```
+
+This is the discrete differential of the actually retained scalar cell. It
+therefore closes without adding local scores, summing path likelihoods, or
+inventing a correction. On all 325,248 measured cells:
+
+| Actual later-codata pullback | Result |
+|---|---:|
+| median absolute closure defect | 0 |
+| maximum absolute closure defect | `7.10542736e-15` |
+| median absolute mixed-reciprocity defect | 0 |
+| maximum absolute mixed-reciprocity defect | `3.55271368e-15` |
+
+In the example above, the actual outer continuation edges supplied by
+`q_E(d)` are `-12.0044019` on `late` and `7.41214975` on `it`. Their mixed
+response is `19.4165517`, exactly the mixed response of the two inner edges up
+to `3.55e-15`; the complete square closes to `8.88e-16`.
+
+The distinction is semantic. `q_D` is the outer selector's local codata.
+`q_E(d)` is the result made available by choosing `d` and continuing. Replacing
+the latter by the former before the outer selection throws away precisely the
+cross-candidate coordinates that backward induction needs. Retaining them
+makes each measured two-level constructor cell a common-payoff potential.
+
+This does **not** establish one globally calibrated scalar energy for a whole
+completion. Individual cross-`d` edges use the selected reference-token
+section. What is gauge-independent here is the equality of the mixed outer and
+inner responses: a common translation of each `q_E(d)` fiber cancels from that
+equality. The next implementation step is consequently structural, not a new
+scoring heuristic: recursively compose the nested codata through selection
+strength and permit only the root continuation to terminalize it.
 
 The compact artifact is
 `outputs/cps-stories15m-firth-potential.json`. Every one of the 325,248 cells,

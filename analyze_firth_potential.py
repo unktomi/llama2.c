@@ -225,6 +225,7 @@ def retained_record(record: dict[str, Any]) -> dict[str, Any]:
         "path_preference_gains": record["path_preference_gains"],
         "preference_circulation": record["preference_circulation"],
         "circulation_fraction": record["hodge_decomposition"]["circulation_fraction"],
+        "actual_later_codata_pullback": record["actual_later_codata_pullback"],
     }
 
 
@@ -262,6 +263,8 @@ def main() -> None:
     circulations: list[float] = []
     fractions: list[float] = []
     outer_future_dependence: list[float] = []
+    pullback_closure_defects: list[float] = []
+    pullback_reciprocity_defects: list[float] = []
     per_root: dict[str, list[float]] = defaultdict(list)
     per_corner: dict[str, list[float]] = defaultdict(list)
     per_outer_pair: dict[tuple[int, int], list[float]] = defaultdict(list)
@@ -287,6 +290,36 @@ def main() -> None:
                     inner11 = demand1.candidate(e1)
                     inner_gain_at_d0 = inner01.contrast - inner00.contrast
                     inner_gain_at_d1 = inner11.contrast - inner10.contrast
+
+                    # The actual continuation available to the outer choice is
+                    # the complete later codata as a function of d.  Holding e
+                    # fixed and changing d supplies the missing reciprocal
+                    # edges directly; no scalar path fold is involved.
+                    continuation_outer_at_e0 = (
+                        inner10.contrast - inner00.contrast
+                    )
+                    continuation_outer_at_e1 = (
+                        inner11.contrast - inner01.contrast
+                    )
+                    continuation_inner_at_d0 = inner_gain_at_d0
+                    continuation_inner_at_d1 = inner_gain_at_d1
+                    continuation_closure = (
+                        continuation_outer_at_e0
+                        + continuation_inner_at_d1
+                        - continuation_outer_at_e1
+                        - continuation_inner_at_d0
+                    )
+                    continuation_outer_mixed = (
+                        continuation_outer_at_e1
+                        - continuation_outer_at_e0
+                    )
+                    continuation_inner_mixed = (
+                        continuation_inner_at_d1
+                        - continuation_inner_at_d0
+                    )
+                    continuation_reciprocity = (
+                        continuation_outer_mixed - continuation_inner_mixed
+                    )
 
                     # The outer observation is made before either inner injection,
                     # so both copies are exactly the same retained operand.  Keep
@@ -401,6 +434,24 @@ def main() -> None:
                         },
                         "preference_circulation": circulation,
                         "dislike_energy_circulation": -circulation,
+                        "actual_later_codata_pullback": {
+                            "scalar_cell": "Phi_E(d,e)=q_E(root,d)[e]",
+                            "preference_one_form": {
+                                "outer_at_inner_from": continuation_outer_at_e0,
+                                "outer_at_inner_to": continuation_outer_at_e1,
+                                "inner_at_outer_from": continuation_inner_at_d0,
+                                "inner_at_outer_to": continuation_inner_at_d1,
+                            },
+                            "outer_mixed_response": continuation_outer_mixed,
+                            "inner_mixed_response": continuation_inner_mixed,
+                            "reciprocity_defect": continuation_reciprocity,
+                            "closure_defect": continuation_closure,
+                            "gauge_scope": (
+                                "individual outer edges use the retained reference-token "
+                                "section; equality of mixed responses is invariant under "
+                                "an arbitrary common translation of each q_E(d) fiber"
+                            ),
+                        },
                         "hodge_decomposition": {
                             "edge_order": [
                                 "outer_at_inner_from",
@@ -442,8 +493,9 @@ def main() -> None:
                                 "outer_to_inner_to": backward_potential[3],
                             },
                             "status": (
-                                "required reciprocal continuation; not present in "
-                                "the measured edge-local outer codata"
+                                "absent when the outer choice observes only q_D; "
+                                "present exactly as the mixed response of q_E(d) when "
+                                "the later codata is retained as its continuation"
                             ),
                         },
                     }
@@ -452,6 +504,8 @@ def main() -> None:
                     circulations.append(circulation)
                     fractions.append(fraction)
                     outer_future_dependence.append(outer_gain_at_e1 - outer_gain_at_e0)
+                    pullback_closure_defects.append(continuation_closure)
+                    pullback_reciprocity_defects.append(continuation_reciprocity)
                     per_root[root].append(circulation)
                     per_corner[corner].append(circulation)
                     per_outer_pair[(d0, d1)].append(circulation)
@@ -541,6 +595,10 @@ def main() -> None:
                 "hold the measured later-selector edges fixed and add the "
                 "minimum-L2 reciprocal mixed response demanded of the earlier continuation"
             ),
+            "actual_backward_continuation": (
+                "retain q_E(d) as the result of each outer candidate; its "
+                "cross-d coordinate differences supply the reciprocal outer edges"
+            ),
             "probabilities_used": False,
             "absolute_logits_combined": False,
             "path_likelihoods_summed": False,
@@ -604,6 +662,12 @@ def main() -> None:
             "outer_response_to_unobserved_future_constructor": finite_summary(
                 outer_future_dependence
             ),
+            "actual_later_codata_pullback_closure_defect": finite_summary(
+                pullback_closure_defects
+            ),
+            "actual_later_codata_pullback_reciprocity_defect": finite_summary(
+                pullback_reciprocity_defects
+            ),
             "exactly_closed_cells": int(np.sum(np.asarray(circulations) == 0.0)),
             "nonclosed_cells": int(np.sum(np.asarray(circulations) != 0.0)),
             "by_grammatical_corner": grouped_summary(per_corner),
@@ -624,8 +688,8 @@ def main() -> None:
                 "potential after higher-scale continuations vote"
             ),
             "next_if_nonclosed": (
-                "retain the same one-form after each typed suffix pullback; test "
-                "whether higher-scale reciprocal terms cancel the measured circulation"
+                "compose the full nested codata through selection strength without "
+                "discarding the cross-candidate continuation coordinates"
             ),
         },
     }
@@ -650,6 +714,19 @@ def main() -> None:
         f"median={fraction_summary['median']:.9g} "
         f"mean={fraction_summary['mean']:.9g} "
         f"max={fraction_summary['maximum']:.9g}"
+    )
+    pullback_closure = result["potential_audit"][
+        "actual_later_codata_pullback_closure_defect"
+    ]
+    pullback_reciprocity = result["potential_audit"][
+        "actual_later_codata_pullback_reciprocity_defect"
+    ]
+    print(
+        "  actual_q_E_pullback "
+        f"closure_median_abs={pullback_closure['median_absolute']:.9g} "
+        f"closure_max_abs={pullback_closure['maximum_absolute']:.9g} "
+        f"reciprocity_median_abs={pullback_reciprocity['median_absolute']:.9g} "
+        f"reciprocity_max_abs={pullback_reciprocity['maximum_absolute']:.9g}"
     )
     print(f"  detailed_cells={args.cells}")
 
